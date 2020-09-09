@@ -1,0 +1,22 @@
+image: golang:1.14
+
+stages:
+  - build
+  - test
+
+build:
+  tags:
+    - cm_ci
+  stage: build
+  script:
+    - go build
+
+test:
+  tags:
+    - cm_ci
+  stage: test
+  script:
+    - apt update
+    - apt install -y libssl-dev  
+    - go test $(go list ./... | grep -v "/vendor") -v -coverprofile .testCoverage.txt
+    - go tool cover -func=.testCoverage.txt
