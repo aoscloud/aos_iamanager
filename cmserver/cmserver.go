@@ -45,6 +45,7 @@ import (
 // Server CM server instance
 type Server struct {
 	certHandler CertHandler
+	listener    net.Listener
 	grpcServer  *grpc.Server
 }
 
@@ -65,21 +66,32 @@ func New(cfg *config.Config, certHandler CertHandler) (server *Server, err error
 
 	server = &Server{certHandler: certHandler}
 
-	listener, err := net.Listen("tcp", cfg.ServerURL)
-	if err != nil {
-		return nil, err
+	defer func() {
+		if err != nil {
+			server.Close()
+		}
+	}()
+
+	if server.listener, err = net.Listen("tcp", cfg.ServerURL); err != nil {
+		return server, err
 	}
 
-	creds, err := credentials.NewServerTLSFromFile(cfg.Cert, cfg.Key)
-	if err != nil {
-		return nil, err
-	}
+	if cfg.Cert != "" || cfg.Key != "" {
+		creds, err := credentials.NewServerTLSFromFile(cfg.Cert, cfg.Key)
+		if err != nil {
+			return server, err
+		}
 
-	server.grpcServer = grpc.NewServer(grpc.Creds(creds))
+		server.grpcServer = grpc.NewServer(grpc.Creds(creds))
+	} else {
+		log.Warnf("CM server uses insecure connection")
+
+		server.grpcServer = grpc.NewServer()
+	}
 
 	pb.RegisterCertificateManagerServer(server.grpcServer, server)
 
-	go server.grpcServer.Serve(listener)
+	go server.grpcServer.Serve(server.listener)
 
 	return server, nil
 }
@@ -92,7 +104,15 @@ func (server *Server) Close() (err error) {
 		server.grpcServer.Stop()
 	}
 
-	return nil
+	if server.listener != nil {
+		if listenerErr := server.listener.Close(); listenerErr != nil {
+			if err == nil {
+				err = listenerErr
+			}
+		}
+	}
+
+	return err
 }
 
 // CreateKeys creates private keys

@@ -19,17 +19,13 @@ package cmserver_test
 
 import (
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/certificatemanager"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
 	"aos_certificatemanager/cmserver"
 	"aos_certificatemanager/config"
@@ -85,9 +81,7 @@ func init() {
 func TestCreateKeys(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(
-		&config.Config{ServerURL: serverURL, Cert: "../data/cert.pem", Key: "../data/key.pem"},
-		certHandler)
+	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -127,9 +121,7 @@ func TestCreateKeys(t *testing.T) {
 func TestApplyCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(
-		&config.Config{ServerURL: serverURL, Cert: "../data/cert.pem", Key: "../data/key.pem"},
-		certHandler)
+	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -170,9 +162,7 @@ func TestApplyCert(t *testing.T) {
 func TestGetCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(
-		&config.Config{ServerURL: serverURL, Cert: "../data/cert.pem", Key: "../data/key.pem"},
-		certHandler)
+	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -218,29 +208,12 @@ func TestGetCert(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func createServerConfig(serverAddress string) (cfg config.Config) {
-	configJSON := `{
-	"Cert": "../data/cert.pem",
-	"Key":  "../data/key.pem"
-}`
-
-	if err := json.NewDecoder(strings.NewReader(configJSON)).Decode(&cfg); err != nil {
-		log.Fatalf("Can't parse config: %s", err)
-	}
-
-	cfg.ServerURL = serverAddress
-
-	return cfg
-}
-
 func newTestClient(url string) (client *testClient, err error) {
 	client = &testClient{}
 
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 
-	if client.connection, err = grpc.DialContext(ctx, url,
-		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})),
-		grpc.WithBlock()); err != nil {
+	if client.connection, err = grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock()); err != nil {
 		return nil, err
 	}
 
