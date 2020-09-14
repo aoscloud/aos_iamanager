@@ -20,6 +20,7 @@ package certhandler
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -157,6 +158,10 @@ func (handler *Handler) GetCertificate(certType string, issuer []byte, serial st
 		certInfos, err := handler.storage.GetCertificates(certType)
 		if err != nil {
 			return "", "", err
+		}
+
+		if len(certInfos) == 0 {
+			return "", "", errors.New("certificate not found")
 		}
 
 		var minTime time.Time
