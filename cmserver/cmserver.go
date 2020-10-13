@@ -61,7 +61,7 @@ type CertHandler interface {
  ******************************************************************************/
 
 // New creates new CM server instance
-func New(cfg *config.Config, certHandler CertHandler) (server *Server, err error) {
+func New(cfg *config.Config, certHandler CertHandler, insecure bool) (server *Server, err error) {
 	log.WithField("url", cfg.ServerURL).Debug("Create CM server")
 
 	server = &Server{certHandler: certHandler}
@@ -76,7 +76,7 @@ func New(cfg *config.Config, certHandler CertHandler) (server *Server, err error
 		return server, err
 	}
 
-	if cfg.Cert != "" || cfg.Key != "" {
+	if insecure == false {
 		creds, err := credentials.NewServerTLSFromFile(cfg.Cert, cfg.Key)
 		if err != nil {
 			return server, err

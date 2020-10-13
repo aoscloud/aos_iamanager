@@ -185,7 +185,7 @@ func main() {
 	}
 	defer certHandler.Close()
 
-	server, err := cmserver.New(cfg, certHandler)
+	server, err := cmserver.New(cfg, certHandler, true)
 	if err != nil {
 		log.Fatalf("Can't create CM server: %s", err)
 	}

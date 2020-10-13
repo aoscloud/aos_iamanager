@@ -81,7 +81,7 @@ func init() {
 func TestCreateKeys(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler)
+	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -121,7 +121,7 @@ func TestCreateKeys(t *testing.T) {
 func TestApplyCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler)
+	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -162,7 +162,7 @@ func TestApplyCert(t *testing.T) {
 func TestGetCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler)
+	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
