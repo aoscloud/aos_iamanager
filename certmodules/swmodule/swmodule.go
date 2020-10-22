@@ -105,6 +105,10 @@ func (module *SWModule) Close() (err error) {
 func (module *SWModule) SyncStorage() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Sync storage")
 
+	if err = module.updateStorage(); err != nil {
+		return err
+	}
+
 	files, err := getFilesByExt(module.config.StoragePath, crtExt)
 	if err != nil {
 		return err
@@ -115,18 +119,6 @@ func (module *SWModule) SyncStorage() (err error) {
 		return err
 	}
 
-	// Certs that no need to update
-
-	var validURLs []string
-
-	for _, file := range files {
-		for _, info := range infos {
-			if fileToURL(file) == info.CertURL {
-				validURLs = append(validURLs, info.CertURL)
-			}
-		}
-	}
-
 	// FS certs that need to be updated
 
 	var updateFiles []string
@@ -134,9 +126,11 @@ func (module *SWModule) SyncStorage() (err error) {
 	for _, file := range files {
 		found := false
 
-		for _, validURL := range validURLs {
-			if fileToURL(file) == validURL {
+		for _, info := range infos {
+			if fileToURL(file) == info.CertURL {
 				found = true
+
+				break
 			}
 		}
 
@@ -147,34 +141,6 @@ func (module *SWModule) SyncStorage() (err error) {
 
 	if err = module.updateCerts(updateFiles); err != nil {
 		return err
-	}
-
-	// DB entries that should be removed
-
-	var removeURLs []string
-
-	for _, info := range infos {
-		found := false
-
-		for _, validURL := range validURLs {
-			if info.CertURL == validURL {
-				found = true
-			}
-		}
-
-		if !found {
-			removeURLs = append(removeURLs, info.CertURL)
-		}
-	}
-
-	// Remove invalid DB entries
-
-	for _, removeURL := range removeURLs {
-		log.WithFields(log.Fields{"certType": module.certType, "certURL": removeURL}).Warn("Remove invalid storage entry")
-
-		if err = module.storage.RemoveCertificate(module.certType, removeURL); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -388,6 +354,44 @@ func fileToURL(file string) (urlStr string) {
 	urlVal := url.URL{Scheme: "file", Path: file}
 
 	return urlVal.String()
+}
+
+func (module *SWModule) updateStorage() (err error) {
+	infos, err := module.storage.GetCertificates(module.certType)
+	if err != nil {
+		return err
+	}
+
+	for _, info := range infos {
+		if err = func() (err error) {
+			x509Cert, err := getCertByURL(info.CertURL)
+			if err != nil {
+				return err
+			}
+
+			key, err := getKeyByURL(info.KeyURL)
+			if err != nil {
+				return err
+			}
+
+			if err = checkCert(x509Cert, key.Public()); err != nil {
+				return err
+			}
+
+			return nil
+		}(); err != nil {
+			log.WithFields(log.Fields{"certType": module.certType,
+				"certURL": info.CertURL, "keyURL": info.KeyURL}).Errorf("Invalid storage entry: %s", err)
+
+			log.WithFields(log.Fields{"certType": module.certType, "certURL": info.CertURL}).Warn("Remove invalid storage entry")
+
+			if err = module.storage.RemoveCertificate(module.certType, info.CertURL); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (module *SWModule) storeCert(x509Cert *x509.Certificate, certURL, keyURL string) (err error) {
