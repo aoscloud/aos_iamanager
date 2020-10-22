@@ -44,6 +44,11 @@ import (
  * Consts
  ******************************************************************************/
 
+const (
+	crtExt = ".crt"
+	keyExt = ".key"
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -100,7 +105,7 @@ func (module *SWModule) Close() (err error) {
 func (module *SWModule) SyncStorage() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Sync storage")
 
-	files, err := getFilesByExt(module.config.StoragePath, ".crt")
+	files, err := getFilesByExt(module.config.StoragePath, crtExt)
 	if err != nil {
 		return err
 	}
@@ -298,7 +303,7 @@ func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
 }
 
 func saveCert(storageDir string, cert *x509.Certificate) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*.crt")
+	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
 	if err != nil {
 		return "", err
 	}
@@ -312,7 +317,7 @@ func saveCert(storageDir string, cert *x509.Certificate) (fileName string, err e
 }
 
 func saveKey(storageDir string, key *rsa.PrivateKey) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*.key")
+	file, err := ioutil.TempFile(storageDir, "*"+keyExt)
 	if err != nil {
 		return "", err
 	}
@@ -447,7 +452,7 @@ func getKeyByURL(urlStr string) (key *rsa.PrivateKey, err error) {
 }
 
 func (module *SWModule) updateCerts(files []string) (err error) {
-	keyFiles, err := getFilesByExt(module.config.StoragePath, ".key")
+	keyFiles, err := getFilesByExt(module.config.StoragePath, keyExt)
 	if err != nil {
 		return err
 	}
