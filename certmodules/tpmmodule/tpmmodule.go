@@ -151,6 +151,10 @@ func (module *TPMModule) Close() (err error) {
 func (module *TPMModule) SyncStorage() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Sync storage")
 
+	if err = module.updateStorage(); err != nil {
+		return err
+	}
+
 	files, err := getCertFiles(module.config.StoragePath)
 	if err != nil {
 		return err
@@ -161,18 +165,6 @@ func (module *TPMModule) SyncStorage() (err error) {
 		return err
 	}
 
-	// Certs that no need to update
-
-	var validURLs []string
-
-	for _, file := range files {
-		for _, info := range infos {
-			if fileToCertURL(file) == info.CertURL {
-				validURLs = append(validURLs, info.CertURL)
-			}
-		}
-	}
-
 	// FS certs that need to be updated
 
 	var updateFiles []string
@@ -180,9 +172,11 @@ func (module *TPMModule) SyncStorage() (err error) {
 	for _, file := range files {
 		found := false
 
-		for _, validURL := range validURLs {
-			if fileToCertURL(file) == validURL {
+		for _, info := range infos {
+			if fileToURL(file) == info.CertURL {
 				found = true
+
+				break
 			}
 		}
 
@@ -193,34 +187,6 @@ func (module *TPMModule) SyncStorage() (err error) {
 
 	if err = module.updateCerts(updateFiles); err != nil {
 		return err
-	}
-
-	// DB entries that should be removed
-
-	var removeURLs []string
-
-	for _, info := range infos {
-		found := false
-
-		for _, validURL := range validURLs {
-			if info.CertURL == validURL {
-				found = true
-			}
-		}
-
-		if !found {
-			removeURLs = append(removeURLs, info.CertURL)
-		}
-	}
-
-	// Remove invalid DB entries
-
-	for _, removeURL := range removeURLs {
-		log.WithFields(log.Fields{"certType": module.certType, "certURL": removeURL}).Warn("Remove invalid storage entry")
-
-		if err = module.storage.RemoveCertificate(module.certType, removeURL); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -280,8 +246,8 @@ func (module *TPMModule) ApplyCertificate(cert string) (certURL, keyURL string, 
 		return "", "", err
 	}
 
-	certURL = fileToCertURL(certFileName)
-	keyURL = handleToKeyURL(persistentHandle)
+	certURL = fileToURL(certFileName)
+	keyURL = handleToURL(persistentHandle)
 
 	if err = module.addCertToDB(x509Cert, certURL, keyURL); err != nil {
 		return "", "", err
@@ -488,6 +454,44 @@ func saveCert(storageDir string, cert string) (fileName string, err error) {
 	return file.Name(), nil
 }
 
+func (module *TPMModule) updateStorage() (err error) {
+	infos, err := module.storage.GetCertificates(module.certType)
+	if err != nil {
+		return err
+	}
+
+	for _, info := range infos {
+		if err = func() (err error) {
+			x509Cert, err := getCertByURL(info.CertURL)
+			if err != nil {
+				return err
+			}
+
+			key, err := module.getPublicKeyByURL(info.KeyURL)
+			if err != nil {
+				return err
+			}
+
+			if err = checkCert(x509Cert, key); err != nil {
+				return err
+			}
+
+			return nil
+		}(); err != nil {
+			log.WithFields(log.Fields{"certType": module.certType,
+				"certURL": info.CertURL, "keyURL": info.KeyURL}).Errorf("Invalid storage entry: %s", err)
+
+			log.WithFields(log.Fields{"certType": module.certType, "certURL": info.CertURL}).Warn("Remove invalid storage entry")
+
+			if err = module.storage.RemoveCertificate(module.certType, info.CertURL); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err error) {
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
@@ -575,13 +579,13 @@ func getCertFiles(storagePath string) (files []string, err error) {
 	return files, nil
 }
 
-func fileToCertURL(file string) (certURL string) {
+func fileToURL(file string) (urlStr string) {
 	urlVal := url.URL{Scheme: "file", Path: file}
 
 	return urlVal.String()
 }
 
-func handleToKeyURL(handle tpmutil.Handle) (keyURL string) {
+func handleToURL(handle tpmutil.Handle) (urlStr string) {
 	urlVal := url.URL{Scheme: "tpm", Host: fmt.Sprintf("0x%X", handle)}
 
 	return urlVal.String()
@@ -611,6 +615,43 @@ func (module *TPMModule) addCertToDB(x509Cert *x509.Certificate, certURL, keyURL
 	return nil
 }
 
+func getCertByURL(urlStr string) (x509Cert *x509.Certificate, err error) {
+	urlVal, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	certPem, err := ioutil.ReadFile(urlVal.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return pemToX509Cert(string(certPem))
+}
+
+func (module *TPMModule) getPublicKeyByURL(urlStr string) (publicKey crypto.PublicKey, err error) {
+	urlVal, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	handle, err := strconv.ParseUint(urlVal.Hostname(), 0, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	pubData, _, _, err := tpm2.ReadPublic(module.device, tpmutil.Handle(handle))
+	if err != nil {
+		return nil, err
+	}
+
+	if publicKey, err = pubData.Key(); err != nil {
+		return nil, err
+	}
+
+	return publicKey, nil
+}
+
 func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err error) {
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
@@ -631,50 +672,42 @@ func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err e
 }
 
 func (module *TPMModule) updateCerts(files []string) (err error) {
-	pubs := make(map[tpmutil.Handle]tpm2.Public)
-
 	handles, err := module.getPersistentHandles()
 	if err != nil {
 		return err
 	}
 
+	publicKeys := make(map[string]crypto.PublicKey)
+
 	for _, handle := range handles {
-		pub, _, _, err := tpm2.ReadPublic(module.device, handle)
+		keyURL := handleToURL(handle)
+
+		publicKey, err := module.getPublicKeyByURL(keyURL)
 		if err != nil {
 			return err
 		}
 
-		pubs[handle] = pub
+		publicKeys[keyURL] = publicKey
 	}
 
 	for _, certFile := range files {
-		certPem, err := ioutil.ReadFile(certFile)
+		x509Cert, err := getCertByURL(fileToURL(certFile))
 		if err != nil {
 			return err
 		}
 
-		x509Cert, err := pemToX509Cert(string(certPem))
-		if err != nil {
-			return err
-		}
+		certKeyURL := ""
 
-		var certHandle tpmutil.Handle
-
-		for handle, pub := range pubs {
-			publicKey, err := pub.Key()
-			if err != nil {
-				return err
-			}
-
+		for keyURL, publicKey := range publicKeys {
 			if err = checkCert(x509Cert, publicKey); err == nil {
-				certHandle = handle
+				certKeyURL = keyURL
 			}
 		}
 
-		if certHandle != 0 {
+		if certKeyURL != "" {
 			log.WithFields(log.Fields{"certType": module.certType, "file": certFile}).Warn("Store valid certificate")
 
-			if err = module.addCertToDB(x509Cert, fileToCertURL(certFile), handleToKeyURL(certHandle)); err != nil {
+			if err = module.addCertToDB(x509Cert, fileToURL(certFile), certKeyURL); err != nil {
 				return err
 			}
 		} else {
