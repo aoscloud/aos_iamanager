@@ -24,7 +24,7 @@ import (
 	"path"
 	"testing"
 
-	"aos_certificatemanager/config"
+	"aos_iamanager/config"
 )
 
 /*******************************************************************************
@@ -71,7 +71,7 @@ func TestGetCredentials(t *testing.T) {
 }
 
 func TestGetWorkingDir(t *testing.T) {
-	if cfg.WorkingDir != "/var/aos/certificatemanager" {
+	if cfg.WorkingDir != "/var/aos/iamanager" {
 		t.Errorf("Wrong working dir value: %s", cfg.WorkingDir)
 	}
 }
@@ -126,7 +126,7 @@ func saveConfigFile(fileName string, configContent string) (err error) {
 }
 
 func setup() (err error) {
-	if tmpDir, err = ioutil.TempDir("", "cm_"); err != nil {
+	if tmpDir, err = ioutil.TempDir("", "iam_"); err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
@@ -134,7 +134,7 @@ func setup() (err error) {
 		"ServerUrl": "localhost:8090",
 		"Cert": "cert.pem",
 		"Key": "key.pem",	
-		"WorkingDir": "/var/aos/certificatemanager",
+		"WorkingDir": "/var/aos/iamanager",
 		"CertModules":[{
 			"ID": "id1",
 			"Plugin": "test1",
@@ -160,7 +160,7 @@ func setup() (err error) {
 		}]
 	}`
 
-	configFile := path.Join(tmpDir, "aos_certificatemanager.cfg")
+	configFile := path.Join(tmpDir, "aos_iamanager.cfg")
 
 	if err = saveConfigFile(configFile, configContent); err != nil {
 		return err

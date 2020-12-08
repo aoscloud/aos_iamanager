@@ -27,7 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/config"
+	"aos_iamanager/config"
 )
 
 /*******************************************************************************

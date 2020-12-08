@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmserver_test
+package iamserver_test
 
 import (
 	"context"
@@ -24,11 +24,11 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/certificatemanager"
+	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
 	"google.golang.org/grpc"
 
-	"aos_certificatemanager/cmserver"
-	"aos_certificatemanager/config"
+	"aos_iamanager/config"
+	"aos_iamanager/iamserver"
 )
 
 /*******************************************************************************
@@ -43,7 +43,7 @@ const serverURL = "localhost:8088"
 
 type testClient struct {
 	connection *grpc.ClientConn
-	pbclient   pb.CertificateManagerClient
+	pbclient   pb.IAManagerClient
 }
 
 type testCertHandler struct {
@@ -81,7 +81,7 @@ func init() {
 func TestCreateKeys(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -121,7 +121,7 @@ func TestCreateKeys(t *testing.T) {
 func TestApplyCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -162,7 +162,7 @@ func TestApplyCert(t *testing.T) {
 func TestGetCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := cmserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -217,7 +217,7 @@ func newTestClient(url string) (client *testClient, err error) {
 		return nil, err
 	}
 
-	client.pbclient = pb.NewCertificateManagerClient(client.connection)
+	client.pbclient = pb.NewIAManagerClient(client.connection)
 
 	return client, nil
 }

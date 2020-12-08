@@ -42,7 +42,7 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/certhandler"
+	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

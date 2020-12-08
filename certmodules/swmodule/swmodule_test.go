@@ -36,8 +36,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/certhandler"
-	"aos_certificatemanager/certmodules/swmodule"
+	"aos_iamanager/certhandler"
+	"aos_iamanager/certmodules/swmodule"
 )
 
 /*******************************************************************************

@@ -28,8 +28,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/certhandler"
-	"aos_certificatemanager/config"
+	"aos_iamanager/certhandler"
+	"aos_iamanager/config"
 )
 
 /*******************************************************************************
@@ -84,7 +84,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "cm_")
+	tmpDir, err = ioutil.TempDir("", "iam_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}

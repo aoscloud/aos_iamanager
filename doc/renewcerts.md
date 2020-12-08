@@ -13,11 +13,11 @@
 
 ## High Level Design
 
-* Renew certificates will be done as part of Update Manager (UM)
-* UM protocol will be extended to support renew certificates
+* Renew certificates will be done as part of Identity and Access Manager (IAM)
+* IAM protocol will be extended to support renew certificates
 * To support different update certificates approaches, certificate update mechanism should be implemented as modules (plugins)
 * Each plugin will have its unique module ID
-* Currently we are going to update ServiceManager certificates. Update Service Manager certs module will be implemented in UM
+* Currently we are going to update ServiceManager certificates. Update Service Manager certs module will be implemented in IAM
 * Two Service Manager certs update modules should be implemented: one using TPM (for Nuance), another using file system to store/retrieve keys/certs (generic AOS)
 * Provisioning script should not update certs itself but should communicated with UM in order to apply initial certificates (TBD)
 
@@ -87,4 +87,4 @@ Following new commands will be add in order to support renew certificates:
 }
 ```
 
-## UM Update certs module interface
+## IAM Update certs module interface

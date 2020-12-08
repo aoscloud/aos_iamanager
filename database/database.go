@@ -27,7 +27,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/certhandler"
+	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

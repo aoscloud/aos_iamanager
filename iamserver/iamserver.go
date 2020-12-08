@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmserver
+package iamserver
 
 import (
 	"context"
@@ -23,11 +23,11 @@ import (
 	"net"
 
 	log "github.com/sirupsen/logrus"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/certificatemanager"
+	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"aos_certificatemanager/config"
+	"aos_iamanager/config"
 )
 
 /*******************************************************************************
@@ -42,7 +42,7 @@ import (
  * Types
  ******************************************************************************/
 
-// Server CM server instance
+// Server IAM server instance
 type Server struct {
 	certHandler CertHandler
 	listener    net.Listener
@@ -60,9 +60,9 @@ type CertHandler interface {
  * Public
  ******************************************************************************/
 
-// New creates new CM server instance
+// New creates new IAM server instance
 func New(cfg *config.Config, certHandler CertHandler, insecure bool) (server *Server, err error) {
-	log.WithField("url", cfg.ServerURL).Debug("Create CM server")
+	log.WithField("url", cfg.ServerURL).Debug("Create IAM server")
 
 	server = &Server{certHandler: certHandler}
 
@@ -84,21 +84,21 @@ func New(cfg *config.Config, certHandler CertHandler, insecure bool) (server *Se
 
 		server.grpcServer = grpc.NewServer(grpc.Creds(creds))
 	} else {
-		log.Warnf("CM server uses insecure connection")
+		log.Warnf("IAM server uses insecure connection")
 
 		server.grpcServer = grpc.NewServer()
 	}
 
-	pb.RegisterCertificateManagerServer(server.grpcServer, server)
+	pb.RegisterIAManagerServer(server.grpcServer, server)
 
 	go server.grpcServer.Serve(server.listener)
 
 	return server, nil
 }
 
-// Close closes CM server instance
+// Close closes IAM server instance
 func (server *Server) Close() (err error) {
-	log.Debug("Close CM server")
+	log.Debug("Close IAM server")
 
 	if server.grpcServer != nil {
 		server.grpcServer.Stop()

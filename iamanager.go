@@ -30,18 +30,18 @@ import (
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/certhandler"
-	_ "aos_certificatemanager/certmodules"
-	"aos_certificatemanager/cmserver"
-	"aos_certificatemanager/config"
-	"aos_certificatemanager/database"
+	"aos_iamanager/certhandler"
+	_ "aos_iamanager/certmodules"
+	"aos_iamanager/config"
+	"aos_iamanager/database"
+	"aos_iamanager/iamserver"
 )
 
 /*******************************************************************************
  * Consts
  ******************************************************************************/
 
-const dbFileName = "certificatemanager.db"
+const dbFileName = "iamanager.db"
 
 /*******************************************************************************
  * Vars
@@ -128,10 +128,10 @@ func (hook *journalHook) Levels() []log.Level {
 
 func main() {
 	// Initialize command line flags
-	configFile := flag.String("c", "aos_certificatemanager.cfg", "path to config file")
+	configFile := flag.String("c", "aos_iamanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)
 	useJournal := flag.Bool("j", false, "output logs to systemd journal")
-	showVersion := flag.Bool("version", false, `show update manager version`)
+	showVersion := flag.Bool("version", false, `show iamanager version`)
 
 	flag.Parse()
 
@@ -155,7 +155,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	log.WithFields(log.Fields{"configFile": *configFile, "version": GitSummary}).Info("Start certificate manager")
+	log.WithFields(log.Fields{"configFile": *configFile, "version": GitSummary}).Info("Start IAM")
 
 	cfg, err := config.New(*configFile)
 	if err != nil {
@@ -185,9 +185,9 @@ func main() {
 	}
 	defer certHandler.Close()
 
-	server, err := cmserver.New(cfg, certHandler, true)
+	server, err := iamserver.New(cfg, certHandler, true)
 	if err != nil {
-		log.Fatalf("Can't create CM server: %s", err)
+		log.Fatalf("Can't create IAM server: %s", err)
 	}
 	defer server.Close()
 

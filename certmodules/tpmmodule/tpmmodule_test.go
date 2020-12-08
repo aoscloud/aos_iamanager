@@ -38,8 +38,8 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
 
-	"aos_certificatemanager/certhandler"
-	"aos_certificatemanager/certmodules/tpmmodule"
+	"aos_iamanager/certhandler"
+	"aos_iamanager/certmodules/tpmmodule"
 )
 
 /*******************************************************************************
