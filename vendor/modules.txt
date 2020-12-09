@@ -1,7 +1,7 @@
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/journal
-# github.com/golang/protobuf v1.4.1
+# github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
@@ -24,9 +24,9 @@ github.com/mattn/go-sqlite3
 # github.com/sirupsen/logrus v1.6.0
 ## explicit
 github.com/sirupsen/logrus
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20200909082413-24a760b76e0d
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20201209094404-e53a3ff733e7
 ## explicit
-gitpct.epam.com/epmd-aepr/aos_common/api/certificatemanager
+gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
 # golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2

@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-option go_package = "gitpct.epam.com/epmd-aepr/aos_common/api/certificatemanager";
+option go_package = "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager";
 
-package certificatemanager;
+package iamanager;
 
-service CertificateManager {
+service IAManager {
     rpc CreateKeys(CreateKeysReq) returns (CreateKeysRsp) {}
     rpc ApplyCert(ApplyCertReq) returns (ApplyCertRsp) {}
     rpc GetCert(GetCertReq) returns (GetCertRsp) {}

@@ -1,4 +1,4 @@
-module aos_certificatemanager
+module aos_iamanager
 
 go 1.14
 
@@ -8,7 +8,7 @@ require (
 	github.com/google/go-tpm-tools v0.1.3-0.20200723191227-f7cd92cef3ca
 	github.com/mattn/go-sqlite3 v1.14.2
 	github.com/sirupsen/logrus v1.6.0
-	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20200909082413-24a760b76e0d
+	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20201209094404-e53a3ff733e7
 	google.golang.org/grpc v1.31.1
 	google.golang.org/protobuf v1.25.0 // indirect
 )
