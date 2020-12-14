@@ -369,6 +369,14 @@ func (module *SWModule) updateStorage() (err error) {
 				return err
 			}
 
+			if info.Serial != fmt.Sprintf("%X", x509Cert.SerialNumber) {
+				return errors.New("invalid certificate serial number")
+			}
+
+			if info.Issuer != base64.StdEncoding.EncodeToString(x509Cert.RawIssuer) {
+				return errors.New("invalid certificate issuer")
+			}
+
 			key, err := getKeyByURL(info.KeyURL)
 			if err != nil {
 				return err
