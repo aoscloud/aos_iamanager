@@ -376,7 +376,7 @@ func TestSyncStorage(t *testing.T) {
 	// * wrongFile - no DB entry and no handle
 	// If cert file has DB entry but no handle - not considered
 
-	testData := []string{"valid", "wrongDB", "wrongDB", "valid", "wrongFile", "validFile", "valid", "valid"}
+	testData := []string{"valid", "wrongDB", "wrongFile", "validFile", "valid", "wrongSerial", "wrongIssuer", "valid"}
 
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
 		var goodItems []certhandler.CertInfo
@@ -424,6 +424,13 @@ func TestSyncStorage(t *testing.T) {
 				t.Errorf("Can't parse key URL: %s", err)
 			}
 
+			block, _ := pem.Decode([]byte(cert))
+
+			x509Cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				t.Errorf("Can't parse certificate: %s", err)
+			}
+
 			switch item {
 			case "wrongDB":
 				if err = os.Remove(certVal.Path); err != nil {
@@ -447,7 +454,8 @@ func TestSyncStorage(t *testing.T) {
 						t.Errorf("Can't parse key handle: %s", err)
 					}
 
-					if err = tpm2.EvictControl(tpmSimulator, password, tpm2.HandleOwner, tpmutil.Handle(handle), tpmutil.Handle(handle)); err != nil {
+					if err = tpm2.EvictControl(tpmSimulator, password, tpm2.HandleOwner, tpmutil.Handle(handle),
+						tpmutil.Handle(handle)); err != nil {
 						t.Errorf("Can't remove key handle: %s", err)
 					}
 
@@ -455,12 +463,50 @@ func TestSyncStorage(t *testing.T) {
 					t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
 				}
 
+			case "wrongSerial":
+				certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
+					fmt.Sprintf("%X", x509Cert.SerialNumber))
+				if err != nil {
+					t.Errorf("Can't remove cert entry: %s", err)
+				}
+
+				if err = storage.RemoveCertificate("test", certURL); err != nil {
+					t.Errorf("Can't remove cert entry: %s", err)
+				}
+
+				certInfo.Serial = "invalid serial"
+
+				if err = storage.AddCertificate("test", certInfo); err != nil {
+					t.Errorf("Can't add cert: %s", err)
+				}
+
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
+
+			case "wrongIssuer":
+				certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
+					fmt.Sprintf("%X", x509Cert.SerialNumber))
+				if err != nil {
+					t.Errorf("Can't remove cert entry: %s", err)
+				}
+
+				if err = storage.RemoveCertificate("test", certURL); err != nil {
+					t.Errorf("Can't remove cert entry: %s", err)
+				}
+
+				certInfo.Issuer = "wrong issuer"
+
+				if err = storage.AddCertificate("test", certInfo); err != nil {
+					t.Errorf("Can't add cert: %s", err)
+				}
+
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
+
 			case "validFile":
 				if err = storage.RemoveCertificate("test", certURL); err != nil {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
-				fallthrough
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
 
 			default:
 				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
