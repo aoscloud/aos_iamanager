@@ -35,6 +35,8 @@ import (
 	"aos_iamanager/config"
 	"aos_iamanager/database"
 	"aos_iamanager/iamserver"
+	"aos_iamanager/identhandler"
+	_ "aos_iamanager/identhandler/modules"
 )
 
 /*******************************************************************************
@@ -179,13 +181,19 @@ func main() {
 	}
 	defer db.Close()
 
+	identHandler, err := identhandler.New(cfg)
+	if err != nil {
+		log.Fatalf("Can't create ident handler: %s", err)
+	}
+	defer identHandler.Close()
+
 	certHandler, err := certhandler.New(cfg, db)
 	if err != nil {
 		log.Fatalf("Can't create cert handler: %s", err)
 	}
 	defer certHandler.Close()
 
-	server, err := iamserver.New(cfg, certHandler, true)
+	server, err := iamserver.New(cfg, identHandler, certHandler, true)
 	if err != nil {
 		log.Fatalf("Can't create IAM server: %s", err)
 	}

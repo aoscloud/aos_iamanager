@@ -20,9 +20,11 @@ package iamserver_test
 import (
 	"context"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
 	"google.golang.org/grpc"
@@ -47,10 +49,17 @@ type testClient struct {
 }
 
 type testCertHandler struct {
-	csr     string
-	certURL string
-	keyURL  string
-	err     error
+	csr      string
+	certURL  string
+	keyURL   string
+	password string
+	err      error
+}
+
+type testIdentHandler struct {
+	systemID            string
+	users               []string
+	usersChangedChannel chan []string
 }
 
 /*******************************************************************************
@@ -78,10 +87,51 @@ func init() {
  * Tests
  ******************************************************************************/
 
+func TestSetOwner(t *testing.T) {
+	certHandler := &testCertHandler{}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	password := "password"
+
+	setOwnerReq := &pb.SetOwnerReq{Type: "online", Password: password}
+
+	if _, err = client.pbclient.SetOwner(ctx, setOwnerReq); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if certHandler.password != password {
+		t.Errorf("Wrong password: %s", certHandler.password)
+	}
+
+	clearReq := &pb.ClearReq{Type: "online"}
+
+	if _, err = client.pbclient.Clear(ctx, clearReq); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if certHandler.password != "" {
+		t.Errorf("Wrong password: %s", certHandler.password)
+	}
+}
+
 func TestCreateKeys(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -112,16 +162,12 @@ func TestCreateKeys(t *testing.T) {
 	if string(response.Csr) != string(certHandler.csr) {
 		t.Errorf("Wrong CSR value: %s", string(response.Csr))
 	}
-
-	if response.Error != "" {
-		t.Errorf("Response error: %s", response.Error)
-	}
 }
 
 func TestApplyCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -152,17 +198,12 @@ func TestApplyCert(t *testing.T) {
 	if response.CertUrl != certHandler.certURL {
 		t.Errorf("Wrong cert URL: %s", response.CertUrl)
 	}
-
-	if response.Error != "" {
-		t.Errorf("Response error: %s", response.Error)
-	}
-
 }
 
 func TestGetCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -198,9 +239,136 @@ func TestGetCert(t *testing.T) {
 	if response.KeyUrl != "keyURL" {
 		t.Errorf("Wrong key URL: %s", response.KeyUrl)
 	}
+}
 
-	if response.Error != "" {
-		t.Errorf("Response error: %s", response.Error)
+func TestGetSystemID(t *testing.T) {
+	identHandler := &testIdentHandler{}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	identHandler.systemID = "testSystemID"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	response, err := client.pbclient.GetSystemID(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Id != identHandler.systemID {
+		t.Errorf("Wrong systemd ID: %s", response.Id)
+	}
+}
+
+func TestGetUsers(t *testing.T) {
+	identHandler := &testIdentHandler{}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	identHandler.users = []string{"user1", "user2", "user3"}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	response, err := client.pbclient.GetUsers(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if !reflect.DeepEqual(response.Users, identHandler.users) {
+		t.Errorf("Wrong users: %v", response.Users)
+	}
+}
+
+func TestSetUsers(t *testing.T) {
+	identHandler := &testIdentHandler{}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	identHandler.users = []string{"user1", "user2", "user3"}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	request := &pb.SetUsersReq{Users: []string{"newUser1", "newUser2", "newUser3"}}
+
+	if _, err := client.pbclient.SetUsers(ctx, request); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if !reflect.DeepEqual(request.Users, identHandler.users) {
+		t.Errorf("Wrong users: %v", identHandler.users)
+	}
+}
+
+func TestUsersChanged(t *testing.T) {
+	identHandler := &testIdentHandler{usersChangedChannel: make(chan []string, 1)}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := client.pbclient.SubscribeUsersChanged(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	newUsers := []string{"newUser1", "newUser2", "newUser3"}
+
+	identHandler.usersChangedChannel <- newUsers
+
+	var message *pb.UsersChangedNtf
+
+	if message, err = stream.Recv(); err != nil {
+		t.Fatalf("Error receiving message: %s", err)
+	}
+
+	if !reflect.DeepEqual(message.Users, newUsers) {
+		t.Errorf("Wrong users: %v", message.Users)
 	}
 }
 
@@ -228,7 +396,19 @@ func (client *testClient) close() {
 	}
 }
 
-func (handler *testCertHandler) CreateKeys(certType, systemID, password string) (csr string, err error) {
+func (handler *testCertHandler) SetOwner(certType, password string) (err error) {
+	handler.password = password
+
+	return nil
+}
+
+func (handler *testCertHandler) Clear(certType string) (err error) {
+	handler.password = ""
+
+	return nil
+}
+
+func (handler *testCertHandler) CreateKeys(certType, password string) (csr string, err error) {
 	return handler.csr, handler.err
 }
 
@@ -238,4 +418,22 @@ func (handler *testCertHandler) ApplyCertificate(certType string, cert string) (
 
 func (handler *testCertHandler) GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error) {
 	return handler.certURL, handler.keyURL, handler.err
+}
+
+func (handler *testIdentHandler) GetSystemID() (systemID string, err error) {
+	return handler.systemID, nil
+}
+
+func (handler *testIdentHandler) GetUsers() (users []string, err error) {
+	return handler.users, nil
+}
+
+func (handler *testIdentHandler) SetUsers(users []string) (err error) {
+	handler.users = users
+
+	return nil
+}
+
+func (handler *testIdentHandler) UsersChangedChannel() (channel <-chan []string) {
+	return handler.usersChangedChannel
 }
