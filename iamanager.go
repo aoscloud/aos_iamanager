@@ -31,7 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_iamanager/certhandler"
-	_ "aos_iamanager/certmodules"
+	_ "aos_iamanager/certhandler/modules"
 	"aos_iamanager/config"
 	"aos_iamanager/database"
 	"aos_iamanager/iamserver"

@@ -41,8 +41,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_iamanager/certhandler"
-	"aos_iamanager/certmodules/swmodule"
-	"aos_iamanager/certmodules/tpmmodule"
+	"aos_iamanager/certhandler/modules/swmodule"
+	"aos_iamanager/certhandler/modules/tpmmodule"
 )
 
 /*******************************************************************************
@@ -123,9 +123,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 		module, err := createModule(certStorage, 1, password, storage, true)
 		if err != nil {
-			t.Errorf("Can't create module: %s", err)
-
-			continue
+			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
 
@@ -133,9 +131,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 		csr, err := module.CreateKeys("testsystem", password)
 		if err != nil {
-			t.Errorf("Can't create keys: %s", err)
-
-			continue
+			t.Fatalf("Can't create keys: %s", err)
 		}
 
 		// Verify CSR
@@ -143,32 +139,24 @@ func TestUpdateCertificate(t *testing.T) {
 		csrFile := path.Join(tmpDir, "data.csr")
 
 		if err = ioutil.WriteFile(csrFile, []byte(csr), 0644); err != nil {
-			t.Errorf("Can't write CSR to file: %s", err)
-
-			continue
+			t.Fatalf("Can't write CSR to file: %s", err)
 		}
 
 		out, err := exec.Command("openssl", "req", "-text", "-noout", "-verify", "-inform", "PEM", "-in", csrFile).CombinedOutput()
 		if err != nil {
-			t.Errorf("Can't verify CSR: %s, %s", out, err)
-
-			continue
+			t.Fatalf("Can't verify CSR: %s, %s", out, err)
 		}
 
 		// Apply certificate
 
 		cert, err := generateCertificate(csr)
 		if err != nil {
-			t.Errorf("Can't generate certificate: %s", err)
-
-			continue
+			t.Fatalf("Can't generate certificate: %s", err)
 		}
 
 		certURL, keyURL, err := module.ApplyCertificate(cert)
 		if err != nil {
-			t.Errorf("Can't apply certificate: %s", err)
-
-			continue
+			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
 		// Get certificate
@@ -177,31 +165,23 @@ func TestUpdateCertificate(t *testing.T) {
 
 		x509Cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
-			t.Errorf("Can't parse certificate: %s", err)
-
-			continue
+			t.Fatalf("Can't parse certificate: %s", err)
 		}
 
 		certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer), fmt.Sprintf("%X", x509Cert.SerialNumber))
 		if err != nil {
-			t.Errorf("Can't get certificate: %s", err)
-
-			continue
+			t.Fatalf("Can't get certificate: %s", err)
 		}
 
 		if certURL != certInfo.CertURL || keyURL != certInfo.KeyURL {
 			t.Errorf("Wrong certificate or key URL: %s, %s", certInfo.CertURL, certInfo.KeyURL)
-
-			continue
 		}
 
 		// Check encrypt/decrypt with private key
 
 		keyVal, err := url.Parse(keyURL)
 		if err != nil {
-			t.Errorf("Wrong key URL: %s", keyURL)
-
-			continue
+			t.Fatalf("Wrong key URL: %s", keyURL)
 		}
 
 		originMessage := []byte("This is origin message")
@@ -217,22 +197,16 @@ func TestUpdateCertificate(t *testing.T) {
 			encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, &key.PublicKey, originMessage)
 			if err != nil {
 				t.Errorf("Can't encrypt message: %s", err)
-
-				continue
 			}
 
 			if decryptedData, err = rsa.DecryptPKCS1v15(rand.Reader, key, encryptedData); err != nil {
 				t.Errorf("Can't decrypt message: %s", err)
-
-				continue
 			}
 
 		case "tpm":
 			handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
 			if err != nil {
-				t.Errorf("Can't parse key URL: %s", err)
-
-				continue
+				t.Fatalf("Can't parse key URL: %s", err)
 			}
 
 			originMessage := []byte("This is origin message")
@@ -240,26 +214,18 @@ func TestUpdateCertificate(t *testing.T) {
 			encryptedData, err := tpm2.RSAEncrypt(tpmSimulator, tpmutil.Handle(handle), originMessage, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, "")
 			if err != nil {
 				t.Errorf("Can't encrypt message: %s", err)
-
-				continue
 			}
 
 			if decryptedData, err = tpm2.RSADecrypt(tpmSimulator, tpmutil.Handle(handle), "", encryptedData, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, ""); err != nil {
 				t.Errorf("Can't decrypt message: %s", err)
-
-				continue
 			}
 
 		default:
-			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
-
-			continue
+			t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
 		}
 
 		if !bytes.Equal(originMessage, decryptedData) {
 			t.Error("Decrypt error")
-
-			continue
 		}
 	}
 }
@@ -274,9 +240,7 @@ func TestMaxItems(t *testing.T) {
 
 		module, err := createModule(certStorage, 1, password, storage, true)
 		if err != nil {
-			t.Errorf("Can't create module: %s", err)
-
-			continue
+			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
 
@@ -286,34 +250,26 @@ func TestMaxItems(t *testing.T) {
 
 			csr, err := module.CreateKeys("testsystem", password)
 			if err != nil {
-				t.Errorf("Can't create keys: %s", err)
-
-				continue
+				t.Fatalf("Can't create keys: %s", err)
 			}
 
 			// Apply certificate
 
 			cert, err := generateCertificate(csr)
 			if err != nil {
-				t.Errorf("Can't generate certificate: %s", err)
-
-				continue
+				t.Fatalf("Can't generate certificate: %s", err)
 			}
 
 			certURL, keyURL, err := module.ApplyCertificate(cert)
 			if err != nil {
-				t.Errorf("Can't apply certificate: %s", err)
-
-				continue
+				t.Fatalf("Can't apply certificate: %s", err)
 			}
 
 			// Check key files
 
 			keyVal, err := url.Parse(keyURL)
 			if err != nil {
-				t.Errorf("Wrong key URL: %s", keyURL)
-
-				continue
+				t.Fatalf("Wrong key URL: %s", keyURL)
 			}
 
 			switch keyVal.Scheme {
@@ -324,7 +280,7 @@ func TestMaxItems(t *testing.T) {
 				}
 
 				if len(keyFiles) != 1 {
-					t.Fatalf("Wrong key files count: %d", len(keyFiles))
+					t.Errorf("Wrong key files count: %d", len(keyFiles))
 				}
 
 				if err = checkFileURL(keyURL, keyFiles[0]); err != nil {
@@ -338,7 +294,7 @@ func TestMaxItems(t *testing.T) {
 				}
 
 				if len(handles) != 1 {
-					t.Fatalf("Wrong persistent handles count: %d", len(handles))
+					t.Errorf("Wrong persistent handles count: %d", len(handles))
 				}
 
 				if err = checkHandleURL(keyURL, handles[0]); err != nil {
@@ -346,9 +302,7 @@ func TestMaxItems(t *testing.T) {
 				}
 
 			default:
-				t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
-
-				continue
+				t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
 			}
 
 			// Check cert files
@@ -359,7 +313,7 @@ func TestMaxItems(t *testing.T) {
 			}
 
 			if len(certFiles) != 1 {
-				t.Fatalf("Wrong cert files count: %d", len(certFiles))
+				t.Errorf("Wrong cert files count: %d", len(certFiles))
 			}
 
 			if err = checkFileURL(certURL, certFiles[0]); err != nil {
@@ -389,9 +343,7 @@ func TestSyncStorage(t *testing.T) {
 
 		module, err := createModule(certStorage, len(testData), password, storage, true)
 		if err != nil {
-			t.Errorf("Can't create module: %s", err)
-
-			continue
+			t.Fatalf("Can't create module: %s", err)
 		}
 
 		for _, item := range testData {
@@ -399,36 +351,36 @@ func TestSyncStorage(t *testing.T) {
 
 			csr, err := module.CreateKeys("testsystem", password)
 			if err != nil {
-				t.Errorf("Can't create keys: %s", err)
+				t.Fatalf("Can't create keys: %s", err)
 			}
 
 			// Apply certificate
 
 			cert, err := generateCertificate(csr)
 			if err != nil {
-				t.Errorf("Can't generate certificate: %s", err)
+				t.Fatalf("Can't generate certificate: %s", err)
 			}
 
 			certURL, keyURL, err := module.ApplyCertificate(cert)
 			if err != nil {
-				t.Errorf("Can't apply certificate: %s", err)
+				t.Fatalf("Can't apply certificate: %s", err)
 			}
 
 			certVal, err := url.Parse(certURL)
 			if err != nil {
-				t.Errorf("Can't parse cert URL: %s", err)
+				t.Fatalf("Can't parse cert URL: %s", err)
 			}
 
 			keyVal, err := url.Parse(keyURL)
 			if err != nil {
-				t.Errorf("Can't parse key URL: %s", err)
+				t.Fatalf("Can't parse key URL: %s", err)
 			}
 
 			block, _ := pem.Decode([]byte(cert))
 
 			x509Cert, err := x509.ParseCertificate(block.Bytes)
 			if err != nil {
-				t.Errorf("Can't parse certificate: %s", err)
+				t.Fatalf("Can't parse certificate: %s", err)
 			}
 
 			switch item {
@@ -516,23 +468,17 @@ func TestSyncStorage(t *testing.T) {
 		module.Close()
 
 		if module, err = createModule(certStorage, 1, password, storage, false); err != nil {
-			t.Errorf("Can't create module: %s", err)
-
-			continue
+			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
 
 		if err = module.SyncStorage(); err != nil {
-			t.Errorf("Can't sync storage: %s", err)
-
-			continue
+			t.Fatalf("Can't sync storage: %s", err)
 		}
 
 		certInfos, err := storage.GetCertificates("test")
 		if err != nil {
-			t.Errorf("Can't get certificates: %s", err)
-
-			continue
+			t.Fatalf("Can't get certificates: %s", err)
 		}
 
 		for _, goodItem := range goodItems {
