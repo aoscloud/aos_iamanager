@@ -34,6 +34,10 @@ type Config struct {
 	Key         string         `json:"key"`
 	WorkingDir  string         `json:"workingDir"`
 	CertModules []ModuleConfig `json:"certModules"`
+	Identifier  struct {
+		Plugin string          `json:"plugin"`
+		Params json.RawMessage `json:"params"`
+	} `json:"identifier"`
 }
 
 // ModuleConfig module configuration

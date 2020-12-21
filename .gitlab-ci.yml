@@ -18,7 +18,8 @@ test:
   stage: test
   script:
     - apt update
-    - apt install -y libssl-dev  
+    - apt install -y libssl-dev
+    - cp ./ci/rootCA.crt.pem  /etc/ssl/certs/
     - go test $(go list ./... | grep -v "/vendor") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 

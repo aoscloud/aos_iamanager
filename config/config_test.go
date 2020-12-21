@@ -18,6 +18,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -113,6 +114,25 @@ func TestNewErrors(t *testing.T) {
 	}
 }
 
+func TestIdentifier(t *testing.T) {
+	if cfg.Identifier.Plugin != "testIdentifier" {
+		t.Errorf("Wrong identifier plugin: %s", cfg.Identifier.Plugin)
+	}
+
+	var moduleConfig struct {
+		Param1 string
+		Param2 string
+	}
+
+	if err := json.Unmarshal(cfg.Identifier.Params, &moduleConfig); err != nil {
+		t.Errorf("Can't unmarshal module config: %s", err)
+	}
+
+	if moduleConfig.Param1 != "Value1" || moduleConfig.Param2 != "Value2" {
+		t.Error("Invalid module config parm value")
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -157,7 +177,14 @@ func setup() (err error) {
 				"Param1" :"value1",
 				"Param2" : 2
 			}
-		}]
+		}],
+		"Identifier": {
+			"Plugin": "testIdentifier",
+			"Params": {
+				"Param1": "Value1",
+				"Param2": "Value2"
+			}
+		}
 	}`
 
 	configFile := path.Join(tmpDir, "aos_iamanager.cfg")
