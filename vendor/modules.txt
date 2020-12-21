@@ -2,10 +2,12 @@
 ## explicit
 github.com/coreos/go-systemd/journal
 # github.com/golang/protobuf v1.4.2
+## explicit
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
+github.com/golang/protobuf/ptypes/empty
 github.com/golang/protobuf/ptypes/timestamp
 # github.com/google/go-tpm v0.3.1-0.20200805192422-240a3433a7a5
 ## explicit
@@ -16,6 +18,12 @@ github.com/google/go-tpm/tpmutil/tbs
 ## explicit
 github.com/google/go-tpm-tools/simulator
 github.com/google/go-tpm-tools/simulator/internal
+# github.com/google/uuid v1.1.1
+## explicit
+github.com/google/uuid
+# github.com/gorilla/websocket v1.4.1
+## explicit
+github.com/gorilla/websocket
 # github.com/konsorten/go-windows-terminal-sequences v1.0.3
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mattn/go-sqlite3 v1.14.2
@@ -24,9 +32,12 @@ github.com/mattn/go-sqlite3
 # github.com/sirupsen/logrus v1.6.0
 ## explicit
 github.com/sirupsen/logrus
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20201209094404-e53a3ff733e7
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210105162112-df371b473a57
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
+gitpct.epam.com/epmd-aepr/aos_common/visprotocol
+gitpct.epam.com/epmd-aepr/aos_common/wsclient
+gitpct.epam.com/epmd-aepr/aos_common/wsserver
 # golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
@@ -116,4 +127,5 @@ google.golang.org/protobuf/runtime/protoiface
 google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
+google.golang.org/protobuf/types/known/emptypb
 google.golang.org/protobuf/types/known/timestamppb
