@@ -67,11 +67,14 @@ type CertStorage interface {
 	GetCertificate(issuer, serial string) (cert CertInfo, err error)
 	GetCertificates(certType string) (certs []CertInfo, err error)
 	RemoveCertificate(certType, certURL string) (err error)
+	RemoveAllCertificates(certType string) (err error)
 }
 
 // CertModule provides API to manage module certificates
 type CertModule interface {
 	SyncStorage() (err error)
+	SetOwner(password string) (err error)
+	Clear() (err error)
 	CreateKeys(systemID, password string) (csr string, err error)
 	ApplyCertificate(cert string) (certURL, keyURL string, err error)
 	Close() (err error)
@@ -117,6 +120,32 @@ func New(cfg *config.Config, storage CertStorage) (handler *Handler, err error) 
 	}
 
 	return handler, nil
+}
+
+// SetOwner owns security storage
+func (handler *Handler) SetOwner(certType, password string) (err error) {
+	handler.Lock()
+	defer handler.Unlock()
+
+	module, ok := handler.modules[certType]
+	if !ok {
+		return fmt.Errorf("module %s not found", certType)
+	}
+
+	return module.SetOwner(password)
+}
+
+// Clear clears security storage
+func (handler *Handler) Clear(certType string) (err error) {
+	handler.Lock()
+	defer handler.Unlock()
+
+	module, ok := handler.modules[certType]
+	if !ok {
+		return fmt.Errorf("module %s not found", certType)
+	}
+
+	return module.Clear(password)
 }
 
 // CreateKeys creates key pair

@@ -37,8 +37,9 @@ import (
  ******************************************************************************/
 
 type moduleData struct {
-	csr     string
-	certURL string
+	csr      string
+	certURL  string
+	password string
 }
 
 type testModule struct {
@@ -118,6 +119,32 @@ func TestMain(m *testing.M) {
 /*******************************************************************************
  * Tests
  ******************************************************************************/
+
+func TestSetOwner(t *testing.T) {
+	handler, err := certhandler.New(&cfg, &testStorage{})
+	if err != nil {
+		t.Fatalf("Can't create cert handler: %s", err)
+	}
+	defer handler.Close()
+
+	password := "password"
+
+	if err = handler.SetOwner("cert1", password); err != nil {
+		t.Fatalf("Can't set owner: %s", err)
+	}
+
+	if modules["cert1"].data.password != password {
+		t.Errorf("Wrong password: %s", modules["cert1"].data.password)
+	}
+
+	if err = handler.Clear("cert1"); err != nil {
+		t.Fatalf("Can't clear: %s", err)
+	}
+
+	if modules["cert1"].data.password != "" {
+		t.Errorf("Wrong password: %s", modules["cert1"].data.password)
+	}
+}
 
 func TestCreateKeys(t *testing.T) {
 	storage := &testStorage{}
@@ -208,6 +235,18 @@ func (module *testModule) SyncStorage() (err error) {
 	return nil
 }
 
+func (module *testModule) SetOwner(password string) (err error) {
+	module.data.password = password
+
+	return nil
+}
+
+func (module *testModule) Clear() (err error) {
+	module.data.password = ""
+
+	return nil
+}
+
 func (module *testModule) CreateKeys(systemID, password string) (csr string, err error) {
 	return module.data.csr, nil
 }
@@ -262,4 +301,18 @@ func (storage *testStorage) RemoveCertificate(certType, certURL string) (err err
 	}
 
 	return errors.New("certificate not found")
+}
+
+func (storage *testStorage) RemoveAllCertificates(certType string) (err error) {
+	newCerts := make([]certDesc, 0)
+
+	for _, item := range storage.certs {
+		if item.certType != certType {
+			newCerts = append(newCerts, item)
+		}
+	}
+
+	storage.certs = newCerts
+
+	return nil
 }
