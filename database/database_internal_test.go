@@ -119,11 +119,11 @@ func TestAddRemoveCertificate(t *testing.T) {
 	}
 
 	data := []testData{
-		testData{certType: "online", cert: certhandler.CertInfo{"issuer0", "s0", "certURL0", "keyURL0", time.Now().UTC()}, errorExpected: false},
-		testData{certType: "online", cert: certhandler.CertInfo{"issuer0", "s0", "certURL0", "keyURL0", time.Now().UTC()}, errorExpected: true},
-		testData{certType: "online", cert: certhandler.CertInfo{"issuer1", "s0", "certURL1", "keyURL1", time.Now().UTC()}, errorExpected: false},
-		testData{certType: "online", cert: certhandler.CertInfo{"issuer1", "s0", "certURL1", "keyURL1", time.Now().UTC()}, errorExpected: true},
-		testData{certType: "online", cert: certhandler.CertInfo{"issuer2", "s0", "certURL2", "keyURL2", time.Now().UTC()}, errorExpected: false}}
+		{certType: "online", cert: certhandler.CertInfo{"issuer0", "s0", "certURL0", "keyURL0", time.Now().UTC()}, errorExpected: false},
+		{certType: "online", cert: certhandler.CertInfo{"issuer0", "s0", "certURL0", "keyURL0", time.Now().UTC()}, errorExpected: true},
+		{certType: "online", cert: certhandler.CertInfo{"issuer1", "s0", "certURL1", "keyURL1", time.Now().UTC()}, errorExpected: false},
+		{certType: "online", cert: certhandler.CertInfo{"issuer1", "s0", "certURL1", "keyURL1", time.Now().UTC()}, errorExpected: true},
+		{certType: "online", cert: certhandler.CertInfo{"issuer2", "s0", "certURL2", "keyURL2", time.Now().UTC()}, errorExpected: false}}
 
 	// Add certificates
 
@@ -173,19 +173,19 @@ func TestGetCertificates(t *testing.T) {
 	defer db.Close()
 
 	data := [][]certhandler.CertInfo{
-		[]certhandler.CertInfo{
+		{
 			certhandler.CertInfo{"issuer0", "s0", "certURL0", "keyURL0", time.Now().UTC()},
 			certhandler.CertInfo{"issuer0", "s1", "certURL1", "keyURL1", time.Now().UTC()},
 			certhandler.CertInfo{"issuer0", "s2", "certURL2", "keyURL2", time.Now().UTC()},
 			certhandler.CertInfo{"issuer0", "s3", "certURL3", "keyURL3", time.Now().UTC()},
 			certhandler.CertInfo{"issuer0", "s4", "certURL4", "keyURL4", time.Now().UTC()},
 		},
-		[]certhandler.CertInfo{
+		{
 			certhandler.CertInfo{"issuer1", "s0", "certURL0", "keyURL0", time.Now().UTC()},
 			certhandler.CertInfo{"issuer1", "s1", "certURL1", "keyURL1", time.Now().UTC()},
 			certhandler.CertInfo{"issuer1", "s2", "certURL2", "keyURL2", time.Now().UTC()},
 		},
-		[]certhandler.CertInfo{
+		{
 			certhandler.CertInfo{"issuer2", "s0", "certURL0", "keyURL0", time.Now().UTC()},
 			certhandler.CertInfo{"issuer2", "s1", "certURL1", "keyURL1", time.Now().UTC()},
 			certhandler.CertInfo{"issuer2", "s2", "certURL2", "keyURL2", time.Now().UTC()},
