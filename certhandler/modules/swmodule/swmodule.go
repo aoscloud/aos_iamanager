@@ -101,6 +101,32 @@ func (module *SWModule) Close() (err error) {
 	return err
 }
 
+// SetOwner owns security storage
+func (module *SWModule) SetOwner(password string) (err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Set owner")
+
+	return nil
+}
+
+// Clear clears security storage
+func (module *SWModule) Clear() (err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
+
+	if err = os.RemoveAll(module.config.StoragePath); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
+		return err
+	}
+
+	if err = module.storage.RemoveAllCertificates(module.certType); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SyncStorage syncs cert storage
 func (module *SWModule) SyncStorage() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Sync storage")
