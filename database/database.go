@@ -173,6 +173,15 @@ func (db *Database) RemoveCertificate(certType, certURL string) (err error) {
 	return nil
 }
 
+// RemoveAllCertificates removes all certificate from database
+func (db *Database) RemoveAllCertificates(certType string) (err error) {
+	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ?", certType); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Close closes database
 func (db *Database) Close() {
 	db.sql.Close()

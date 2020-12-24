@@ -216,3 +216,47 @@ func TestGetCertificates(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveAllCertificates(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	type testData struct {
+		certType      string
+		cert          certhandler.CertInfo
+		errorExpected bool
+	}
+
+	data := []testData{
+		{certType: "remove", cert: certhandler.CertInfo{"issuerR", "s0", "certURL0", "keyURL0", time.Now().UTC()}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{"issuerR", "s1", "certURL1", "keyURL1", time.Now().UTC()}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{"issuerR", "s2", "certURL2", "keyURL2", time.Now().UTC()}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{"issuerR", "s3", "certURL3", "keyURL3", time.Now().UTC()}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{"issuerR", "s4", "certURL4", "keyURL4", time.Now().UTC()}, errorExpected: false}}
+
+	// Add certificates
+
+	for _, item := range data {
+		if err = db.AddCertificate(item.certType, item.cert); err != nil && !item.errorExpected {
+			t.Errorf("Can't add certificate: %s", err)
+		}
+	}
+
+	// Remove certificates
+
+	if err = db.RemoveAllCertificates("remove"); err != nil {
+		t.Fatalf("Can't remove certificates: %s", err)
+	}
+
+	certificates, err := db.GetCertificates("remove")
+	if err != nil {
+		t.Fatalf("Can't get certificates: %s", err)
+	}
+
+	if len(certificates) != 0 {
+		t.Errorf("Certificates should be removed")
+	}
+}
