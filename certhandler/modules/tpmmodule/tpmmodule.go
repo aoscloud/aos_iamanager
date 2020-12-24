@@ -49,6 +49,8 @@ import (
  * Consts
  ******************************************************************************/
 
+const tpmPermanentOwnerAuthSet = 0x00000001
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -192,6 +194,56 @@ func (module *TPMModule) SyncStorage() (err error) {
 	return nil
 }
 
+// SetOwner owns security storage
+func (module *TPMModule) SetOwner(password string) (err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Set owner")
+
+	ownerSet, err := module.isOwnerSet()
+	if err != nil {
+		return err
+	}
+
+	auth := tpm2.AuthCommand{
+		Session:    tpm2.HandlePasswordSession,
+		Attributes: tpm2.AttrContinueSession,
+	}
+
+	if ownerSet {
+		auth.Auth = []byte(password)
+	}
+
+	if err = tpm2.HierarchyChangeAuth(module.device, tpm2.HandleOwner, auth, password); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Clear clears security storage
+func (module *TPMModule) Clear() (err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
+
+	if err = tpm2.Clear(module.device, tpm2.HandleLockout, tpm2.AuthCommand{
+		Session:    tpm2.HandlePasswordSession,
+		Attributes: tpm2.AttrContinueSession}); err != nil {
+		return err
+	}
+
+	if err = os.RemoveAll(module.config.StoragePath); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
+		return err
+	}
+
+	if err = module.storage.RemoveAllCertificates(module.certType); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // CreateKeys creates key pair
 func (module *TPMModule) CreateKeys(systemID, password string) (csr string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType, "systemID": systemID}).Debug("Create keys")
@@ -284,6 +336,28 @@ func (module *TPMModule) ApplyCertificate(cert string) (certURL, keyURL string, 
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (module *TPMModule) isOwnerSet() (result bool, err error) {
+	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.TPMAPermanent))
+	if err != nil {
+		return false, err
+	}
+
+	if len(values) == 0 {
+		return false, errors.New("wrong prop value")
+	}
+
+	prop, ok := values[0].(tpm2.TaggedProperty)
+	if !ok {
+		return false, errors.New("invalid prop type")
+	}
+
+	if prop.Value&tpmPermanentOwnerAuthSet != 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
 
 func (module *TPMModule) newKey(password string) (k *key, err error) {
 	k = &key{device: module.device, password: password}
