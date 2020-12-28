@@ -48,8 +48,9 @@ var plugins = make(map[string]NewPlugin)
 type Handler struct {
 	sync.Mutex
 
-	storage CertStorage
-	modules map[string]CertModule
+	systemID string
+	storage  CertStorage
+	modules  map[string]CertModule
 }
 
 // CertInfo certificate info
@@ -95,8 +96,8 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 }
 
 // New returns pointer to new Handler
-func New(cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
-	handler = &Handler{modules: make(map[string]CertModule), storage: storage}
+func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
+	handler = &Handler{systemID: systemID, modules: make(map[string]CertModule), storage: storage}
 
 	log.Debug("Create certificate handler")
 
@@ -145,11 +146,11 @@ func (handler *Handler) Clear(certType string) (err error) {
 		return fmt.Errorf("module %s not found", certType)
 	}
 
-	return module.Clear(password)
+	return module.Clear()
 }
 
 // CreateKeys creates key pair
-func (handler *Handler) CreateKeys(certType, systemdID, password string) (csr string, err error) {
+func (handler *Handler) CreateKeys(certType, password string) (csr string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -158,7 +159,7 @@ func (handler *Handler) CreateKeys(certType, systemdID, password string) (csr st
 		return "", fmt.Errorf("module %s not found", certType)
 	}
 
-	return module.CreateKeys(systemdID, password)
+	return module.CreateKeys(handler.systemID, password)
 }
 
 // ApplyCertificate applies certificate

@@ -121,7 +121,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestSetOwner(t *testing.T) {
-	handler, err := certhandler.New(&cfg, &testStorage{})
+	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -149,7 +149,7 @@ func TestSetOwner(t *testing.T) {
 func TestCreateKeys(t *testing.T) {
 	storage := &testStorage{}
 
-	handler, err := certhandler.New(&cfg, storage)
+	handler, err := certhandler.New("testID", &cfg, storage)
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -157,7 +157,7 @@ func TestCreateKeys(t *testing.T) {
 
 	modules["cert1"].data.csr = "this is csr"
 
-	csr, err := handler.CreateKeys("cert1", "systemID", "password")
+	csr, err := handler.CreateKeys("cert1", "password")
 	if err != nil {
 		t.Fatalf("Can't create keys: %s", err)
 	}
@@ -170,7 +170,7 @@ func TestCreateKeys(t *testing.T) {
 func TestApplyCertificate(t *testing.T) {
 	storage := &testStorage{}
 
-	handler, err := certhandler.New(&cfg, storage)
+	handler, err := certhandler.New("testID", &cfg, storage)
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -195,7 +195,7 @@ func TestGetCertificate(t *testing.T) {
 	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "2", "certURL2", "keyURL2", time.Now()})
 	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "3", "certURL3", "keyURL3", time.Now()})
 
-	handler, err := certhandler.New(&cfg, storage)
+	handler, err := certhandler.New("testID", &cfg, storage)
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}

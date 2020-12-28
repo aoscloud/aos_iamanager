@@ -187,7 +187,12 @@ func main() {
 	}
 	defer identHandler.Close()
 
-	certHandler, err := certhandler.New(cfg, db)
+	systemID, err := identHandler.GetSystemID()
+	if err != nil {
+		log.Fatalf("Can't get system ID: %s", err)
+	}
+
+	certHandler, err := certhandler.New(systemID, cfg, db)
 	if err != nil {
 		log.Fatalf("Can't create cert handler: %s", err)
 	}
