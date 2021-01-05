@@ -49,11 +49,12 @@ type testClient struct {
 }
 
 type testCertHandler struct {
-	csr      string
-	certURL  string
-	keyURL   string
-	password string
-	err      error
+	certTypes []string
+	csr       string
+	certURL   string
+	keyURL    string
+	password  string
+	err       error
 }
 
 type testIdentHandler struct {
@@ -86,6 +87,36 @@ func init() {
 /*******************************************************************************
  * Tests
  ******************************************************************************/
+
+func TestGetCertTypes(t *testing.T) {
+	certHandler := &testCertHandler{}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	certHandler.certTypes = []string{"test1", "test2", "test3"}
+
+	response, err := client.pbclient.GetCertTypes(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if !reflect.DeepEqual(certHandler.certTypes, response.Types) {
+		t.Errorf("Wrong cert types: %v", response.Types)
+	}
+}
 
 func TestSetOwner(t *testing.T) {
 	certHandler := &testCertHandler{}
@@ -394,6 +425,10 @@ func (client *testClient) close() {
 	if client.connection != nil {
 		client.connection.Close()
 	}
+}
+
+func (handler *testCertHandler) GetCertTypes() (certTypes []string) {
+	return handler.certTypes
 }
 
 func (handler *testCertHandler) SetOwner(certType, password string) (err error) {

@@ -59,6 +59,7 @@ type Server struct {
 
 // CertHandler interface
 type CertHandler interface {
+	GetCertTypes() (certTypes []string)
 	SetOwner(certType, password string) (err error)
 	Clear(certType string) (err error)
 	CreateKeys(certType, password string) (csr string, err error)
@@ -137,6 +138,15 @@ func (server *Server) Close() (err error) {
 	server.streamsWg.Wait()
 
 	return err
+}
+
+// GetCertTypes return all IAM cert types
+func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (rsp *pb.GetCertTypesRsp, err error) {
+	rsp = &pb.GetCertTypesRsp{Types: server.certHandler.GetCertTypes()}
+
+	log.WithField("types", rsp.Types).Debug("Process get cert types")
+
+	return rsp, nil
 }
 
 // SetOwner makes IAM owner of secure storage

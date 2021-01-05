@@ -123,6 +123,20 @@ func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Han
 	return handler, nil
 }
 
+// GetCertTypes returns IAM cert types
+func (handler *Handler) GetCertTypes() (certTypes []string) {
+	handler.Lock()
+	defer handler.Unlock()
+
+	certTypes = make([]string, 0, len(handler.modules))
+
+	for certType := range handler.modules {
+		certTypes = append(certTypes, certType)
+	}
+
+	return certTypes
+}
+
 // SetOwner owns security storage
 func (handler *Handler) SetOwner(certType, password string) (err error) {
 	handler.Lock()

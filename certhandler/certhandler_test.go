@@ -23,6 +23,8 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -119,6 +121,29 @@ func TestMain(m *testing.M) {
 /*******************************************************************************
  * Tests
  ******************************************************************************/
+
+func TestGetCertTypes(t *testing.T) {
+	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	if err != nil {
+		t.Fatalf("Can't create cert handler: %s", err)
+	}
+	defer handler.Close()
+
+	refCertTypes := make([]string, 0, len(cfg.CertModules))
+
+	for _, module := range cfg.CertModules {
+		refCertTypes = append(refCertTypes, module.ID)
+	}
+
+	getCertTypes := handler.GetCertTypes()
+
+	sort.Strings(refCertTypes)
+	sort.Strings(getCertTypes)
+
+	if !reflect.DeepEqual(refCertTypes, getCertTypes) {
+		t.Errorf("Wrong cert types: %v", getCertTypes)
+	}
+}
 
 func TestSetOwner(t *testing.T) {
 	handler, err := certhandler.New("testID", &cfg, &testStorage{})
