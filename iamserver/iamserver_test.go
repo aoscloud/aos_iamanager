@@ -19,7 +19,9 @@ package iamserver_test
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -115,6 +117,41 @@ func TestGetCertTypes(t *testing.T) {
 
 	if !reflect.DeepEqual(certHandler.certTypes, response.Types) {
 		t.Errorf("Wrong cert types: %v", response.Types)
+	}
+}
+
+func TestFinishProvisioning(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "iam_")
+	if err != nil {
+		log.Fatalf("Error creating temporary dir: %s", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	finishFile := path.Join(tmpDir, "finish.sh")
+
+	server, err := iamserver.New(&config.Config{
+		ServerURL:                 serverURL,
+		FinishProvisioningCmdArgs: []string{"touch", finishFile}}, &testIdentHandler{}, &testCertHandler{}, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	if _, err = client.pbclient.FinishProvisioning(ctx, &empty.Empty{}); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if _, err = os.Stat(finishFile); err != nil {
+		t.Errorf("Finish file error: %s", err)
 	}
 }
 

@@ -29,12 +29,13 @@ import (
 
 // Config instance
 type Config struct {
-	ServerURL   string         `json:"serverURL"`
-	Cert        string         `json:"cert"`
-	Key         string         `json:"key"`
-	WorkingDir  string         `json:"workingDir"`
-	CertModules []ModuleConfig `json:"certModules"`
-	Identifier  struct {
+	ServerURL                 string         `json:"serverURL"`
+	Cert                      string         `json:"cert"`
+	Key                       string         `json:"key"`
+	WorkingDir                string         `json:"workingDir"`
+	CertModules               []ModuleConfig `json:"certModules"`
+	FinishProvisioningCmdArgs []string       `json:"finishProvisioningCmdArgs"`
+	Identifier                struct {
 		Plugin string          `json:"plugin"`
 		Params json.RawMessage `json:"params"`
 	} `json:"identifier"`

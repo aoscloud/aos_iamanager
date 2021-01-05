@@ -20,7 +20,9 @@ package iamserver
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net"
+	"os/exec"
 	"sync"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -48,13 +50,14 @@ import (
 type Server struct {
 	sync.Mutex
 
-	identHandler        IdentHandler
-	certHandler         CertHandler
-	listener            net.Listener
-	grpcServer          *grpc.Server
-	usersChangedStreams []pb.IAManager_SubscribeUsersChangedServer
-	closeChannel        chan struct{}
-	streamsWg           sync.WaitGroup
+	identHandler              IdentHandler
+	certHandler               CertHandler
+	listener                  net.Listener
+	grpcServer                *grpc.Server
+	usersChangedStreams       []pb.IAManager_SubscribeUsersChangedServer
+	closeChannel              chan struct{}
+	streamsWg                 sync.WaitGroup
+	finishProvisioningCmdArgs []string
 }
 
 // CertHandler interface
@@ -83,7 +86,11 @@ type IdentHandler interface {
 func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler, insecure bool) (server *Server, err error) {
 	log.WithField("url", cfg.ServerURL).Debug("Create IAM server")
 
-	server = &Server{identHandler: identHandler, certHandler: certHandler, closeChannel: make(chan struct{}, 1)}
+	server = &Server{
+		identHandler:              identHandler,
+		certHandler:               certHandler,
+		closeChannel:              make(chan struct{}, 1),
+		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs}
 
 	defer func() {
 		if err != nil {
@@ -145,6 +152,20 @@ func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (r
 	rsp = &pb.GetCertTypesRsp{Types: server.certHandler.GetCertTypes()}
 
 	log.WithField("types", rsp.Types).Debug("Process get cert types")
+
+	return rsp, nil
+}
+
+// FinishProvisioning notifies IAM that provisioning is finished
+func (server *Server) FinishProvisioning(context context.Context, req *empty.Empty) (rsp *empty.Empty, err error) {
+	rsp = &empty.Empty{}
+
+	if len(server.finishProvisioningCmdArgs) > 0 {
+		output, err := exec.Command(server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
+		if err != nil {
+			return rsp, fmt.Errorf("message: %s, err: %s", string(output), err)
+		}
+	}
 
 	return rsp, nil
 }

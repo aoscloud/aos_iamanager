@@ -23,6 +23,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"reflect"
 	"testing"
 
 	"aos_iamanager/config"
@@ -133,6 +134,12 @@ func TestIdentifier(t *testing.T) {
 	}
 }
 
+func TestFinishProvisioningCmdArgs(t *testing.T) {
+	if !reflect.DeepEqual(cfg.FinishProvisioningCmdArgs, []string{"/var/aos/finish.sh"}) {
+		t.Errorf("Wrong finish provisioning cmd args: %v", cfg.FinishProvisioningCmdArgs)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -155,6 +162,9 @@ func setup() (err error) {
 		"Cert": "cert.pem",
 		"Key": "key.pem",	
 		"WorkingDir": "/var/aos/iamanager",
+		"FinishProvisioningCmdArgs": [
+			"/var/aos/finish.sh"
+		],
 		"CertModules":[{
 			"ID": "id1",
 			"Plugin": "test1",
