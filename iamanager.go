@@ -161,7 +161,7 @@ func main() {
 
 	cfg, err := config.New(*configFile)
 	if err != nil {
-		log.Fatalf("Can' open config file: %s", err)
+		log.Fatalf("Can't open config file: %s", err)
 	}
 
 	// Create DB
