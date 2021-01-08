@@ -63,12 +63,12 @@ func TestGetCredentials(t *testing.T) {
 		t.Errorf("Wrong ServerURL value: %s", cfg.ServerURL)
 	}
 
-	if cfg.Cert != "cert.pem" {
-		t.Errorf("Wrong cert value: %s", cfg.Cert)
+	if cfg.CACert != "/etc/ssl/certs/rootCA.crt" {
+		t.Errorf("Wrong cert value: %s", cfg.CACert)
 	}
 
-	if cfg.Key != "key.pem" {
-		t.Errorf("Wrong key value: %s", cfg.Key)
+	if cfg.CertStorage != "/var/aos/crypt/iam/" {
+		t.Errorf("Wrong key value: %s", cfg.CertStorage)
 	}
 }
 
@@ -159,8 +159,8 @@ func setup() (err error) {
 
 	configContent := `{
 		"ServerUrl": "localhost:8090",
-		"Cert": "cert.pem",
-		"Key": "key.pem",	
+		"CACert": "/etc/ssl/certs/rootCA.crt",
+		"CertStorage": "/var/aos/crypt/iam/",
 		"WorkingDir": "/var/aos/iamanager",
 		"FinishProvisioningCmdArgs": [
 			"/var/aos/finish.sh"
