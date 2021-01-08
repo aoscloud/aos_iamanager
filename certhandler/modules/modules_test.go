@@ -58,7 +58,7 @@ type testStorage struct {
 	certs []certDesc
 }
 
-type createModuleType func(storagePath string, maxItem int, password string,
+type createModuleType func(storagePath string, maxItem int,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error)
 
 /*******************************************************************************
@@ -117,15 +117,21 @@ func TestUpdateCertificate(t *testing.T) {
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
 		storage := &testStorage{}
 
-		password := "password"
-
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, 1, password, storage, true)
+		module, err := createModule(certStorage, 1, storage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
+
+		// Set owner
+
+		password := "password"
+
+		if err = module.SetOwner(password); err != nil {
+			t.Fatalf("Can't set owner: %s", err)
+		}
 
 		// Create keys
 
@@ -233,16 +239,21 @@ func TestUpdateCertificate(t *testing.T) {
 func TestMaxItems(t *testing.T) {
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
 		storage := &testStorage{}
-
-		password := "password"
-
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, 1, password, storage, true)
+		module, err := createModule(certStorage, 1, storage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
+
+		// Set owner
+
+		password := "password"
+
+		if err = module.SetOwner(password); err != nil {
+			t.Fatalf("Can't set owner: %s", err)
+		}
 
 		for i := 0; i < 3; i++ {
 
@@ -337,13 +348,19 @@ func TestSyncStorage(t *testing.T) {
 
 		storage := &testStorage{}
 
-		password := "password"
-
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, len(testData), password, storage, true)
+		module, err := createModule(certStorage, len(testData), storage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
+		}
+
+		// Set owner
+
+		password := "password"
+
+		if err = module.SetOwner(password); err != nil {
+			t.Fatalf("Can't set owner: %s", err)
 		}
 
 		for _, item := range testData {
@@ -467,7 +484,7 @@ func TestSyncStorage(t *testing.T) {
 
 		module.Close()
 
-		if module, err = createModule(certStorage, 1, password, storage, false); err != nil {
+		if module, err = createModule(certStorage, 1, storage, false); err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
@@ -502,6 +519,170 @@ func TestSyncStorage(t *testing.T) {
 
 		for _, badItem := range certInfos {
 			t.Errorf("Item should not be in srorage, certURL: %s, keyURL: %s", badItem.CertURL, badItem.KeyURL)
+		}
+	}
+}
+
+func TestSetOwnerClear(t *testing.T) {
+	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
+		storage := &testStorage{}
+		certStorage := path.Join(tmpDir, "certStorage")
+
+		module, err := createModule(certStorage, 1, storage, true)
+		if err != nil {
+			t.Fatalf("Can't create module: %s", err)
+		}
+		defer module.Close()
+
+		// Set owner
+
+		password := "password"
+
+		if err = module.SetOwner(password); err != nil {
+			t.Fatalf("Can't set owner: %s", err)
+		}
+
+		// Check if we can set owner twice
+		if err = module.SetOwner(password); err != nil {
+			t.Errorf("Can't set owner: %s", err)
+		}
+
+		// Create keys
+
+		csr, err := module.CreateKeys("testsystem", password)
+		if err != nil {
+			t.Fatalf("Can't create keys: %s", err)
+		}
+
+		// Apply certificate
+
+		cert, err := generateCertificate(csr)
+		if err != nil {
+			t.Fatalf("Can't generate certificate: %s", err)
+		}
+
+		_, keyURL, err := module.ApplyCertificate(cert)
+		if err != nil {
+			t.Fatalf("Can't apply certificate: %s", err)
+		}
+
+		// Check key files
+
+		keyVal, err := url.Parse(keyURL)
+		if err != nil {
+			t.Fatalf("Wrong key URL: %s", keyURL)
+		}
+
+		switch keyVal.Scheme {
+		case "file":
+			// Check key files
+
+			keyFiles, err := getKeyFiles(certStorage)
+			if err != nil {
+				t.Fatalf("Can't get key files")
+			}
+
+			if len(keyFiles) != 1 {
+				t.Errorf("Wrong key files count: %d", len(keyFiles))
+			}
+
+			certFiles, err := getCertFiles(certStorage)
+			if err != nil {
+				t.Fatalf("Can't get cert files")
+			}
+
+			if len(certFiles) != 1 {
+				t.Errorf("Wrong cert files count: %d", len(certFiles))
+			}
+
+			if len(storage.certs) != 1 {
+				t.Errorf("Wrong storage entries count: %d", len(storage.certs))
+			}
+
+		case "tpm":
+			handles, err := getPersistentHandles()
+			if err != nil {
+				t.Fatalf("Can't get persistent handles: %s", err)
+			}
+
+			if len(handles) != 1 {
+				t.Errorf("Wrong handles count: %d", len(handles))
+			}
+
+			certFiles, err := getCertFiles(certStorage)
+			if err != nil {
+				t.Fatalf("Can't get cert files")
+			}
+
+			if len(certFiles) != 1 {
+				t.Errorf("Wrong cert files count: %d", len(certFiles))
+			}
+
+			if len(storage.certs) != 1 {
+				t.Errorf("Wrong storage entries count: %d", len(storage.certs))
+			}
+
+		default:
+			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
+
+			continue
+		}
+
+		// Clear
+
+		if err = module.Clear(); err != nil {
+			t.Fatalf("Can't clear: %s", err)
+		}
+
+		switch keyVal.Scheme {
+		case "file":
+			// Check key files
+
+			keyFiles, err := getKeyFiles(certStorage)
+			if err != nil {
+				t.Fatalf("Can't get key files")
+
+			}
+
+			if len(keyFiles) != 0 {
+				t.Errorf("Wrong key files count: %d", len(keyFiles))
+			}
+
+			certFiles, err := getCertFiles(certStorage)
+			if err != nil {
+				t.Fatalf("Can't get cert files")
+			}
+
+			if len(certFiles) != 0 {
+				t.Errorf("Wrong cert files count: %d", len(certFiles))
+			}
+
+			if len(storage.certs) != 0 {
+				t.Errorf("Wrong storage entries count: %d", len(storage.certs))
+			}
+		case "tpm":
+			handles, err := getPersistentHandles()
+			if err != nil {
+				t.Fatalf("Can't get persistent handles: %s", err)
+			}
+
+			if len(handles) != 0 {
+				t.Errorf("Wrong handles count: %d", len(handles))
+			}
+
+			certFiles, err := getCertFiles(certStorage)
+			if err != nil {
+				t.Fatalf("Can't get cert files")
+			}
+
+			if len(certFiles) != 0 {
+				t.Errorf("Wrong cert files count: %d", len(certFiles))
+			}
+
+		default:
+			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
+
+			continue
 		}
 	}
 }
@@ -554,11 +735,25 @@ func (storage *testStorage) RemoveCertificate(certType, certURL string) (err err
 	return errors.New("certificate not found")
 }
 
+func (storage *testStorage) RemoveAllCertificates(certType string) (err error) {
+	newCerts := make([]certDesc, 0)
+
+	for _, item := range storage.certs {
+		if item.certType != certType {
+			newCerts = append(newCerts, item)
+		}
+	}
+
+	storage.certs = newCerts
+
+	return nil
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
-func createSwModule(storagePath string, maxItem int, password string,
+func createSwModule(storagePath string, maxItem int,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
@@ -571,7 +766,7 @@ func createSwModule(storagePath string, maxItem int, password string,
 	return swmodule.New("test", config, storage)
 }
 
-func createTpmModule(storagePath string, maxItem int, password string,
+func createTpmModule(storagePath string, maxItem int,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
@@ -579,14 +774,6 @@ func createTpmModule(storagePath string, maxItem int, password string,
 		}
 
 		if err = tpmSimulator.ManufactureReset(); err != nil {
-			return nil, err
-		}
-
-		if err = tpm2.HierarchyChangeAuth(tpmSimulator, tpm2.HandleOwner,
-			tpm2.AuthCommand{
-				Session:    tpm2.HandlePasswordSession,
-				Attributes: tpm2.AttrContinueSession},
-			password); err != nil {
 			return nil, err
 		}
 	}
