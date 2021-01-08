@@ -1,7 +1,7 @@
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/journal
-# github.com/golang/protobuf v1.4.2
+# github.com/golang/protobuf v1.4.3
 ## explicit
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
@@ -18,43 +18,44 @@ github.com/google/go-tpm/tpmutil/tbs
 ## explicit
 github.com/google/go-tpm-tools/simulator
 github.com/google/go-tpm-tools/simulator/internal
-# github.com/google/uuid v1.1.1
+# github.com/google/uuid v1.1.2
 ## explicit
 github.com/google/uuid
 # github.com/gorilla/websocket v1.4.1
 ## explicit
 github.com/gorilla/websocket
-# github.com/konsorten/go-windows-terminal-sequences v1.0.3
-github.com/konsorten/go-windows-terminal-sequences
 # github.com/mattn/go-sqlite3 v1.14.2
 ## explicit
 github.com/mattn/go-sqlite3
-# github.com/sirupsen/logrus v1.6.0
+# github.com/sirupsen/logrus v1.7.0
 ## explicit
 github.com/sirupsen/logrus
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210105162112-df371b473a57
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210113091140-a6a0b6488575
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
+gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils
 gitpct.epam.com/epmd-aepr/aos_common/visprotocol
 gitpct.epam.com/epmd-aepr/aos_common/wsclient
 gitpct.epam.com/epmd-aepr/aos_common/wsserver
-# golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
+# golang.org/x/net v0.0.0-20201029221708-28c70e62bb1d
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd
+# golang.org/x/sys v0.0.0-20201029080932-201ba4db2418
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
-# golang.org/x/text v0.3.0
+golang.org/x/sys/windows
+# golang.org/x/text v0.3.3
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
+# google.golang.org/genproto v0.0.0-20201030142918-24207fddd1c3
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.31.1
+# google.golang.org/grpc v1.33.1
 ## explicit
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -67,7 +68,6 @@ google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/codes
 google.golang.org/grpc/connectivity
 google.golang.org/grpc/credentials
-google.golang.org/grpc/credentials/internal
 google.golang.org/grpc/encoding
 google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
