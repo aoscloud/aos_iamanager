@@ -198,7 +198,7 @@ func main() {
 	}
 	defer certHandler.Close()
 
-	server, err := iamserver.New(cfg, identHandler, certHandler, true)
+	server, err := iamserver.New(cfg, identHandler, certHandler, false)
 	if err != nil {
 		log.Fatalf("Can't create IAM server: %s", err)
 	}

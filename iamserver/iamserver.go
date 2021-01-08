@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -102,18 +103,20 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		return server, err
 	}
 
+	var opts []grpc.ServerOption
+
 	if insecure == false {
-		creds, err := credentials.NewServerTLSFromFile(cfg.Cert, cfg.Key)
+		tlsConfig, err := cryptutils.GetServerTLSConfig(cfg.CACert, cfg.CertStorage)
 		if err != nil {
 			return server, err
 		}
 
-		server.grpcServer = grpc.NewServer(grpc.Creds(creds))
+		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	} else {
 		log.Warnf("IAM server uses insecure connection")
-
-		server.grpcServer = grpc.NewServer()
 	}
+
+	server.grpcServer = grpc.NewServer(opts...)
 
 	pb.RegisterIAManagerServer(server.grpcServer, server)
 
