@@ -103,6 +103,14 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		return server, err
 	}
 
+	_, crtErr := cryptutils.GetCertFileFromDir(cfg.CertStorage)
+
+	_, keyErr := cryptutils.GetKeyFileFromDir(cfg.CertStorage)
+
+	if crtErr != nil && keyErr != nil {
+		insecure = true
+	}
+
 	var opts []grpc.ServerOption
 
 	if insecure == false {
