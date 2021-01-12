@@ -63,8 +63,10 @@ type SWModule struct {
 }
 
 type moduleConfig struct {
-	StoragePath string `json:"storagePath"`
-	MaxItems    int    `json:"maxItems"`
+	StoragePath      string   `json:"storagePath"`
+	MaxItems         int      `json:"maxItems"`
+	ExtendedKeyUsage []string `json:"ExtendedKeyUsage"`
+	AlternativeNames []string `json:"AlternativeNames"`
 }
 
 /*******************************************************************************
