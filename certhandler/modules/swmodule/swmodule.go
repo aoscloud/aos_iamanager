@@ -24,6 +24,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -49,6 +50,11 @@ const (
 	keyExt = ".key"
 )
 
+const (
+	clientAuth = "clientAuth"
+	serverAuth = "serverAuth"
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -70,8 +76,14 @@ type moduleConfig struct {
 }
 
 /*******************************************************************************
- * Types
+ * Variables
  ******************************************************************************/
+
+var (
+	oidExtensionExtendedKeyUsage = asn1.ObjectIdentifier{2, 5, 29, 37}
+	oidExtKeyUsageServerAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
+	oidExtKeyUsageClientAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 2}
+)
 
 /*******************************************************************************
  * Public
@@ -186,7 +198,35 @@ func (module *SWModule) CreateKeys(systemID, password string) (csr string, err e
 		return "", err
 	}
 
-	csrDER, err := x509.CreateCertificateRequest(nil, &x509.CertificateRequest{Subject: pkix.Name{CommonName: systemID}}, module.currentKey)
+	template := x509.CertificateRequest{
+		Subject:  pkix.Name{CommonName: systemID},
+		DNSNames: module.config.AlternativeNames,
+	}
+
+	var oids []asn1.ObjectIdentifier
+	for _, value := range module.config.ExtendedKeyUsage {
+		switch value {
+		case clientAuth:
+			oids = append(oids, oidExtKeyUsageClientAuth)
+
+		case serverAuth:
+			oids = append(oids, oidExtKeyUsageServerAuth)
+
+		default:
+			log.Warning("Unexpected ExtendedKeyUsage value: ", value)
+		}
+	}
+
+	if len(oids) > 0 {
+		oidsValue, err := asn1.Marshal(oids)
+		if err != nil {
+			return "", err
+		}
+
+		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: oidExtensionExtendedKeyUsage, Value: oidsValue})
+	}
+
+	csrDER, err := x509.CreateCertificateRequest(nil, &template, module.currentKey)
 	if err != nil {
 		return "", err
 	}

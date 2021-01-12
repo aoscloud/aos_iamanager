@@ -761,7 +761,8 @@ func createSwModule(storagePath string, maxItem int,
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d}`, storagePath, maxItem))
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d,
+	  "ExtendedKeyUsage": ["serverAuth","clientAuth"],	"AlternativeNames" : ["aosserver"]}`, storagePath, maxItem))
 
 	return swmodule.New("test", config, storage)
 }
