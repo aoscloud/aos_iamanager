@@ -42,8 +42,9 @@ const (
 const reconnectTimeout = 10 * time.Second
 
 const (
-	vinVISPath   = "Attribute.Vehicle.VehicleIdentification.VIN"
-	usersVISPath = "Attribute.Vehicle.UserIdentification.Users"
+	vinVISPath     = "Attribute.Vehicle.VehicleIdentification.VIN"
+	boardModelPath = "Attribute.BoardIdentification.Model"
+	usersVISPath   = "Attribute.Vehicle.UserIdentification.Users"
 )
 
 /*******************************************************************************
@@ -58,8 +59,9 @@ type Instance struct {
 
 	wsClient *wsclient.Client
 
-	vin   string
-	users []string
+	vin        string
+	boardModel string
+	users      []string
 
 	subscribeMap sync.Map
 
@@ -156,6 +158,37 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	log.WithField("VIN", instance.vin).Debug("Get VIN")
 
 	return instance.vin, err
+}
+
+// GetBoardModel returns the board model
+func (instance *Instance) GetBoardModel() (boardModel string, err error) {
+	instance.wg.Wait()
+
+	var rsp visprotocol.GetResponse
+
+	req := visprotocol.GetRequest{
+		MessageHeader: visprotocol.MessageHeader{
+			Action:    visprotocol.ActionGet,
+			RequestID: wsclient.GenerateRequestID()},
+		Path: boardModelPath}
+
+	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
+		return "", err
+	}
+
+	value, err := getValueByPath(boardModelPath, rsp.Value)
+	if err != nil {
+		return "", err
+	}
+
+	ok := false
+	if instance.boardModel, ok = value.(string); !ok {
+		return "", errors.New("wrong boardModel type")
+	}
+
+	log.WithField("boardModel ", instance.boardModel).Debug("Get boardModel")
+
+	return instance.boardModel, err
 }
 
 // GetUsers returns the user claims

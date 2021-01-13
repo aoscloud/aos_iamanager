@@ -51,6 +51,7 @@ type Handler struct {
 // IdentModule identification module interface
 type IdentModule interface {
 	GetSystemID() (systemdID string, err error)
+	GetBoardModel() (boardModel string, err error)
 	GetUsers() (users []string, err error)
 	SetUsers(users []string) (err error)
 	UsersChangedChannel() (channel <-chan []string)
@@ -99,6 +100,11 @@ func (handler *Handler) Close() {
 // GetSystemID return system ID
 func (handler *Handler) GetSystemID() (systemdID string, err error) {
 	return handler.module.GetSystemID()
+}
+
+// GetBoardModel return board model
+func (handler *Handler) GetBoardModel() (boardModel string, err error) {
+	return handler.module.GetBoardModel()
 }
 
 // GetUsers returns current users

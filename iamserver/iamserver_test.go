@@ -61,6 +61,7 @@ type testCertHandler struct {
 
 type testIdentHandler struct {
 	systemID            string
+	boardModel          string
 	users               []string
 	usersChangedChannel chan []string
 }
@@ -309,7 +310,7 @@ func TestGetCert(t *testing.T) {
 	}
 }
 
-func TestGetSystemID(t *testing.T) {
+func TestGetSystemInfo(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
 	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
@@ -325,6 +326,7 @@ func TestGetSystemID(t *testing.T) {
 	defer client.close()
 
 	identHandler.systemID = "testSystemID"
+	identHandler.boardModel = "testBoardModel:1.0"
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -336,6 +338,10 @@ func TestGetSystemID(t *testing.T) {
 
 	if response.SystemId != identHandler.systemID {
 		t.Errorf("Wrong systemd ID: %s", response.SystemId)
+	}
+
+	if response.BoardModel != identHandler.boardModel {
+		t.Errorf("Wrong board model: %s", response.BoardModel)
 	}
 }
 
@@ -494,6 +500,10 @@ func (handler *testCertHandler) GetCertificate(certType string, issuer []byte, s
 
 func (handler *testIdentHandler) GetSystemID() (systemID string, err error) {
 	return handler.systemID, nil
+}
+
+func (handler *testIdentHandler) GetBoardModel() (boardModel string, err error) {
+	return handler.boardModel, nil
 }
 
 func (handler *testIdentHandler) GetUsers() (users []string, err error) {

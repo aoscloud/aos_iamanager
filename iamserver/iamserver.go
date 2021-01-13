@@ -74,6 +74,7 @@ type CertHandler interface {
 // IdentHandler interface
 type IdentHandler interface {
 	GetSystemID() (systemdID string, err error)
+	GetBoardModel() (boardModel string, err error)
 	GetUsers() (users []string, err error)
 	SetUsers(users []string) (err error)
 	UsersChangedChannel() (channel <-chan []string)
@@ -256,6 +257,10 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 	log.Debug("Process get system ID")
 
 	if rsp.SystemId, err = server.identHandler.GetSystemID(); err != nil {
+		return rsp, err
+	}
+
+	if rsp.BoardModel, err = server.identHandler.GetBoardModel(); err != nil {
 		return rsp, err
 	}
 

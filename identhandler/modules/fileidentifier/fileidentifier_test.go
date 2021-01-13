@@ -90,15 +90,20 @@ func TestMain(m *testing.M) {
 
 func TestGetSystemID(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
+	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
 	usersFile := path.Join(tmpDir, "users.txt")
 
 	systemID := "testSystemID"
 
-	if err := writeSystemID(systemIDFile, systemID); err != nil {
+	if err := writeID(systemIDFile, systemID); err != nil {
 		t.Fatalf("Can't write system ID: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, usersFile))
+	if err := writeID(boardModelFile, ""); err != nil {
+		t.Fatalf("Can't write boardModel: %s", err)
+	}
+
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -114,11 +119,39 @@ func TestGetSystemID(t *testing.T) {
 	}
 }
 
-func TestGetUsers(t *testing.T) {
+func TestGetBoardModel(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
+	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
 	usersFile := path.Join(tmpDir, "users.txt")
 
-	if err := writeSystemID(systemIDFile, "testSystemID"); err != nil {
+	boardModel := "testBoard:1.0"
+
+	if err := writeID(boardModelFile, boardModel); err != nil {
+		t.Fatalf("Can't write boardModel: %s", err)
+	}
+
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
+	if err != nil {
+		t.Fatalf("Can't create identifier: %s", err)
+	}
+	defer identifier.Close()
+
+	getBoardModel, err := identifier.GetBoardModel()
+	if err != nil {
+		t.Fatalf("Error getting system ID: %s", err)
+	}
+
+	if getBoardModel != boardModel {
+		t.Errorf("Wrong board model value: %s", getBoardModel)
+	}
+}
+
+func TestGetUsers(t *testing.T) {
+	systemIDFile := path.Join(tmpDir, "systemid.txt")
+	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
+	usersFile := path.Join(tmpDir, "users.txt")
+
+	if err := writeID(systemIDFile, "testSystemID"); err != nil {
 		t.Fatalf("Can't write system ID: %s", err)
 	}
 
@@ -128,7 +161,7 @@ func TestGetUsers(t *testing.T) {
 		t.Fatalf("Can't write users: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, usersFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -146,9 +179,10 @@ func TestGetUsers(t *testing.T) {
 
 func TestSetUsers(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
+	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
 	usersFile := path.Join(tmpDir, "users.txt")
 
-	if err := writeSystemID(systemIDFile, "testSystemID"); err != nil {
+	if err := writeID(systemIDFile, "testSystemID"); err != nil {
 		t.Fatalf("Can't write system ID: %s", err)
 	}
 
@@ -156,7 +190,7 @@ func TestSetUsers(t *testing.T) {
 		t.Fatalf("Can't write users: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, usersFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -183,15 +217,17 @@ func TestSetUsers(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func generateConfig(systemIDPath, usersPath string) (config []byte) {
+func generateConfig(systemIDPath, boardModelPath, usersPath string) (config []byte) {
 	type adapterConfig struct {
-		SystemIDPath string `json:"systemIDPath"`
-		UsersPath    string `json:"usersPath"`
+		SystemIDPath   string `json:"systemIDPath"`
+		BoardModelPath string `json:"boardModelPath"`
+		UsersPath      string `json:"usersPath"`
 	}
 
 	var err error
 
-	if config, err = json.Marshal(&adapterConfig{SystemIDPath: systemIDPath, UsersPath: usersPath}); err != nil {
+	if config, err = json.Marshal(&adapterConfig{SystemIDPath: systemIDPath,
+		BoardModelPath: boardModelPath, UsersPath: usersPath}); err != nil {
 		log.Fatalf("Can't marshal config: %s", err)
 	}
 
@@ -214,8 +250,8 @@ func writeUsers(usersFile string, users []string) (err error) {
 	return writer.Flush()
 }
 
-func writeSystemID(systemIDFile string, systemID string) (err error) {
-	if err = ioutil.WriteFile(systemIDFile, []byte(systemID), 0644); err != nil {
+func writeID(filePth string, ID string) (err error) {
+	if err = ioutil.WriteFile(filePth, []byte(ID), 0644); err != nil {
 		return err
 	}
 

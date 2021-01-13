@@ -36,6 +36,7 @@ import (
 
 type testIdentifier struct {
 	systemID            string
+	boardModel          string
 	users               []string
 	usersChangedChannel chan []string
 }
@@ -96,6 +97,17 @@ func TestIdentifier(t *testing.T) {
 		t.Errorf("Wrong system ID: %s", systemID)
 	}
 
+	identifier.boardModel = "testBoard:1.0"
+
+	boardModel, err := handler.GetBoardModel()
+	if err != nil {
+		t.Fatalf("Can't get system ID: %s", err)
+	}
+
+	if boardModel != identifier.boardModel {
+		t.Errorf("Wrong system ID: %s", boardModel)
+	}
+
 	identifier.users = []string{"user1", "user2", "user3"}
 
 	users, err := handler.GetUsers()
@@ -138,6 +150,10 @@ func newTestIdentifier(configJSON json.RawMessage) (module identhandler.IdentMod
 
 func (identifier *testIdentifier) GetSystemID() (systemdID string, err error) {
 	return identifier.systemID, nil
+}
+
+func (identifier *testIdentifier) GetBoardModel() (boardModel string, err error) {
+	return identifier.boardModel, nil
 }
 
 func (identifier *testIdentifier) GetUsers() (users []string, err error) {

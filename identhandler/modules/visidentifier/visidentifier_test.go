@@ -267,6 +267,17 @@ func TestGetSystemID(t *testing.T) {
 	}
 }
 
+func TestGetBoardModel(t *testing.T) {
+	boardModel, err := vis.GetBoardModel()
+	if err != nil {
+		t.Fatalf("Error getting board model: %s", err)
+	}
+
+	if boardModel == "" {
+		t.Fatalf("Wrong board model value: %s", boardModel)
+	}
+}
+
 func TestGetUsers(t *testing.T) {
 	testHandler.users = []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 
@@ -359,6 +370,9 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			getRsp.Value = map[string]string{getReq.Path: "VIN1234567890"}
 
+		case "Attribute.BoardIdentification.Model":
+			getRsp.Value = map[string]string{getReq.Path: "testBoardModel:1.0"}
+
 		case "Attribute.Vehicle.UserIdentification.Users":
 			getRsp.Value = map[string][]string{getReq.Path: handler.users}
 		}
@@ -379,6 +393,9 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 
 		switch setReq.Path {
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
+			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
+
+		case "Attribute.BoardIdentification.Model":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
 		case "Attribute.Vehicle.UserIdentification.Users":

@@ -49,13 +49,15 @@ type Instance struct {
 	config              instanceConfig
 	usersChangedChannel chan []string
 
-	systemID string
-	users    []string
+	systemID   string
+	boardModel string
+	users      []string
 }
 
 type instanceConfig struct {
-	SystemIDPath string `json:"systemIDPath"`
-	UsersPath    string `json:"usersPath"`
+	SystemIDPath   string `json:"systemIDPath"`
+	BoardModelPath string `json:"boardModelPath"`
+	UsersPath      string `json:"usersPath"`
 }
 
 /*******************************************************************************
@@ -78,7 +80,11 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 
 	instance.usersChangedChannel = make(chan []string, usersChangedChannelSize)
 
-	if err = instance.readSystemID(); err != nil {
+	if instance.systemID, err = instance.readDataFromFile(instance.config.SystemIDPath); err != nil {
+		return nil, err
+	}
+
+	if instance.boardModel, err = instance.readDataFromFile(instance.config.BoardModelPath); err != nil {
 		return nil, err
 	}
 
@@ -104,6 +110,16 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	log.WithField("systemID", instance.systemID).Debug("Get system ID")
 
 	return instance.systemID, err
+}
+
+// GetBoardModel returns the board model
+func (instance *Instance) GetBoardModel() (boardModel string, err error) {
+	instance.Lock()
+	defer instance.Unlock()
+
+	log.WithField("boardModel", instance.boardModel).Debug("Get board model")
+
+	return instance.boardModel, err
 }
 
 // GetUsers returns the user claims
@@ -149,15 +165,15 @@ func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
  * Private
  ******************************************************************************/
 
-func (instance *Instance) readSystemID() (err error) {
-	data, err := ioutil.ReadFile(instance.config.SystemIDPath)
+func (instance *Instance) readDataFromFile(path string) (data string, err error) {
+	rawData, err := ioutil.ReadFile(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	instance.systemID = strings.TrimSpace(string(data))
+	data = strings.TrimSpace(string(rawData))
 
-	return nil
+	return data, nil
 }
 
 func (instance *Instance) readUsers() (err error) {
