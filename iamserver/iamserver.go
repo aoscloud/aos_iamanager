@@ -208,8 +208,8 @@ func (server *Server) Clear(context context.Context, req *pb.ClearReq) (rsp *emp
 }
 
 // CreateKeys creates private keys
-func (server *Server) CreateKeys(context context.Context, req *pb.CreateKeysReq) (rsp *pb.CreateKeysRsp, err error) {
-	rsp = &pb.CreateKeysRsp{Type: req.Type}
+func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReq) (rsp *pb.CreateKeyRsp, err error) {
+	rsp = &pb.CreateKeyRsp{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process create keys request")
 

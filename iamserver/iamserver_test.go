@@ -216,9 +216,9 @@ func TestCreateKeys(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	request := &pb.CreateKeysReq{Type: "online"}
+	request := &pb.CreateKeyReq{Type: "online"}
 
-	response, err := client.pbclient.CreateKeys(ctx, request)
+	response, err := client.pbclient.CreateKey(ctx, request)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
