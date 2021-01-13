@@ -329,13 +329,13 @@ func TestGetSystemID(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	response, err := client.pbclient.GetSystemID(ctx, &empty.Empty{})
+	response, err := client.pbclient.GetSystemInfo(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Id != identHandler.systemID {
-		t.Errorf("Wrong systemd ID: %s", response.Id)
+	if response.SystemId != identHandler.systemID {
+		t.Errorf("Wrong systemd ID: %s", response.SystemId)
 	}
 }
 

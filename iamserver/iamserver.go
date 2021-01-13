@@ -249,13 +249,13 @@ func (server *Server) GetCert(context context.Context, req *pb.GetCertReq) (rsp 
 	return rsp, nil
 }
 
-// GetSystemID returns system ID
-func (server *Server) GetSystemID(context context.Context, req *empty.Empty) (rsp *pb.GetSystemIDRsp, err error) {
-	rsp = &pb.GetSystemIDRsp{}
+// GetSystemInfo returns system information
+func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (rsp *pb.GetSystemInfoRsp, err error) {
+	rsp = &pb.GetSystemInfoRsp{}
 
 	log.Debug("Process get system ID")
 
-	if rsp.Id, err = server.identHandler.GetSystemID(); err != nil {
+	if rsp.SystemId, err = server.identHandler.GetSystemID(); err != nil {
 		return rsp, err
 	}
 
