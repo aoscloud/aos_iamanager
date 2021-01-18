@@ -260,7 +260,7 @@ func (module *SWModule) ApplyCertificate(cert string) (certURL, keyURL string, e
 		return "", "", err
 	}
 
-	certFileName, err := saveCert(module.config.StoragePath, x509Cert)
+	certFileName, err := saveCert(module.config.StoragePath, cert)
 	if err != nil {
 		return "", "", err
 	}
@@ -336,18 +336,16 @@ func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
 	return nil
 }
 
-func saveCert(storageDir string, cert *x509.Certificate) (fileName string, err error) {
+func saveCert(storageDir string, cert string) (fileName string, err error) {
 	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	if err = pem.Encode(file, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}); err != nil {
-		return "", err
-	}
+	_, err = file.WriteString(cert)
 
-	return file.Name(), nil
+	return file.Name(), err
 }
 
 func saveKey(storageDir string, key *rsa.PrivateKey) (fileName string, err error) {
