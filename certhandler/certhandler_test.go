@@ -179,7 +179,7 @@ func TestSetOwner(t *testing.T) {
 	}
 }
 
-func TestCreateKeys(t *testing.T) {
+func TestCreateKey(t *testing.T) {
 	cfg := config.Config{CertModules: []config.ModuleConfig{
 		{ID: "cert1",
 			Plugin:           "testmodule",
@@ -193,9 +193,9 @@ func TestCreateKeys(t *testing.T) {
 	}
 	defer handler.Close()
 
-	csrData, err := handler.CreateKeys("cert1", "password")
+	csrData, err := handler.CreateKey("cert1", "password")
 	if err != nil {
-		t.Fatalf("Can't create keys: %s", err)
+		t.Fatalf("Can't create key: %s", err)
 	}
 
 	// Get key public part
@@ -212,7 +212,7 @@ func TestCreateKeys(t *testing.T) {
 
 	// Check CSR
 
-	block, _ := pem.Decode([]byte(csrData))
+	block, _ := pem.Decode(csrData)
 
 	csr, err := x509.ParseCertificateRequest(block.Bytes)
 	if err != nil {

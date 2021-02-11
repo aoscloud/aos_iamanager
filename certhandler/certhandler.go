@@ -187,27 +187,27 @@ func (handler *Handler) Clear(certType string) (err error) {
 	return descriptor.module.Clear()
 }
 
-// CreateKeys creates key pair
-func (handler *Handler) CreateKeys(certType, password string) (csr string, err error) {
+// CreateKey creates key pair
+func (handler *Handler) CreateKey(certType, password string) (csr []byte, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return "", fmt.Errorf("module %s not found", certType)
+		return nil, fmt.Errorf("module %s not found", certType)
 	}
 
 	key, err := descriptor.module.CreateKey(password)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	csrData, err := createCSR(handler.systemID, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(csrData), nil
+	return csrData, nil
 }
 
 // ApplyCertificate applies certificate

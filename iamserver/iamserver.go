@@ -66,7 +66,7 @@ type CertHandler interface {
 	GetCertTypes() (certTypes []string)
 	SetOwner(certType, password string) (err error)
 	Clear(certType string) (err error)
-	CreateKeys(certType, password string) (csr string, err error)
+	CreateKey(certType, password string) (csr []byte, err error)
 	ApplyCertificate(certType string, cert string) (certURL string, err error)
 	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
 }
@@ -208,15 +208,18 @@ func (server *Server) Clear(context context.Context, req *pb.ClearReq) (rsp *emp
 	return rsp, nil
 }
 
-// CreateKeys creates private keys
+// CreateKey creates private key
 func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReq) (rsp *pb.CreateKeyRsp, err error) {
 	rsp = &pb.CreateKeyRsp{Type: req.Type}
 
-	log.WithField("type", req.Type).Debug("Process create keys request")
+	log.WithField("type", req.Type).Debug("Process create key request")
 
-	if rsp.Csr, err = server.certHandler.CreateKeys(req.Type, req.Password); err != nil {
+	csr, err := server.certHandler.CreateKey(req.Type, req.Password)
+	if err != nil {
 		return rsp, err
 	}
+
+	rsp.Csr = string(csr)
 
 	return rsp, nil
 }

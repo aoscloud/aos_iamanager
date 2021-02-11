@@ -52,7 +52,7 @@ type testClient struct {
 
 type testCertHandler struct {
 	certTypes []string
-	csr       string
+	csr       []byte
 	certURL   string
 	keyURL    string
 	password  string
@@ -197,7 +197,7 @@ func TestSetOwner(t *testing.T) {
 	}
 }
 
-func TestCreateKeys(t *testing.T) {
+func TestCreateKey(t *testing.T) {
 	certHandler := &testCertHandler{}
 
 	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
@@ -212,7 +212,7 @@ func TestCreateKeys(t *testing.T) {
 	}
 	defer client.close()
 
-	certHandler.csr = "this is csr"
+	certHandler.csr = []byte("this is csr")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -486,7 +486,7 @@ func (handler *testCertHandler) Clear(certType string) (err error) {
 	return nil
 }
 
-func (handler *testCertHandler) CreateKeys(certType, password string) (csr string, err error) {
+func (handler *testCertHandler) CreateKey(certType, password string) (csr []byte, err error) {
 	return handler.csr, handler.err
 }
 
