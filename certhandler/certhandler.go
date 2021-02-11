@@ -18,10 +18,16 @@
 package certhandler
 
 import (
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,9 +40,22 @@ import (
  * Consts
  ******************************************************************************/
 
+const (
+	clientAuth = "clientauth"
+	serverAuth = "serverauth"
+)
+
+const csrBlockType = "CERTIFICATE REQUEST"
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
+
+var (
+	oidExtensionExtendedKeyUsage = asn1.ObjectIdentifier{2, 5, 29, 37}
+	oidExtKeyUsageServerAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
+	oidExtKeyUsageClientAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 2}
+)
 
 var plugins = make(map[string]NewPlugin)
 
@@ -48,9 +67,9 @@ var plugins = make(map[string]NewPlugin)
 type Handler struct {
 	sync.Mutex
 
-	systemID string
-	storage  CertStorage
-	modules  map[string]CertModule
+	systemID          string
+	storage           CertStorage
+	moduleDescriptors map[string]moduleDescriptor
 }
 
 // CertInfo certificate info
@@ -76,13 +95,18 @@ type CertModule interface {
 	SyncStorage() (err error)
 	SetOwner(password string) (err error)
 	Clear() (err error)
-	CreateKeys(systemID, password string) (csr string, err error)
+	CreateKey(password string) (key interface{}, err error)
 	ApplyCertificate(cert string) (certURL, keyURL string, err error)
 	Close() (err error)
 }
 
 // NewPlugin plugin new function
 type NewPlugin func(certType string, configJSON json.RawMessage, storage CertStorage) (module CertModule, err error)
+
+type moduleDescriptor struct {
+	config config.ModuleConfig
+	module CertModule
+}
 
 /*******************************************************************************
  * Public
@@ -97,7 +121,7 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 
 // New returns pointer to new Handler
 func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
-	handler = &Handler{systemID: systemID, modules: make(map[string]CertModule), storage: storage}
+	handler = &Handler{systemID: systemID, moduleDescriptors: make(map[string]moduleDescriptor), storage: storage}
 
 	log.Debug("Create certificate handler")
 
@@ -108,12 +132,12 @@ func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Han
 			continue
 		}
 
-		module, err := handler.createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
+		descriptor, err := handler.createModule(moduleCfg)
 		if err != nil {
 			return nil, err
 		}
 
-		handler.modules[moduleCfg.ID] = module
+		handler.moduleDescriptors[moduleCfg.ID] = descriptor
 	}
 
 	if err = handler.syncStorage(); err != nil {
@@ -128,9 +152,9 @@ func (handler *Handler) GetCertTypes() (certTypes []string) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	certTypes = make([]string, 0, len(handler.modules))
+	certTypes = make([]string, 0, len(handler.moduleDescriptors))
 
-	for certType := range handler.modules {
+	for certType := range handler.moduleDescriptors {
 		certTypes = append(certTypes, certType)
 	}
 
@@ -142,12 +166,12 @@ func (handler *Handler) SetOwner(certType, password string) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	module, ok := handler.modules[certType]
+	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return fmt.Errorf("module %s not found", certType)
 	}
 
-	return module.SetOwner(password)
+	return descriptor.module.SetOwner(password)
 }
 
 // Clear clears security storage
@@ -155,12 +179,12 @@ func (handler *Handler) Clear(certType string) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	module, ok := handler.modules[certType]
+	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return fmt.Errorf("module %s not found", certType)
 	}
 
-	return module.Clear()
+	return descriptor.module.Clear()
 }
 
 // CreateKeys creates key pair
@@ -168,12 +192,22 @@ func (handler *Handler) CreateKeys(certType, password string) (csr string, err e
 	handler.Lock()
 	defer handler.Unlock()
 
-	module, ok := handler.modules[certType]
+	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return "", fmt.Errorf("module %s not found", certType)
 	}
 
-	return module.CreateKeys(handler.systemID, password)
+	key, err := descriptor.module.CreateKey(password)
+	if err != nil {
+		return "", err
+	}
+
+	csrData, err := createCSR(handler.systemID, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
+	if err != nil {
+		return "", err
+	}
+
+	return string(csrData), nil
 }
 
 // ApplyCertificate applies certificate
@@ -181,12 +215,12 @@ func (handler *Handler) ApplyCertificate(certType string, cert string) (certURL 
 	handler.Lock()
 	defer handler.Unlock()
 
-	module, ok := handler.modules[certType]
+	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return "", fmt.Errorf("module %s not found", certType)
 	}
 
-	if certURL, _, err = module.ApplyCertificate(cert); err != nil {
+	if certURL, _, err = descriptor.module.ApplyCertificate(cert); err != nil {
 		return "", err
 	}
 
@@ -234,8 +268,8 @@ func (handler *Handler) GetCertificate(certType string, issuer []byte, serial st
 func (handler *Handler) Close() {
 	log.Debug("Close certificate handler")
 
-	for _, module := range handler.modules {
-		if err := module.Close(); err != nil {
+	for _, descriptor := range handler.moduleDescriptors {
+		if err := descriptor.module.Close(); err != nil {
 			log.Errorf("Error closing module: %s", err)
 		}
 	}
@@ -245,17 +279,59 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (handler *Handler) createModule(plugin, certType string, params json.RawMessage) (module CertModule, err error) {
-	newFunc, ok := plugins[plugin]
-	if !ok {
-		return nil, fmt.Errorf("plugin %s not found", plugin)
+func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key interface{}) (csr []byte, err error) {
+	template := &x509.CertificateRequest{
+		Subject:  pkix.Name{CommonName: systemID},
+		DNSNames: alternativeNames,
 	}
 
-	if module, err = newFunc(certType, params, handler.storage); err != nil {
+	var oids []asn1.ObjectIdentifier
+
+	for _, value := range extendedKeyUsage {
+		switch strings.ToLower(value) {
+		case clientAuth:
+			oids = append(oids, oidExtKeyUsageClientAuth)
+
+		case serverAuth:
+			oids = append(oids, oidExtKeyUsageServerAuth)
+
+		default:
+			log.Warnf("Unexpected extended key usage value: %s", value)
+		}
+	}
+
+	if len(oids) > 0 {
+		oidsValue, err := asn1.Marshal(oids)
+		if err != nil {
+			return nil, err
+		}
+
+		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{
+			Id:    oidExtensionExtendedKeyUsage,
+			Value: oidsValue})
+	}
+
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)
+	if err != nil {
 		return nil, err
 	}
 
-	return module, nil
+	return pem.EncodeToMemory(&pem.Block{Type: csrBlockType, Bytes: csrDER}), nil
+}
+
+func (handler *Handler) createModule(cfg config.ModuleConfig) (descriptor moduleDescriptor, err error) {
+	newFunc, ok := plugins[cfg.Plugin]
+	if !ok {
+		return moduleDescriptor{}, fmt.Errorf("plugin %s not found", cfg.Plugin)
+	}
+
+	if descriptor.module, err = newFunc(cfg.ID, cfg.Params, handler.storage); err != nil {
+		return moduleDescriptor{}, err
+	}
+
+	descriptor.config = cfg
+
+	return descriptor, nil
 }
 
 func (handler *Handler) syncStorage() (err error) {
@@ -264,8 +340,8 @@ func (handler *Handler) syncStorage() (err error) {
 
 	log.Debug("Sync certificate DB")
 
-	for _, module := range handler.modules {
-		if err = module.SyncStorage(); err != nil {
+	for _, descriptor := range handler.moduleDescriptors {
+		if err = descriptor.module.SyncStorage(); err != nil {
 			return err
 		}
 	}

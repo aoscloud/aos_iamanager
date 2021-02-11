@@ -92,7 +92,19 @@ func TestModules(t *testing.T) {
 	}
 
 	if cfg.CertModules[0].Disabled != false || cfg.CertModules[1].Disabled != false || cfg.CertModules[2].Disabled != true {
-		t.Error("Disabled value")
+		t.Error("Wrong disabled value")
+	}
+
+	if !reflect.DeepEqual(cfg.CertModules[0].ExtendedKeyUsage, []string{"clientAuth"}) ||
+		!reflect.DeepEqual(cfg.CertModules[1].ExtendedKeyUsage, []string{"serverAuth"}) ||
+		!reflect.DeepEqual(cfg.CertModules[2].ExtendedKeyUsage, []string{"clientAuth", "serverAuth"}) {
+		t.Error("Wrong extended key usage value")
+	}
+
+	if !reflect.DeepEqual(cfg.CertModules[0].AlternativeNames, []string{"host1"}) ||
+		!reflect.DeepEqual(cfg.CertModules[1].AlternativeNames, []string{"host2"}) ||
+		!reflect.DeepEqual(cfg.CertModules[2].AlternativeNames, []string{"host3"}) {
+		t.Error("Wrong alternative names value")
 	}
 }
 
@@ -168,6 +180,8 @@ func setup() (err error) {
 		"CertModules":[{
 			"ID": "id1",
 			"Plugin": "test1",
+			"ExtendedKeyUsage": ["clientAuth"],
+			"AlternativeNames": ["host1"],
 			"Params": {
 				"Param1" :"value1",
 				"Param2" : 2
@@ -175,6 +189,8 @@ func setup() (err error) {
 		}, {
 			"ID": "id2",
 			"Plugin": "test2",
+			"ExtendedKeyUsage": ["serverAuth"],
+			"AlternativeNames": ["host2"],
 			"Params": {
 				"Param1" :"value1",
 				"Param2" : 2
@@ -182,6 +198,8 @@ func setup() (err error) {
 		}, {
 			"ID": "id3",
 			"Plugin": "test3",
+			"ExtendedKeyUsage": ["clientAuth", "serverAuth"],
+			"AlternativeNames": ["host3"],
 			"Disabled": true,
 			"Params": {
 				"Param1" :"value1",

@@ -18,8 +18,16 @@
 package certhandler_test
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -39,7 +47,7 @@ import (
  ******************************************************************************/
 
 type moduleData struct {
-	csr      string
+	key      interface{}
 	certURL  string
 	password string
 }
@@ -62,8 +70,6 @@ type testStorage struct {
  ******************************************************************************/
 
 var tmpDir string
-
-var cfg config.Config
 
 var modules map[string]*testModule
 
@@ -92,12 +98,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
-	cfg = config.Config{
-		CertModules: []config.ModuleConfig{
-			{ID: "cert1", Plugin: "testmodule"},
-			{ID: "cert2", Plugin: "testmodule"},
-			{ID: "cert3", Plugin: "testmodule"}}}
-
 	modules = make(map[string]*testModule)
 
 	certhandler.RegisterPlugin("testmodule", func(certType string, configJSON json.RawMessage,
@@ -123,6 +123,12 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetCertTypes(t *testing.T) {
+	cfg := config.Config{
+		CertModules: []config.ModuleConfig{
+			{ID: "cert1", Plugin: "testmodule"},
+			{ID: "cert2", Plugin: "testmodule"},
+			{ID: "cert3", Plugin: "testmodule"}}}
+
 	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
@@ -146,6 +152,8 @@ func TestGetCertTypes(t *testing.T) {
 }
 
 func TestSetOwner(t *testing.T) {
+	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
+
 	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
@@ -172,43 +180,94 @@ func TestSetOwner(t *testing.T) {
 }
 
 func TestCreateKeys(t *testing.T) {
-	storage := &testStorage{}
+	cfg := config.Config{CertModules: []config.ModuleConfig{
+		{ID: "cert1",
+			Plugin:           "testmodule",
+			ExtendedKeyUsage: []string{"serverAuth", "clientAuth"},
+			AlternativeNames: []string{"name1", "name2"},
+		}}}
 
-	handler, err := certhandler.New("testID", &cfg, storage)
+	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
 	defer handler.Close()
 
-	modules["cert1"].data.csr = "this is csr"
-
-	csr, err := handler.CreateKeys("cert1", "password")
+	csrData, err := handler.CreateKeys("cert1", "password")
 	if err != nil {
 		t.Fatalf("Can't create keys: %s", err)
 	}
 
-	if modules["cert1"].data.csr != csr {
-		t.Errorf("Wrong CSR value: %s", string(csr))
+	// Get key public part
+
+	signer, ok := modules["cert1"].data.key.(crypto.Signer)
+	if !ok {
+		t.Fatalf("Wrong key type")
+	}
+
+	keyPub, err := x509.MarshalPKIXPublicKey(signer.Public())
+	if err != nil {
+		t.Fatalf("Can't marshal public key: %s", err)
+	}
+
+	// Check CSR
+
+	block, _ := pem.Decode([]byte(csrData))
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		t.Fatalf("Can't parse certificate request: %s", err)
+	}
+
+	if !reflect.DeepEqual(csr.DNSNames, []string{"name1", "name2"}) {
+		t.Errorf("Wrong CSR DNS names: %v", csr.DNSNames)
+	}
+
+	extendedKeyUsageValue, err := asn1.Marshal([]asn1.ObjectIdentifier{
+		{1, 3, 6, 1, 5, 5, 7, 3, 1},
+		{1, 3, 6, 1, 5, 5, 7, 3, 2},
+	})
+	if err != nil {
+		t.Fatalf("Can't marshal extended key usage: %s", err)
+	}
+
+	extendedKeyUsage := pkix.Extension{Id: asn1.ObjectIdentifier{2, 5, 29, 37}, Value: extendedKeyUsageValue}
+
+	if len(csr.Extensions) < 2 {
+		t.Fatalf("Wrong CSR extension length: %d", len(csr.Extensions))
+	}
+
+	if !reflect.DeepEqual(csr.Extensions[1], extendedKeyUsage) {
+		t.Errorf("Wrong CSR extended key usage: %v", csr.Extensions[1])
+	}
+
+	pubCSR, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		t.Fatalf("Can't marshal public key: %s", err)
+	}
+
+	if !bytes.Equal(keyPub, pubCSR) {
+		t.Error("Public key mismatch")
 	}
 }
 
 func TestApplyCertificate(t *testing.T) {
-	storage := &testStorage{}
+	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
-	handler, err := certhandler.New("testID", &cfg, storage)
+	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
 	defer handler.Close()
 
-	modules["cert2"].data.certURL = "certURL"
+	modules["cert1"].data.certURL = "certURL"
 
-	certURL, err := handler.ApplyCertificate("cert2", "this is certificate")
+	certURL, err := handler.ApplyCertificate("cert1", "this is certificate")
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %s", err)
 	}
 
-	if modules["cert2"].data.certURL != certURL {
+	if modules["cert1"].data.certURL != certURL {
 		t.Errorf("Wrong cert URL: %s", certURL)
 	}
 }
@@ -219,6 +278,8 @@ func TestGetCertificate(t *testing.T) {
 	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "1", "certURL1", "keyURL1", time.Now()})
 	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "2", "certURL2", "keyURL2", time.Now()})
 	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "3", "certURL3", "keyURL3", time.Now()})
+
+	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
 	handler, err := certhandler.New("testID", &cfg, storage)
 	if err != nil {
@@ -272,8 +333,12 @@ func (module *testModule) Clear() (err error) {
 	return nil
 }
 
-func (module *testModule) CreateKeys(systemID, password string) (csr string, err error) {
-	return module.data.csr, nil
+func (module *testModule) CreateKey(password string) (key interface{}, err error) {
+	if module.data.key, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
+		return nil, err
+	}
+
+	return module.data.key, nil
 }
 
 func (module *testModule) ApplyCertificate(cert string) (certURL, keyURL string, err error) {

@@ -43,10 +43,12 @@ type Config struct {
 
 // ModuleConfig module configuration
 type ModuleConfig struct {
-	ID       string
-	Plugin   string
-	Disabled bool
-	Params   json.RawMessage
+	ID               string          `json:"id"`
+	Plugin           string          `json:"plugin"`
+	ExtendedKeyUsage []string        `json:"extendedKeyUsage"`
+	AlternativeNames []string        `json:"alternativeNames"`
+	Disabled         bool            `json:"disabled"`
+	Params           json.RawMessage `json:"params"`
 }
 
 /*******************************************************************************

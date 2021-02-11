@@ -133,18 +133,25 @@ func TestUpdateCertificate(t *testing.T) {
 			t.Fatalf("Can't set owner: %s", err)
 		}
 
-		// Create keys
+		// Create key
 
-		csr, err := module.CreateKeys("testsystem", password)
+		key, err := module.CreateKey(password)
 		if err != nil {
-			t.Fatalf("Can't create keys: %s", err)
+			t.Fatalf("Can't create key: %s", err)
+		}
+
+		// Create CSR
+
+		csr, err := createCSR(key)
+		if err != nil {
+			t.Fatalf("Can't create CSR: %s", err)
 		}
 
 		// Verify CSR
 
 		csrFile := path.Join(tmpDir, "data.csr")
 
-		if err = ioutil.WriteFile(csrFile, []byte(csr), 0644); err != nil {
+		if err = ioutil.WriteFile(csrFile, csr, 0644); err != nil {
 			t.Fatalf("Can't write CSR to file: %s", err)
 		}
 
@@ -257,11 +264,18 @@ func TestMaxItems(t *testing.T) {
 
 		for i := 0; i < 3; i++ {
 
-			// Create keys
+			// Create key
 
-			csr, err := module.CreateKeys("testsystem", password)
+			key, err := module.CreateKey(password)
 			if err != nil {
-				t.Fatalf("Can't create keys: %s", err)
+				t.Fatalf("Can't create key: %s", err)
+			}
+
+			// Create CSR
+
+			csr, err := createCSR(key)
+			if err != nil {
+				t.Fatalf("Can't create CSR: %s", err)
 			}
 
 			// Apply certificate
@@ -364,11 +378,18 @@ func TestSyncStorage(t *testing.T) {
 		}
 
 		for _, item := range testData {
-			// Create keys
+			// Create key
 
-			csr, err := module.CreateKeys("testsystem", password)
+			key, err := module.CreateKey(password)
 			if err != nil {
-				t.Fatalf("Can't create keys: %s", err)
+				t.Fatalf("Can't create key: %s", err)
+			}
+
+			// Create CSR
+
+			csr, err := createCSR(key)
+			if err != nil {
+				t.Fatalf("Can't create CSR: %s", err)
 			}
 
 			// Apply certificate
@@ -547,11 +568,18 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Errorf("Can't set owner: %s", err)
 		}
 
-		// Create keys
+		// Create key
 
-		csr, err := module.CreateKeys("testsystem", password)
+		key, err := module.CreateKey(password)
 		if err != nil {
-			t.Fatalf("Can't create keys: %s", err)
+			t.Fatalf("Can't create key: %s", err)
+		}
+
+		// Create CSR
+
+		csr, err := createCSR(key)
+		if err != nil {
+			t.Fatalf("Can't create CSR: %s", err)
 		}
 
 		// Apply certificate
@@ -753,6 +781,17 @@ func (storage *testStorage) RemoveAllCertificates(certType string) (err error) {
  * Private
  ******************************************************************************/
 
+func createCSR(key interface{}) (csr []byte, err error) {
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err != nil {
+		return nil, err
+	}
+
+	csr = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
+	return csr, nil
+}
+
 func createSwModule(storagePath string, maxItem int,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
@@ -761,8 +800,7 @@ func createSwModule(storagePath string, maxItem int,
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d,
-	  "ExtendedKeyUsage": ["serverAuth","clientAuth"],	"AlternativeNames" : ["aosserver"]}`, storagePath, maxItem))
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d}`, storagePath, maxItem))
 
 	return swmodule.New("test", config, storage)
 }
@@ -784,7 +822,7 @@ func createTpmModule(storagePath string, maxItem int,
 	return tpmmodule.New("test", config, storage, tpmSimulator)
 }
 
-func generateCertificate(csr string) (cert string, err error) {
+func generateCertificate(csr []byte) (cert string, err error) {
 	caCert :=
 		`-----BEGIN CERTIFICATE-----
 MIIDYTCCAkmgAwIBAgIUefLO+XArcR2jeqrgGqQlTM20N/swDQYJKoZIhvcNAQEL

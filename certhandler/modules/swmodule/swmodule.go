@@ -23,8 +23,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -50,11 +48,6 @@ const (
 	keyExt = ".key"
 )
 
-const (
-	clientAuth = "clientAuth"
-	serverAuth = "serverAuth"
-)
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -69,21 +62,13 @@ type SWModule struct {
 }
 
 type moduleConfig struct {
-	StoragePath      string   `json:"storagePath"`
-	MaxItems         int      `json:"maxItems"`
-	ExtendedKeyUsage []string `json:"ExtendedKeyUsage"`
-	AlternativeNames []string `json:"AlternativeNames"`
+	StoragePath string `json:"storagePath"`
+	MaxItems    int    `json:"maxItems"`
 }
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
-
-var (
-	oidExtensionExtendedKeyUsage = asn1.ObjectIdentifier{2, 5, 29, 37}
-	oidExtKeyUsageServerAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
-	oidExtKeyUsageClientAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 2}
-)
 
 /*******************************************************************************
  * Public
@@ -186,52 +171,19 @@ func (module *SWModule) SyncStorage() (err error) {
 	return nil
 }
 
-// CreateKeys creates key pair
-func (module *SWModule) CreateKeys(systemID, password string) (csr string, err error) {
-	log.WithFields(log.Fields{"certType": module.certType, "systemID": systemID}).Debug("Create keys")
+// CreateKey creates key pair
+func (module *SWModule) CreateKey(password string) (key interface{}, err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
 	if module.currentKey != nil {
 		log.Warning("Current key exists. Flushing...")
 	}
 
 	if module.currentKey, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	template := x509.CertificateRequest{
-		Subject:  pkix.Name{CommonName: systemID},
-		DNSNames: module.config.AlternativeNames,
-	}
-
-	var oids []asn1.ObjectIdentifier
-	for _, value := range module.config.ExtendedKeyUsage {
-		switch value {
-		case clientAuth:
-			oids = append(oids, oidExtKeyUsageClientAuth)
-
-		case serverAuth:
-			oids = append(oids, oidExtKeyUsageServerAuth)
-
-		default:
-			log.Warning("Unexpected ExtendedKeyUsage value: ", value)
-		}
-	}
-
-	if len(oids) > 0 {
-		oidsValue, err := asn1.Marshal(oids)
-		if err != nil {
-			return "", err
-		}
-
-		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: oidExtensionExtendedKeyUsage, Value: oidsValue})
-	}
-
-	csrDER, err := x509.CreateCertificateRequest(nil, &template, module.currentKey)
-	if err != nil {
-		return "", err
-	}
-
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})), nil
+	return module.currentKey, nil
 }
 
 // ApplyCertificate applies certificate

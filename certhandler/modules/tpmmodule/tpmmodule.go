@@ -22,7 +22,6 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
@@ -244,15 +243,15 @@ func (module *TPMModule) Clear() (err error) {
 	return nil
 }
 
-// CreateKeys creates key pair
-func (module *TPMModule) CreateKeys(systemID, password string) (csr string, err error) {
-	log.WithFields(log.Fields{"certType": module.certType, "systemID": systemID}).Debug("Create keys")
+// CreateKey creates key pair
+func (module *TPMModule) CreateKey(password string) (key interface{}, err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
 	if module.currentKey != nil {
 		log.Warning("Current key exists. Flushing...")
 
 		if err = module.currentKey.flush(); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
@@ -260,12 +259,7 @@ func (module *TPMModule) CreateKeys(systemID, password string) (csr string, err 
 		return "", err
 	}
 
-	csrDER, err := x509.CreateCertificateRequest(nil, &x509.CertificateRequest{Subject: pkix.Name{CommonName: systemID}}, module.currentKey)
-	if err != nil {
-		return "", err
-	}
-
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})), nil
+	return module.currentKey, nil
 }
 
 // ApplyCertificate applies certificate
