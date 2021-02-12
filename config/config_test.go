@@ -91,6 +91,10 @@ func TestModules(t *testing.T) {
 		t.Error("Wrong plugin value")
 	}
 
+	if cfg.CertModules[0].MaxItems != 1 || cfg.CertModules[1].MaxItems != 2 || cfg.CertModules[2].MaxItems != 3 {
+		t.Error("Wrong max items value")
+	}
+
 	if cfg.CertModules[0].Disabled != false || cfg.CertModules[1].Disabled != false || cfg.CertModules[2].Disabled != true {
 		t.Error("Wrong disabled value")
 	}
@@ -180,6 +184,7 @@ func setup() (err error) {
 		"CertModules":[{
 			"ID": "id1",
 			"Plugin": "test1",
+			"MaxItems": 1,
 			"ExtendedKeyUsage": ["clientAuth"],
 			"AlternativeNames": ["host1"],
 			"Params": {
@@ -189,6 +194,7 @@ func setup() (err error) {
 		}, {
 			"ID": "id2",
 			"Plugin": "test2",
+			"MaxItems": 2,
 			"ExtendedKeyUsage": ["serverAuth"],
 			"AlternativeNames": ["host2"],
 			"Params": {
@@ -198,6 +204,7 @@ func setup() (err error) {
 		}, {
 			"ID": "id3",
 			"Plugin": "test3",
+			"MaxItems": 3,
 			"ExtendedKeyUsage": ["clientAuth", "serverAuth"],
 			"AlternativeNames": ["host3"],
 			"Disabled": true,

@@ -35,7 +35,6 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"time"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -67,7 +66,6 @@ type TPMModule struct {
 type moduleConfig struct {
 	Device      string `json:"device"`
 	StoragePath string `json:"storagePath"`
-	MaxItems    int    `json:"maxItems"`
 }
 
 type key struct {
@@ -236,10 +234,6 @@ func (module *TPMModule) Clear() (err error) {
 		return err
 	}
 
-	if err = module.storage.RemoveAllCertificates(module.certType); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -263,68 +257,74 @@ func (module *TPMModule) CreateKey(password string) (key interface{}, err error)
 }
 
 // ApplyCertificate applies certificate
-func (module *TPMModule) ApplyCertificate(cert string) (certURL, keyURL string, err error) {
+func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
 	if module.currentKey == nil {
-		return "", "", errors.New("no key created")
+		return certhandler.CertInfo{}, "", errors.New("no key created")
 	}
 	defer func() { module.currentKey = nil }()
 
 	x509Cert, err := pemToX509Cert(cert)
 	if err != nil {
-		return "", "", nil
+		return certhandler.CertInfo{}, "", nil
 	}
 
 	if err = checkCert(x509Cert, module.currentKey.publicKey); err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
 	certFileName, err := saveCert(module.config.StoragePath, cert)
 	if err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
 	persistentHandle, err := module.findEmptyPersistentHandle()
 	if err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
 	if err = module.currentKey.makePersistent(persistentHandle); err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
-	certURL = fileToURL(certFileName)
-	keyURL = handleToURL(persistentHandle)
+	certInfo.CertURL = fileToURL(certFileName)
+	certInfo.KeyURL = handleToURL(persistentHandle)
+	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Cert.RawIssuer)
+	certInfo.Serial = fmt.Sprintf("%X", x509Cert.SerialNumber)
 
-	if err = module.addCertToDB(x509Cert, certURL, keyURL); err != nil {
-		return "", "", err
-	}
+	return certInfo, module.currentKey.password, nil
+}
 
-	certs, err := module.storage.GetCertificates(module.certType)
+// RemoveCertificate removes certificate and corresponding key
+func (module *TPMModule) RemoveCertificate(certURL, keyURL, password string) (err error) {
+	log.WithFields(log.Fields{
+		"certType": module.certType,
+		"certURL":  certURL,
+		"keyURL":   keyURL}).Debug("Remove certificate")
+
+	key, err := url.Parse(keyURL)
 	if err != nil {
-		log.Errorf("Can' get certificates: %s", err)
+		return err
 	}
 
-	for len(certs) > module.config.MaxItems && module.config.MaxItems != 0 {
-		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certs", len(certs), module.config.MaxItems)
-
-		var minTime time.Time
-		var minIndex int
-
-		for i, cert := range certs {
-			if minTime.IsZero() || cert.NotAfter.Before(minTime) {
-				minTime = cert.NotAfter
-				minIndex = i
-			}
-		}
-
-		if err = module.removeCert(certs[minIndex], module.currentKey.password); err != nil {
-			log.Errorf("Can't delete old certificate: %s", err)
-		}
-
-		certs = append(certs[:minIndex], certs[minIndex+1:]...)
+	handle, err := strconv.ParseUint(key.Hostname(), 0, 32)
+	if err != nil {
+		return err
 	}
 
-	return certURL, keyURL, nil
+	if err = tpm2.EvictControl(module.device, password, tpm2.HandleOwner, tpmutil.Handle(handle), tpmutil.Handle(handle)); err != nil {
+		return err
+	}
+
+	cert, err := url.Parse(certURL)
+	if err != nil {
+		return err
+	}
+
+	if err = os.Remove(cert.Path); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /*******************************************************************************

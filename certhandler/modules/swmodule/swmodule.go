@@ -32,7 +32,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -63,7 +62,6 @@ type SWModule struct {
 
 type moduleConfig struct {
 	StoragePath string `json:"storagePath"`
-	MaxItems    int    `json:"maxItems"`
 }
 
 /*******************************************************************************
@@ -116,10 +114,6 @@ func (module *SWModule) Clear() (err error) {
 	}
 
 	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
-		return err
-	}
-
-	if err = module.storage.RemoveAllCertificates(module.certType); err != nil {
 		return err
 	}
 
@@ -187,74 +181,75 @@ func (module *SWModule) CreateKey(password string) (key interface{}, err error) 
 }
 
 // ApplyCertificate applies certificate
-func (module *SWModule) ApplyCertificate(cert string) (certURL, keyURL string, err error) {
+func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
 	if module.currentKey == nil {
-		return "", "", errors.New("no key created")
+		return certhandler.CertInfo{}, "", errors.New("no key created")
 	}
 	defer func() { module.currentKey = nil }()
 
 	block, _ := pem.Decode([]byte(cert))
 
 	if block == nil {
-		return "", "", errors.New("invalid PEM Block")
+		return certhandler.CertInfo{}, "", errors.New("invalid PEM Block")
 	}
 
 	if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-		return "", "", errors.New("invalid PEM Block")
+		return certhandler.CertInfo{}, "", errors.New("invalid PEM Block")
 	}
 
 	x509Cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
 	if err = checkCert(x509Cert, module.currentKey.Public()); err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
 	certFileName, err := saveCert(module.config.StoragePath, cert)
 	if err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
 	keyFileName, err := saveKey(module.config.StoragePath, module.currentKey)
 	if err != nil {
-		return "", "", err
+		return certhandler.CertInfo{}, "", err
 	}
 
-	certURL = fileToURL(certFileName)
-	keyURL = fileToURL(keyFileName)
+	certInfo.CertURL = fileToURL(certFileName)
+	certInfo.KeyURL = fileToURL(keyFileName)
+	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Cert.RawIssuer)
+	certInfo.Serial = fmt.Sprintf("%X", x509Cert.SerialNumber)
 
-	if err = module.storeCert(x509Cert, certURL, keyURL); err != nil {
-		return "", "", err
-	}
+	return certInfo, "", nil
+}
 
-	certs, err := module.storage.GetCertificates(module.certType)
+// RemoveCertificate removes certificate and corresponding key
+func (module *SWModule) RemoveCertificate(certURL, keyURL, password string) (err error) {
+	log.WithFields(log.Fields{
+		"certType": module.certType,
+		"certURL":  certURL,
+		"keyURL":   keyURL}).Debug("Remove certificate")
+
+	key, err := url.Parse(keyURL)
 	if err != nil {
-		log.Errorf("Can' get certificates: %s", err)
+		return err
 	}
 
-	for len(certs) > module.config.MaxItems && module.config.MaxItems != 0 {
-		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certs", len(certs), module.config.MaxItems)
-
-		var minTime time.Time
-		var minIndex int
-
-		for i, cert := range certs {
-			if minTime.IsZero() || cert.NotAfter.Before(minTime) {
-				minTime = cert.NotAfter
-				minIndex = i
-			}
-		}
-
-		if err = module.removeCert(certs[minIndex]); err != nil {
-			log.Errorf("Can't delete old certificate: %s", err)
-		}
-
-		certs = append(certs[:minIndex], certs[minIndex+1:]...)
+	if err = os.Remove(key.Path); err != nil {
+		return err
 	}
 
-	return certURL, keyURL, nil
+	cert, err := url.Parse(certURL)
+	if err != nil {
+		return err
+	}
+
+	if err = os.Remove(cert.Path); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /*******************************************************************************

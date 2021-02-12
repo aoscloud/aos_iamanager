@@ -96,7 +96,8 @@ type CertModule interface {
 	SetOwner(password string) (err error)
 	Clear() (err error)
 	CreateKey(password string) (key interface{}, err error)
-	ApplyCertificate(cert string) (certURL, keyURL string, err error)
+	ApplyCertificate(cert string) (certInfo CertInfo, password string, err error)
+	RemoveCertificate(certURL, keyURL, password string) (err error)
 	Close() (err error)
 }
 
@@ -184,7 +185,11 @@ func (handler *Handler) Clear(certType string) (err error) {
 		return fmt.Errorf("module %s not found", certType)
 	}
 
-	return descriptor.module.Clear()
+	if err = descriptor.module.Clear(); err != nil {
+		return err
+	}
+
+	return handler.storage.RemoveAllCertificates(certType)
 }
 
 // CreateKey creates key pair
@@ -220,8 +225,46 @@ func (handler *Handler) ApplyCertificate(certType string, cert string) (certURL 
 		return "", fmt.Errorf("module %s not found", certType)
 	}
 
-	if certURL, _, err = descriptor.module.ApplyCertificate(cert); err != nil {
+	certInfo, password, err := descriptor.module.ApplyCertificate(cert)
+	if err != nil {
 		return "", err
+	}
+
+	certURL = certInfo.CertURL
+
+	if err = handler.storage.AddCertificate(certType, certInfo); err != nil {
+		return "", err
+	}
+
+	certs, err := handler.storage.GetCertificates(certType)
+	if err != nil {
+		log.Errorf("Can' get certificates: %s", err)
+	}
+
+	for len(certs) > descriptor.config.MaxItems && descriptor.config.MaxItems != 0 {
+		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certificates",
+			len(certs), descriptor.config.MaxItems)
+
+		var minTime time.Time
+		var minIndex int
+
+		for i, cert := range certs {
+			if minTime.IsZero() || cert.NotAfter.Before(minTime) {
+				minTime = cert.NotAfter
+				minIndex = i
+			}
+		}
+
+		if err = descriptor.module.RemoveCertificate(
+			certs[minIndex].CertURL, certs[minIndex].KeyURL, password); err != nil {
+			return "", err
+		}
+
+		if err = handler.storage.RemoveCertificate(certType, certs[minIndex].CertURL); err != nil {
+			return "", err
+		}
+
+		certs = append(certs[:minIndex], certs[minIndex+1:]...)
 	}
 
 	return certURL, nil

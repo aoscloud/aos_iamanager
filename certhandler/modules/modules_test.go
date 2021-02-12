@@ -58,7 +58,7 @@ type testStorage struct {
 	certs []certDesc
 }
 
-type createModuleType func(storagePath string, maxItem int,
+type createModuleType func(storagePath string,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error)
 
 /*******************************************************************************
@@ -119,7 +119,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, 1, storage, true)
+		module, err := createModule(certStorage, storage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -167,34 +167,16 @@ func TestUpdateCertificate(t *testing.T) {
 			t.Fatalf("Can't generate certificate: %s", err)
 		}
 
-		certURL, keyURL, err := module.ApplyCertificate(cert)
+		certInfo, _, err := module.ApplyCertificate(cert)
 		if err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
-		// Get certificate
-
-		block, _ := pem.Decode([]byte(cert))
-
-		x509Cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			t.Fatalf("Can't parse certificate: %s", err)
-		}
-
-		certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer), fmt.Sprintf("%X", x509Cert.SerialNumber))
-		if err != nil {
-			t.Fatalf("Can't get certificate: %s", err)
-		}
-
-		if certURL != certInfo.CertURL || keyURL != certInfo.KeyURL {
-			t.Errorf("Wrong certificate or key URL: %s, %s", certInfo.CertURL, certInfo.KeyURL)
-		}
-
 		// Check encrypt/decrypt with private key
 
-		keyVal, err := url.Parse(keyURL)
+		keyVal, err := url.Parse(certInfo.KeyURL)
 		if err != nil {
-			t.Fatalf("Wrong key URL: %s", keyURL)
+			t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
 		}
 
 		originMessage := []byte("This is origin message")
@@ -243,111 +225,6 @@ func TestUpdateCertificate(t *testing.T) {
 	}
 }
 
-func TestMaxItems(t *testing.T) {
-	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
-		storage := &testStorage{}
-		certStorage := path.Join(tmpDir, "certStorage")
-
-		module, err := createModule(certStorage, 1, storage, true)
-		if err != nil {
-			t.Fatalf("Can't create module: %s", err)
-		}
-		defer module.Close()
-
-		// Set owner
-
-		password := "password"
-
-		if err = module.SetOwner(password); err != nil {
-			t.Fatalf("Can't set owner: %s", err)
-		}
-
-		for i := 0; i < 3; i++ {
-
-			// Create key
-
-			key, err := module.CreateKey(password)
-			if err != nil {
-				t.Fatalf("Can't create key: %s", err)
-			}
-
-			// Create CSR
-
-			csr, err := createCSR(key)
-			if err != nil {
-				t.Fatalf("Can't create CSR: %s", err)
-			}
-
-			// Apply certificate
-
-			cert, err := generateCertificate(csr)
-			if err != nil {
-				t.Fatalf("Can't generate certificate: %s", err)
-			}
-
-			certURL, keyURL, err := module.ApplyCertificate(cert)
-			if err != nil {
-				t.Fatalf("Can't apply certificate: %s", err)
-			}
-
-			// Check key files
-
-			keyVal, err := url.Parse(keyURL)
-			if err != nil {
-				t.Fatalf("Wrong key URL: %s", keyURL)
-			}
-
-			switch keyVal.Scheme {
-			case "file":
-				keyFiles, err := getKeyFiles(certStorage)
-				if err != nil {
-					t.Fatalf("Can't get key files")
-				}
-
-				if len(keyFiles) != 1 {
-					t.Errorf("Wrong key files count: %d", len(keyFiles))
-				}
-
-				if err = checkFileURL(keyURL, keyFiles[0]); err != nil {
-					t.Errorf("Check key URL error: %s", err)
-				}
-
-			case "tpm":
-				handles, err := getPersistentHandles()
-				if err != nil {
-					t.Fatalf("Can't get peristent handles")
-				}
-
-				if len(handles) != 1 {
-					t.Errorf("Wrong persistent handles count: %d", len(handles))
-				}
-
-				if err = checkHandleURL(keyURL, handles[0]); err != nil {
-					t.Errorf("Check key URL error: %s", err)
-				}
-
-			default:
-				t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
-			}
-
-			// Check cert files
-
-			certFiles, err := getCertFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get cert files")
-			}
-
-			if len(certFiles) != 1 {
-				t.Errorf("Wrong cert files count: %d", len(certFiles))
-			}
-
-			if err = checkFileURL(certURL, certFiles[0]); err != nil {
-				t.Errorf("Check cert URL error: %s", err)
-			}
-		}
-	}
-}
-
 func TestSyncStorage(t *testing.T) {
 	// Test items:
 	// * valid     - cert file, handle, DB entry
@@ -364,7 +241,7 @@ func TestSyncStorage(t *testing.T) {
 
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, len(testData), storage, true)
+		module, err := createModule(certStorage, storage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -399,17 +276,17 @@ func TestSyncStorage(t *testing.T) {
 				t.Fatalf("Can't generate certificate: %s", err)
 			}
 
-			certURL, keyURL, err := module.ApplyCertificate(cert)
+			certInfo, _, err := module.ApplyCertificate(cert)
 			if err != nil {
 				t.Fatalf("Can't apply certificate: %s", err)
 			}
 
-			certVal, err := url.Parse(certURL)
+			certVal, err := url.Parse(certInfo.CertURL)
 			if err != nil {
 				t.Fatalf("Can't parse cert URL: %s", err)
 			}
 
-			keyVal, err := url.Parse(keyURL)
+			keyVal, err := url.Parse(certInfo.KeyURL)
 			if err != nil {
 				t.Fatalf("Can't parse key URL: %s", err)
 			}
@@ -428,7 +305,7 @@ func TestSyncStorage(t *testing.T) {
 				}
 
 			case "wrongFile":
-				if err = storage.RemoveCertificate("test", certURL); err != nil {
+				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
@@ -460,7 +337,7 @@ func TestSyncStorage(t *testing.T) {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
-				if err = storage.RemoveCertificate("test", certURL); err != nil {
+				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
@@ -470,7 +347,7 @@ func TestSyncStorage(t *testing.T) {
 					t.Errorf("Can't add cert: %s", err)
 				}
 
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
 
 			case "wrongIssuer":
 				certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
@@ -479,7 +356,7 @@ func TestSyncStorage(t *testing.T) {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
-				if err = storage.RemoveCertificate("test", certURL); err != nil {
+				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
@@ -489,23 +366,23 @@ func TestSyncStorage(t *testing.T) {
 					t.Errorf("Can't add cert: %s", err)
 				}
 
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
 
 			case "validFile":
-				if err = storage.RemoveCertificate("test", certURL); err != nil {
+				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
 					t.Errorf("Can't remove cert entry: %s", err)
 				}
 
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
 
 			default:
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certURL, KeyURL: keyURL})
+				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
 			}
 		}
 
 		module.Close()
 
-		if module, err = createModule(certStorage, 1, storage, false); err != nil {
+		if module, err = createModule(certStorage, storage, false); err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
 		defer module.Close()
@@ -549,7 +426,7 @@ func TestSetOwnerClear(t *testing.T) {
 		storage := &testStorage{}
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, 1, storage, true)
+		module, err := createModule(certStorage, storage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -792,7 +669,7 @@ func createCSR(key interface{}) (csr []byte, err error) {
 	return csr, nil
 }
 
-func createSwModule(storagePath string, maxItem int,
+func createSwModule(storagePath string,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
@@ -800,12 +677,12 @@ func createSwModule(storagePath string, maxItem int,
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d}`, storagePath, maxItem))
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, storagePath))
 
 	return swmodule.New("test", config, storage)
 }
 
-func createTpmModule(storagePath string, maxItem int,
+func createTpmModule(storagePath string,
 	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
@@ -817,7 +694,7 @@ func createTpmModule(storagePath string, maxItem int,
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d}`, storagePath, maxItem))
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, storagePath))
 
 	return tpmmodule.New("test", config, storage, tpmSimulator)
 }

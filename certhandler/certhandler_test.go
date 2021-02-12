@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -48,7 +49,7 @@ import (
 
 type moduleData struct {
 	key      interface{}
-	certURL  string
+	certInfo certhandler.CertInfo
 	password string
 }
 
@@ -260,14 +261,17 @@ func TestApplyCertificate(t *testing.T) {
 	}
 	defer handler.Close()
 
-	modules["cert1"].data.certURL = "certURL"
+	modules["cert1"].data.certInfo = certhandler.CertInfo{
+		CertURL: "certURL",
+		KeyURL:  "keyURL",
+	}
 
 	certURL, err := handler.ApplyCertificate("cert1", "this is certificate")
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %s", err)
 	}
 
-	if modules["cert1"].data.certURL != certURL {
+	if modules["cert1"].data.certInfo.CertURL != certURL {
 		t.Errorf("Wrong cert URL: %s", certURL)
 	}
 }
@@ -313,6 +317,52 @@ func TestGetCertificate(t *testing.T) {
 	}
 }
 
+func TestMaxItems(t *testing.T) {
+	maxItems := 5
+	addItems := 10
+
+	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule", MaxItems: maxItems}}}
+
+	storage := &testStorage{}
+
+	handler, err := certhandler.New("testID", &cfg, storage)
+	if err != nil {
+		t.Fatalf("Can't create cert handler: %s", err)
+	}
+	defer handler.Close()
+
+	for i := 0; i < addItems; i++ {
+		modules["cert1"].data.certInfo = certhandler.CertInfo{
+			CertURL:  fmt.Sprintf("certURL%d", i),
+			KeyURL:   fmt.Sprintf("keyURL%d", i),
+			Serial:   fmt.Sprintf("Serial%d", i),
+			Issuer:   fmt.Sprintf("Issuer%d", i),
+			NotAfter: time.Now(),
+		}
+
+		if _, err = handler.ApplyCertificate("cert1", "this is certificate"); err != nil {
+			t.Fatalf("Can't apply certificate: %s", err)
+		}
+
+		if i >= maxItems {
+			if modules["cert1"].data.certInfo.CertURL != fmt.Sprintf("certURL%d", i-maxItems) {
+				t.Errorf("Delete unexpected certificate: %s", modules["cert1"].data.certInfo.CertURL)
+			}
+		}
+	}
+
+	certs, err := storage.GetCertificates("cert1")
+	if err != nil {
+		t.Fatalf("Can't get certificates: %s", err)
+	}
+
+	for i, cert := range certs {
+		if cert.CertURL != fmt.Sprintf("certURL%d", maxItems+i) {
+			t.Errorf("Unexpected certificate found: %s", cert.CertURL)
+		}
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/
@@ -341,8 +391,17 @@ func (module *testModule) CreateKey(password string) (key interface{}, err error
 	return module.data.key, nil
 }
 
-func (module *testModule) ApplyCertificate(cert string) (certURL, keyURL string, err error) {
-	return module.data.certURL, "", nil
+func (module *testModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
+	return module.data.certInfo, "", nil
+}
+
+func (module *testModule) RemoveCertificate(certURL, keyURL, password string) (err error) {
+	module.data.certInfo = certhandler.CertInfo{
+		CertURL: certURL,
+		KeyURL:  keyURL,
+	}
+
+	return nil
 }
 
 func (module *testModule) Close() (err error) {
