@@ -49,6 +49,10 @@ import (
 
 const tpmPermanentOwnerAuthSet = 0x00000001
 
+const (
+	crtExt = ".crt"
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -58,7 +62,6 @@ type TPMModule struct {
 	certType string
 	config   moduleConfig
 	device   io.ReadWriteCloser
-	storage  certhandler.CertStorage
 
 	currentKey *key
 }
@@ -92,11 +95,11 @@ var supportedHash = map[crypto.Hash]tpm2.Algorithm{
  ******************************************************************************/
 
 // New creates ssh module instance
-func New(certType string, configJSON json.RawMessage, storage certhandler.CertStorage,
+func New(certType string, configJSON json.RawMessage,
 	device io.ReadWriteCloser) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create TPM module")
 
-	tpmModule := &TPMModule{certType: certType, storage: storage}
+	tpmModule := &TPMModule{certType: certType}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &tpmModule.config); err != nil {
@@ -146,49 +149,104 @@ func (module *TPMModule) Close() (err error) {
 	return err
 }
 
-// SyncStorage syncs cert storage
-func (module *TPMModule) SyncStorage() (err error) {
-	log.WithFields(log.Fields{"certType": module.certType}).Debug("Sync storage")
+// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
+func (module *TPMModule) ValidateCertificates() (
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
-	if err = module.updateStorage(); err != nil {
-		return err
-	}
-
-	files, err := getCertFiles(module.config.StoragePath)
+	handles, err := module.getPersistentHandles()
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 
-	infos, err := module.storage.GetCertificates(module.certType)
+	keyMap := make(map[string]crypto.PublicKey)
+
+	for _, handle := range handles {
+		keyURL := handleToURL(handle)
+
+		publicKey, err := module.getPublicKeyByURL(keyURL)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		keyMap[keyURL] = publicKey
+	}
+
+	content, err := ioutil.ReadDir(module.config.StoragePath)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 
-	// FS certs that need to be updated
+	for _, item := range content {
+		absItemPath := path.Join(module.config.StoragePath, item.Name())
 
-	var updateFiles []string
+		if item.IsDir() {
+			log.WithFields(log.Fields{
+				"certType": module.certType,
+				"dir":      absItemPath}).Warn("Unexpected dir found in storage, remove it")
 
-	for _, file := range files {
-		found := false
+			if err = os.RemoveAll(absItemPath); err != nil {
+				return nil, nil, nil, err
+			}
 
-		for _, info := range infos {
-			if fileToURL(file) == info.CertURL {
-				found = true
+			continue
+		}
+
+		x509Cert, err := getCertByFileName(absItemPath)
+		if err != nil {
+			if _, ok := keyMap[absItemPath]; !ok {
+				log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
+
+				invalidCerts = append(invalidCerts, fileToURL(absItemPath))
+			}
+
+			continue
+		}
+
+		keyFound := false
+
+		for keyURL, publicKey := range keyMap {
+			if checkCert(x509Cert, publicKey) == nil {
+				validInfos = append(validInfos, certhandler.CertInfo{
+					CertURL:  fileToURL(absItemPath),
+					KeyURL:   keyURL,
+					Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
+					Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
+					NotAfter: x509Cert.NotAfter,
+				})
+
+				delete(keyMap, keyURL)
+
+				keyFound = true
 
 				break
 			}
 		}
 
-		if !found {
-			updateFiles = append(updateFiles, file)
+		if !keyFound {
+			log.WithFields(log.Fields{
+				"certType": module.certType,
+				"file":     absItemPath}).Warn("Found certificate without corresponding key")
+
+			invalidCerts = append(invalidCerts, fileToURL(absItemPath))
 		}
 	}
 
-	if err = module.updateCerts(updateFiles); err != nil {
-		return err
+	for _, info := range validInfos {
+		if _, ok := keyMap[info.KeyURL]; ok {
+			delete(keyMap, info.KeyURL)
+		}
 	}
 
-	return nil
+	for keyURL := range keyMap {
+		log.WithFields(log.Fields{
+			"certType": module.certType,
+			"keyURL":   keyURL}).Warn("Found key without corresponding certificate")
+
+		invalidKeys = append(invalidKeys, keyURL)
+	}
+
+	return validInfos, invalidCerts, invalidKeys, nil
 }
 
 // SetOwner owns security storage
@@ -258,6 +316,8 @@ func (module *TPMModule) CreateKey(password string) (key interface{}, err error)
 
 // ApplyCertificate applies certificate
 func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
+
 	if module.currentKey == nil {
 		return certhandler.CertInfo{}, "", errors.New("no key created")
 	}
@@ -290,16 +350,41 @@ func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.Cer
 	certInfo.KeyURL = handleToURL(persistentHandle)
 	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Cert.RawIssuer)
 	certInfo.Serial = fmt.Sprintf("%X", x509Cert.SerialNumber)
+	certInfo.NotAfter = x509Cert.NotAfter
+
+	log.WithFields(log.Fields{
+		"certType": module.certType,
+		"certURL":  certInfo.CertURL,
+		"keyURL":   certInfo.KeyURL,
+		"notAfter": certInfo.NotAfter,
+	}).Debug("Certificate applied")
 
 	return certInfo, module.currentKey.password, nil
 }
 
-// RemoveCertificate removes certificate and corresponding key
-func (module *TPMModule) RemoveCertificate(certURL, keyURL, password string) (err error) {
+// RemoveCertificate removes certificate
+func (module *TPMModule) RemoveCertificate(certURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"certURL":  certURL,
-		"keyURL":   keyURL}).Debug("Remove certificate")
+		"certURL":  certURL}).Debug("Remove certificate")
+
+	cert, err := url.Parse(certURL)
+	if err != nil {
+		return err
+	}
+
+	if err = os.Remove(cert.Path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RemoveKey removes key
+func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
+	log.WithFields(log.Fields{
+		"certType": module.certType,
+		"keyURL":   keyURL}).Debug("Remove key")
 
 	key, err := url.Parse(keyURL)
 	if err != nil {
@@ -312,15 +397,6 @@ func (module *TPMModule) RemoveCertificate(certURL, keyURL, password string) (er
 	}
 
 	if err = tpm2.EvictControl(module.device, password, tpm2.HandleOwner, tpmutil.Handle(handle), tpmutil.Handle(handle)); err != nil {
-		return err
-	}
-
-	cert, err := url.Parse(certURL)
-	if err != nil {
-		return err
-	}
-
-	if err = os.Remove(cert.Path); err != nil {
 		return err
 	}
 
@@ -509,7 +585,7 @@ func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
 }
 
 func saveCert(storageDir string, cert string) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*.crt")
+	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
 	if err != nil {
 		return "", err
 	}
@@ -519,53 +595,7 @@ func saveCert(storageDir string, cert string) (fileName string, err error) {
 		return "", err
 	}
 
-	return file.Name(), nil
-}
-
-func (module *TPMModule) updateStorage() (err error) {
-	infos, err := module.storage.GetCertificates(module.certType)
-	if err != nil {
-		return err
-	}
-
-	for _, info := range infos {
-		if err = func() (err error) {
-			x509Cert, err := getCertByURL(info.CertURL)
-			if err != nil {
-				return err
-			}
-
-			if info.Serial != fmt.Sprintf("%X", x509Cert.SerialNumber) {
-				return errors.New("invalid certificate serial number")
-			}
-
-			if info.Issuer != base64.StdEncoding.EncodeToString(x509Cert.RawIssuer) {
-				return errors.New("invalid certificate issuer")
-			}
-
-			key, err := module.getPublicKeyByURL(info.KeyURL)
-			if err != nil {
-				return err
-			}
-
-			if err = checkCert(x509Cert, key); err != nil {
-				return err
-			}
-
-			return nil
-		}(); err != nil {
-			log.WithFields(log.Fields{"certType": module.certType,
-				"certURL": info.CertURL, "keyURL": info.KeyURL}).Errorf("Invalid storage entry: %s", err)
-
-			log.WithFields(log.Fields{"certType": module.certType, "certURL": info.CertURL}).Warn("Remove invalid storage entry")
-
-			if err = module.storage.RemoveCertificate(module.certType, info.CertURL); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	return file.Name(), err
 }
 
 func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err error) {
@@ -601,43 +631,6 @@ func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err
 	return 0, errors.New("no empty persistent slot found")
 }
 
-func (module *TPMModule) removeCert(cert certhandler.CertInfo, password string) (err error) {
-	log.WithFields(log.Fields{
-		"certType": module.certType,
-		"certURL":  cert.CertURL,
-		"keyURL":   cert.KeyURL,
-		"notAfter": cert.NotAfter}).Debug("Remove certificate")
-
-	if err = module.storage.RemoveCertificate(module.certType, cert.CertURL); err != nil {
-		return err
-	}
-
-	keyURL, err := url.Parse(cert.KeyURL)
-	if err != nil {
-		return err
-	}
-
-	handle, err := strconv.ParseUint(keyURL.Hostname(), 0, 32)
-	if err != nil {
-		return err
-	}
-
-	if err = tpm2.EvictControl(module.device, password, tpm2.HandleOwner, tpmutil.Handle(handle), tpmutil.Handle(handle)); err != nil {
-		return err
-	}
-
-	certURL, err := url.Parse(cert.CertURL)
-	if err != nil {
-		return err
-	}
-
-	if err = os.Remove(certURL.Path); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func getCertFiles(storagePath string) (files []string, err error) {
 	content, err := ioutil.ReadDir(storagePath)
 	if err != nil {
@@ -667,37 +660,8 @@ func handleToURL(handle tpmutil.Handle) (urlStr string) {
 	return urlVal.String()
 }
 
-func (module *TPMModule) addCertToDB(x509Cert *x509.Certificate, certURL, keyURL string) (err error) {
-	certInfo := certhandler.CertInfo{
-		Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-		Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
-		CertURL:  certURL,
-		KeyURL:   keyURL,
-		NotAfter: x509Cert.NotAfter,
-	}
-
-	if err = module.storage.AddCertificate(module.certType, certInfo); err != nil {
-		return err
-	}
-
-	log.WithFields(log.Fields{
-		"certType": module.certType,
-		"issuer":   certInfo.Issuer,
-		"serial":   certInfo.Serial,
-		"certURL":  certInfo.CertURL,
-		"keyURL":   certInfo.KeyURL,
-		"notAfter": x509Cert.NotAfter}).Debug("Add certificate")
-
-	return nil
-}
-
-func getCertByURL(urlStr string) (x509Cert *x509.Certificate, err error) {
-	urlVal, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-
-	certPem, err := ioutil.ReadFile(urlVal.Path)
+func getCertByFileName(fileName string) (x509Cert *x509.Certificate, err error) {
+	certPem, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -745,55 +709,4 @@ func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err e
 	}
 
 	return handles, nil
-}
-
-func (module *TPMModule) updateCerts(files []string) (err error) {
-	handles, err := module.getPersistentHandles()
-	if err != nil {
-		return err
-	}
-
-	publicKeys := make(map[string]crypto.PublicKey)
-
-	for _, handle := range handles {
-		keyURL := handleToURL(handle)
-
-		publicKey, err := module.getPublicKeyByURL(keyURL)
-		if err != nil {
-			return err
-		}
-
-		publicKeys[keyURL] = publicKey
-	}
-
-	for _, certFile := range files {
-		x509Cert, err := getCertByURL(fileToURL(certFile))
-		if err != nil {
-			return err
-		}
-
-		certKeyURL := ""
-
-		for keyURL, publicKey := range publicKeys {
-			if err = checkCert(x509Cert, publicKey); err == nil {
-				certKeyURL = keyURL
-			}
-		}
-
-		if certKeyURL != "" {
-			log.WithFields(log.Fields{"certType": module.certType, "file": certFile}).Warn("Store valid certificate")
-
-			if err = module.addCertToDB(x509Cert, fileToURL(certFile), certKeyURL); err != nil {
-				return err
-			}
-		} else {
-			log.WithFields(log.Fields{"certType": module.certType, "file": certFile}).Warn("Remove invalid certificate")
-
-			if err = os.Remove(certFile); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }

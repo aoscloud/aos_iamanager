@@ -92,21 +92,24 @@ type CertStorage interface {
 
 // CertModule provides API to manage module certificates
 type CertModule interface {
-	SyncStorage() (err error)
+	ValidateCertificates() (validInfos []CertInfo, invalidCerts, invalidKeys []string, err error)
 	SetOwner(password string) (err error)
 	Clear() (err error)
 	CreateKey(password string) (key interface{}, err error)
 	ApplyCertificate(cert string) (certInfo CertInfo, password string, err error)
-	RemoveCertificate(certURL, keyURL, password string) (err error)
+	RemoveCertificate(certURL, password string) (err error)
+	RemoveKey(certURL, password string) (err error)
 	Close() (err error)
 }
 
 // NewPlugin plugin new function
-type NewPlugin func(certType string, configJSON json.RawMessage, storage CertStorage) (module CertModule, err error)
+type NewPlugin func(certType string, configJSON json.RawMessage) (module CertModule, err error)
 
 type moduleDescriptor struct {
-	config config.ModuleConfig
-	module CertModule
+	config       config.ModuleConfig
+	invalidCerts []string
+	invalidKeys  []string
+	module       CertModule
 }
 
 /*******************************************************************************
@@ -202,6 +205,26 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 		return nil, fmt.Errorf("module %s not found", certType)
 	}
 
+	for _, certURL := range descriptor.invalidCerts {
+		log.WithFields(log.Fields{"certType": certType, "URL": certURL}).Warn("Remove invalid certificate")
+
+		if err = descriptor.module.RemoveCertificate(certURL, password); err != nil {
+			return nil, err
+		}
+	}
+
+	descriptor.invalidCerts = nil
+
+	for _, keyURL := range descriptor.invalidKeys {
+		log.WithFields(log.Fields{"certType": certType, "URL": keyURL}).Warn("Remove invalid key")
+
+		if err = descriptor.module.RemoveKey(keyURL, password); err != nil {
+			return nil, err
+		}
+	}
+
+	descriptor.invalidKeys = nil
+
 	key, err := descriptor.module.CreateKey(password)
 	if err != nil {
 		return nil, err
@@ -255,8 +278,11 @@ func (handler *Handler) ApplyCertificate(certType string, cert string) (certURL 
 			}
 		}
 
-		if err = descriptor.module.RemoveCertificate(
-			certs[minIndex].CertURL, certs[minIndex].KeyURL, password); err != nil {
+		if err = descriptor.module.RemoveCertificate(certs[minIndex].CertURL, password); err != nil {
+			return "", err
+		}
+
+		if err = descriptor.module.RemoveKey(certs[minIndex].KeyURL, password); err != nil {
 			return "", err
 		}
 
@@ -368,7 +394,7 @@ func (handler *Handler) createModule(cfg config.ModuleConfig) (descriptor module
 		return moduleDescriptor{}, fmt.Errorf("plugin %s not found", cfg.Plugin)
 	}
 
-	if descriptor.module, err = newFunc(cfg.ID, cfg.Params, handler.storage); err != nil {
+	if descriptor.module, err = newFunc(cfg.ID, cfg.Params); err != nil {
 		return moduleDescriptor{}, err
 	}
 
@@ -384,8 +410,56 @@ func (handler *Handler) syncStorage() (err error) {
 	log.Debug("Sync certificate DB")
 
 	for _, descriptor := range handler.moduleDescriptors {
-		if err = descriptor.module.SyncStorage(); err != nil {
+		validItems, invalidCerts, invalidKeys, err := descriptor.module.ValidateCertificates()
+		if err != nil {
 			return err
+		}
+
+		descriptor.invalidCerts = invalidCerts
+		descriptor.invalidKeys = invalidKeys
+
+		existingItems, err := handler.storage.GetCertificates(descriptor.config.ID)
+		if err != nil {
+			return err
+		}
+
+		for _, validItem := range validItems {
+			found := false
+
+			for i, existingItem := range existingItems {
+				if validItem == existingItem {
+					found = true
+					existingItems = append(existingItems[:i], existingItems[i+1:]...)
+
+					break
+				}
+			}
+
+			if !found {
+				log.WithFields(log.Fields{
+					"certType": descriptor.config.ID,
+					"certURL":  validItem.CertURL,
+					"keyURL":   validItem.KeyURL,
+					"notAfter": validItem.NotAfter,
+				}).Warn("Add missing cert to DB")
+
+				if err = handler.storage.AddCertificate(descriptor.config.ID, validItem); err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, existingItem := range existingItems {
+			log.WithFields(log.Fields{
+				"certType": descriptor.config.ID,
+				"certURL":  existingItem.CertURL,
+				"keyURL":   existingItem.KeyURL,
+				"notAfter": existingItem.NotAfter,
+			}).Warn("Remove invalid cert from DB")
+
+			if err = handler.storage.RemoveCertificate(descriptor.config.ID, existingItem.CertURL); err != nil {
+				return err
+			}
 		}
 	}
 

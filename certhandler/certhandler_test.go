@@ -48,9 +48,11 @@ import (
  ******************************************************************************/
 
 type moduleData struct {
-	key      interface{}
-	certInfo certhandler.CertInfo
-	password string
+	key        interface{}
+	certInfo   certhandler.CertInfo
+	removeCert string
+	removeKey  string
+	password   string
 }
 
 type testModule struct {
@@ -73,6 +75,8 @@ type testStorage struct {
 var tmpDir string
 
 var modules map[string]*testModule
+
+var moduleValidInfos []certhandler.CertInfo
 
 /*******************************************************************************
  * Init
@@ -101,8 +105,8 @@ func TestMain(m *testing.M) {
 
 	modules = make(map[string]*testModule)
 
-	certhandler.RegisterPlugin("testmodule", func(certType string, configJSON json.RawMessage,
-		storage certhandler.CertStorage) (module certhandler.CertModule, err error) {
+	certhandler.RegisterPlugin("testmodule", func(certType string,
+		configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 		certModule := &testModule{data: &moduleData{}}
 
 		modules[certType] = certModule
@@ -279,10 +283,6 @@ func TestApplyCertificate(t *testing.T) {
 func TestGetCertificate(t *testing.T) {
 	storage := &testStorage{}
 
-	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "1", "certURL1", "keyURL1", time.Now()})
-	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "2", "certURL2", "keyURL2", time.Now()})
-	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "3", "certURL3", "keyURL3", time.Now()})
-
 	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
 	handler, err := certhandler.New("testID", &cfg, storage)
@@ -290,6 +290,10 @@ func TestGetCertificate(t *testing.T) {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
 	defer handler.Close()
+
+	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "1", "certURL1", "keyURL1", time.Now()})
+	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "2", "certURL2", "keyURL2", time.Now()})
+	storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "3", "certURL3", "keyURL3", time.Now()})
 
 	certURL, keyURL, err := handler.GetCertificate("cert1", []byte("issuer"), "2")
 	if err != nil {
@@ -345,8 +349,12 @@ func TestMaxItems(t *testing.T) {
 		}
 
 		if i >= maxItems {
-			if modules["cert1"].data.certInfo.CertURL != fmt.Sprintf("certURL%d", i-maxItems) {
-				t.Errorf("Delete unexpected certificate: %s", modules["cert1"].data.certInfo.CertURL)
+			if modules["cert1"].data.removeCert != fmt.Sprintf("certURL%d", i-maxItems) {
+				t.Errorf("Delete unexpected certificate: %s", modules["cert1"].data.removeCert)
+			}
+
+			if modules["cert1"].data.removeKey != fmt.Sprintf("keyURL%d", i-maxItems) {
+				t.Errorf("Delete unexpected certificate: %s", modules["cert1"].data.removeKey)
 			}
 		}
 	}
@@ -363,12 +371,48 @@ func TestMaxItems(t *testing.T) {
 	}
 }
 
+func TestSyncStorage(t *testing.T) {
+	storage := &testStorage{}
+
+	moduleValidInfos = []certhandler.CertInfo{
+		{Issuer: "issuer3", Serial: "serial3", CertURL: "cert3", KeyURL: "key3"},
+		{Issuer: "issuer4", Serial: "serial4", CertURL: "cert4", KeyURL: "key4"},
+		{Issuer: "issuer5", Serial: "serial5", CertURL: "cert5", KeyURL: "key5"},
+		{Issuer: "issuer6", Serial: "serial6", CertURL: "cert6", KeyURL: "key6"},
+		{Issuer: "issuer7", Serial: "serial7", CertURL: "cert7", KeyURL: "key7"},
+	}
+
+	storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer1", Serial: "serial1", CertURL: "cert1", KeyURL: "key1"})
+	storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer2", Serial: "serial2", CertURL: "cert2", KeyURL: "key2"})
+	storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer3", Serial: "serial3", CertURL: "cert3", KeyURL: "key3"})
+	storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer4", Serial: "serial4", CertURL: "cert4", KeyURL: "key4"})
+	storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer5", Serial: "serial5", CertURL: "cert5", KeyURL: "key5"})
+
+	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
+
+	handler, err := certhandler.New("testID", &cfg, storage)
+	if err != nil {
+		t.Fatalf("Can't create cert handler: %s", err)
+	}
+	defer handler.Close()
+
+	certInfos, err := storage.GetCertificates("cert1")
+	if err != nil {
+		t.Fatalf("Can't get certificates: %s", err)
+	}
+
+	if !reflect.DeepEqual(moduleValidInfos, certInfos) {
+		t.Error("Wrong storage items")
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/
 
-func (module *testModule) SyncStorage() (err error) {
-	return nil
+func (module *testModule) ValidateCertificates() (
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	return moduleValidInfos, nil, nil, nil
 }
 
 func (module *testModule) SetOwner(password string) (err error) {
@@ -395,11 +439,14 @@ func (module *testModule) ApplyCertificate(cert string) (certInfo certhandler.Ce
 	return module.data.certInfo, "", nil
 }
 
-func (module *testModule) RemoveCertificate(certURL, keyURL, password string) (err error) {
-	module.data.certInfo = certhandler.CertInfo{
-		CertURL: certURL,
-		KeyURL:  keyURL,
-	}
+func (module *testModule) RemoveCertificate(certURL, password string) (err error) {
+	module.data.removeCert = certURL
+
+	return nil
+}
+
+func (module *testModule) RemoveKey(keyURL, password string) (err error) {
+	module.data.removeKey = keyURL
 
 	return nil
 }

@@ -22,10 +22,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
@@ -54,12 +52,7 @@ type certDesc struct {
 	certInfo certhandler.CertInfo
 }
 
-type testStorage struct {
-	certs []certDesc
-}
-
-type createModuleType func(storagePath string,
-	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error)
+type createModuleType func(storagePath string, doReset bool) (module certhandler.CertModule, err error)
 
 /*******************************************************************************
  * Var
@@ -115,11 +108,9 @@ func TestMain(m *testing.M) {
 
 func TestUpdateCertificate(t *testing.T) {
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
-		storage := &testStorage{}
-
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, storage, true)
+		module, err := createModule(certStorage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -225,26 +216,23 @@ func TestUpdateCertificate(t *testing.T) {
 	}
 }
 
-func TestSyncStorage(t *testing.T) {
+func TestValidateCertificates(t *testing.T) {
 	// Test items:
-	// * valid     - cert file, handle, DB entry
-	// * wrongDB   - DB entry but no cert file
-	// * wrongFile - no DB entry and no handle
-	// If cert file has DB entry but no handle - not considered
+	// * valid       - cert and key are valid
+	// * onlyCert    - cert without key
+	// * onlyKey     - key without cert
+	// * invalidFile - invalid file
 
-	testData := []string{"valid", "wrongDB", "wrongFile", "validFile", "valid", "wrongSerial", "wrongIssuer", "valid"}
+	testData := []string{"valid", "onlyCert", "valid", "onlyKey", "invalidFile"}
 
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
-		var goodItems []certhandler.CertInfo
-
-		storage := &testStorage{}
-
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, storage, true)
+		module, err := createModule(certStorage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
+		defer module.Close()
 
 		// Set owner
 
@@ -253,6 +241,8 @@ func TestSyncStorage(t *testing.T) {
 		if err = module.SetOwner(password); err != nil {
 			t.Fatalf("Can't set owner: %s", err)
 		}
+
+		var goodItems []certhandler.CertInfo
 
 		for _, item := range testData {
 			// Create key
@@ -291,24 +281,13 @@ func TestSyncStorage(t *testing.T) {
 				t.Fatalf("Can't parse key URL: %s", err)
 			}
 
-			block, _ := pem.Decode([]byte(cert))
-
-			x509Cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				t.Fatalf("Can't parse certificate: %s", err)
-			}
-
 			switch item {
-			case "wrongDB":
+			case "onlyKey":
 				if err = os.Remove(certVal.Path); err != nil {
 					t.Errorf("Can't remove cert file: %s", err)
 				}
 
-			case "wrongFile":
-				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
-					t.Errorf("Can't remove cert entry: %s", err)
-				}
-
+			case "onlyCert":
 				switch keyVal.Scheme {
 				case "file":
 					if err = os.Remove(keyVal.Path); err != nil {
@@ -330,103 +309,105 @@ func TestSyncStorage(t *testing.T) {
 					t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
 				}
 
-			case "wrongSerial":
-				certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-					fmt.Sprintf("%X", x509Cert.SerialNumber))
-				if err != nil {
-					t.Errorf("Can't remove cert entry: %s", err)
+			case "invalidFile":
+				if err = ioutil.WriteFile(certVal.Path, []byte{}, 0644); err != nil {
+					t.Errorf("Can't write file: %s", err)
 				}
-
-				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
-					t.Errorf("Can't remove cert entry: %s", err)
-				}
-
-				certInfo.Serial = "invalid serial"
-
-				if err = storage.AddCertificate("test", certInfo); err != nil {
-					t.Errorf("Can't add cert: %s", err)
-				}
-
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
-
-			case "wrongIssuer":
-				certInfo, err := storage.GetCertificate(base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-					fmt.Sprintf("%X", x509Cert.SerialNumber))
-				if err != nil {
-					t.Errorf("Can't remove cert entry: %s", err)
-				}
-
-				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
-					t.Errorf("Can't remove cert entry: %s", err)
-				}
-
-				certInfo.Issuer = "wrong issuer"
-
-				if err = storage.AddCertificate("test", certInfo); err != nil {
-					t.Errorf("Can't add cert: %s", err)
-				}
-
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
-
-			case "validFile":
-				if err = storage.RemoveCertificate("test", certInfo.CertURL); err != nil {
-					t.Errorf("Can't remove cert entry: %s", err)
-				}
-
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
 
 			default:
-				goodItems = append(goodItems, certhandler.CertInfo{CertURL: certInfo.CertURL, KeyURL: certInfo.KeyURL})
+				goodItems = append(goodItems, certInfo)
 			}
 		}
 
-		module.Close()
-
-		if module, err = createModule(certStorage, storage, false); err != nil {
-			t.Fatalf("Can't create module: %s", err)
-		}
-		defer module.Close()
-
-		if err = module.SyncStorage(); err != nil {
-			t.Fatalf("Can't sync storage: %s", err)
-		}
-
-		certInfos, err := storage.GetCertificates("test")
+		certInfos, invalidCerts, invalidKeys, err := module.ValidateCertificates()
 		if err != nil {
-			t.Fatalf("Can't get certificates: %s", err)
+			t.Fatalf("Can't validate certificates: %s", err)
 		}
+
+		checkInfo := make([]certhandler.CertInfo, len(certInfos))
+
+		copy(checkInfo, certInfos)
 
 		for _, goodItem := range goodItems {
 			found := false
 
 			infoIndex := 0
 
-			for i, info := range certInfos {
-				if info.CertURL == goodItem.CertURL && info.KeyURL == goodItem.KeyURL {
+			for i, info := range checkInfo {
+				if info == goodItem {
 					found = true
 					infoIndex = i
+
+					break
 				}
 			}
 
 			if !found {
-				t.Errorf("Expected item not found in storage, certURL: %s, keyURL: %s", goodItem.CertURL, goodItem.KeyURL)
+				t.Errorf("Expected item not found, certURL: %s, keyURL: %s", goodItem.CertURL, goodItem.KeyURL)
 			} else {
-				certInfos = append(certInfos[:infoIndex], certInfos[infoIndex+1:]...)
+				checkInfo = append(checkInfo[:infoIndex], checkInfo[infoIndex+1:]...)
 			}
 		}
 
-		for _, badItem := range certInfos {
-			t.Errorf("Item should not be in srorage, certURL: %s, keyURL: %s", badItem.CertURL, badItem.KeyURL)
+		for _, badItem := range checkInfo {
+			t.Errorf("Item should not be found, certURL: %s, keyURL: %s", badItem.CertURL, badItem.KeyURL)
+		}
+
+		// Remove invalid certs
+
+		for _, certURL := range invalidCerts {
+			if err = module.RemoveCertificate(certURL, password); err != nil {
+				t.Fatalf("Can't remove certificate: %s", err)
+			}
+		}
+
+		// Remove invalid keys
+
+		for _, keyURL := range invalidKeys {
+			if err = module.RemoveKey(keyURL, password); err != nil {
+				t.Fatalf("Can't remove key: %s", err)
+			}
+		}
+
+		// Check cert files
+
+		certURLs := make([]string, 0, len(certInfos))
+
+		for _, info := range certInfos {
+			certURLs = append(certURLs, info.CertURL)
+		}
+
+		checkCertURLs(t, certStorage, certURLs)
+
+		// Check key files
+
+		switch module.(type) {
+		case *swmodule.SWModule:
+			keyURLs := make([]string, 0, len(certInfos))
+
+			for _, info := range certInfos {
+				keyURLs = append(keyURLs, info.KeyURL)
+			}
+
+			checkKeyURLs(t, certStorage, keyURLs)
+
+		case *tpmmodule.TPMModule:
+			keyURLs := make([]string, 0, len(certInfos))
+
+			for _, info := range certInfos {
+				keyURLs = append(keyURLs, info.KeyURL)
+			}
+
+			checkHandleURLs(t, certStorage, keyURLs)
 		}
 	}
 }
 
 func TestSetOwnerClear(t *testing.T) {
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
-		storage := &testStorage{}
 		certStorage := path.Join(tmpDir, "certStorage")
 
-		module, err := createModule(certStorage, storage, true)
+		module, err := createModule(certStorage, true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -466,66 +447,26 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't generate certificate: %s", err)
 		}
 
-		_, keyURL, err := module.ApplyCertificate(cert)
+		certInfo, _, err := module.ApplyCertificate(cert)
 		if err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
 		// Check key files
 
-		keyVal, err := url.Parse(keyURL)
+		keyVal, err := url.Parse(certInfo.KeyURL)
 		if err != nil {
-			t.Fatalf("Wrong key URL: %s", keyURL)
+			t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
 		}
+
+		checkCertURLs(t, certStorage, []string{certInfo.CertURL})
 
 		switch keyVal.Scheme {
 		case "file":
-			// Check key files
-
-			keyFiles, err := getKeyFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get key files")
-			}
-
-			if len(keyFiles) != 1 {
-				t.Errorf("Wrong key files count: %d", len(keyFiles))
-			}
-
-			certFiles, err := getCertFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get cert files")
-			}
-
-			if len(certFiles) != 1 {
-				t.Errorf("Wrong cert files count: %d", len(certFiles))
-			}
-
-			if len(storage.certs) != 1 {
-				t.Errorf("Wrong storage entries count: %d", len(storage.certs))
-			}
+			checkKeyURLs(t, certStorage, []string{certInfo.KeyURL})
 
 		case "tpm":
-			handles, err := getPersistentHandles()
-			if err != nil {
-				t.Fatalf("Can't get persistent handles: %s", err)
-			}
-
-			if len(handles) != 1 {
-				t.Errorf("Wrong handles count: %d", len(handles))
-			}
-
-			certFiles, err := getCertFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get cert files")
-			}
-
-			if len(certFiles) != 1 {
-				t.Errorf("Wrong cert files count: %d", len(certFiles))
-			}
-
-			if len(storage.certs) != 1 {
-				t.Errorf("Wrong storage entries count: %d", len(storage.certs))
-			}
+			checkHandleURLs(t, certStorage, []string{certInfo.KeyURL})
 
 		default:
 			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
@@ -539,50 +480,14 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't clear: %s", err)
 		}
 
+		checkCertURLs(t, certStorage, nil)
+
 		switch keyVal.Scheme {
 		case "file":
-			// Check key files
+			checkKeyURLs(t, certStorage, nil)
 
-			keyFiles, err := getKeyFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get key files")
-
-			}
-
-			if len(keyFiles) != 0 {
-				t.Errorf("Wrong key files count: %d", len(keyFiles))
-			}
-
-			certFiles, err := getCertFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get cert files")
-			}
-
-			if len(certFiles) != 0 {
-				t.Errorf("Wrong cert files count: %d", len(certFiles))
-			}
-
-			if len(storage.certs) != 0 {
-				t.Errorf("Wrong storage entries count: %d", len(storage.certs))
-			}
 		case "tpm":
-			handles, err := getPersistentHandles()
-			if err != nil {
-				t.Fatalf("Can't get persistent handles: %s", err)
-			}
-
-			if len(handles) != 0 {
-				t.Errorf("Wrong handles count: %d", len(handles))
-			}
-
-			certFiles, err := getCertFiles(certStorage)
-			if err != nil {
-				t.Fatalf("Can't get cert files")
-			}
-
-			if len(certFiles) != 0 {
-				t.Errorf("Wrong cert files count: %d", len(certFiles))
-			}
+			checkHandleURLs(t, certStorage, nil)
 
 		default:
 			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
@@ -590,68 +495,6 @@ func TestSetOwnerClear(t *testing.T) {
 			continue
 		}
 	}
-}
-
-/*******************************************************************************
- * Interfaces
- ******************************************************************************/
-
-func (storage *testStorage) AddCertificate(certType string, cert certhandler.CertInfo) (err error) {
-	for _, item := range storage.certs {
-		if item.certInfo.Issuer == cert.Issuer && item.certInfo.Serial == cert.Serial {
-			return errors.New("certificate already exists")
-		}
-	}
-
-	storage.certs = append(storage.certs, certDesc{certType, cert})
-
-	return nil
-}
-
-func (storage *testStorage) GetCertificate(issuer, serial string) (cert certhandler.CertInfo, err error) {
-	for _, item := range storage.certs {
-		if item.certInfo.Issuer == issuer && item.certInfo.Serial == serial {
-			return item.certInfo, nil
-		}
-	}
-
-	return cert, errors.New("certificate not found")
-}
-
-func (storage *testStorage) GetCertificates(certType string) (certs []certhandler.CertInfo, err error) {
-	for _, item := range storage.certs {
-		if item.certType == certType {
-			certs = append(certs, item.certInfo)
-		}
-	}
-
-	return certs, nil
-}
-
-func (storage *testStorage) RemoveCertificate(certType, certURL string) (err error) {
-	for i, item := range storage.certs {
-		if item.certType == certType && item.certInfo.CertURL == certURL {
-			storage.certs = append(storage.certs[:i], storage.certs[i+1:]...)
-
-			return nil
-		}
-	}
-
-	return errors.New("certificate not found")
-}
-
-func (storage *testStorage) RemoveAllCertificates(certType string) (err error) {
-	newCerts := make([]certDesc, 0)
-
-	for _, item := range storage.certs {
-		if item.certType != certType {
-			newCerts = append(newCerts, item)
-		}
-	}
-
-	storage.certs = newCerts
-
-	return nil
 }
 
 /*******************************************************************************
@@ -669,8 +512,7 @@ func createCSR(key interface{}) (csr []byte, err error) {
 	return csr, nil
 }
 
-func createSwModule(storagePath string,
-	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
+func createSwModule(storagePath string, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
 			return nil, err
@@ -679,11 +521,10 @@ func createSwModule(storagePath string,
 
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, storagePath))
 
-	return swmodule.New("test", config, storage)
+	return swmodule.New("test", config)
 }
 
-func createTpmModule(storagePath string,
-	storage certhandler.CertStorage, doReset bool) (module certhandler.CertModule, err error) {
+func createTpmModule(storagePath string, doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
 			return nil, err
@@ -696,7 +537,7 @@ func createTpmModule(storagePath string,
 
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, storagePath))
 
-	return tpmmodule.New("test", config, storage, tpmSimulator)
+	return tpmmodule.New("test", config, tpmSimulator)
 }
 
 func generateCertificate(csr []byte) (cert string, err error) {
@@ -872,63 +713,130 @@ func checkHandleURL(keyURL string, handle tpmutil.Handle) (err error) {
 	return nil
 }
 
-func getPersistentHandles() (handles []tpmutil.Handle, err error) {
+func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
+	t.Helper()
+
+	for _, expected := range expectedURLs {
+		found := false
+
+		for i, existing := range existingURLs {
+			if expected == existing {
+				found = true
+				existingURLs = append(existingURLs[:i], existingURLs[i+1:]...)
+
+				break
+			}
+		}
+
+		if !found {
+			t.Errorf("Expected URL %s not found", expected)
+		}
+	}
+
+	for _, existing := range existingURLs {
+		t.Errorf("Unexpected URL %s found", existing)
+	}
+}
+
+func checkHandleURLs(t *testing.T, storagePath string, expectedURLs []string) {
 	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
 	if err != nil {
-		return nil, err
+		t.Fatalf("Can't read persistent storage: %s", err)
 	}
+
+	existingURLs := make([]string, 0)
 
 	for _, value := range values {
 		handle, ok := value.(tpmutil.Handle)
 		if !ok {
-			return nil, errors.New("wrong TPM data format")
+			t.Fatal("Wrong TPM data format")
 		}
 
-		handles = append(handles, handle)
+		keyURL := url.URL{Scheme: "tpm", Host: fmt.Sprintf("0x%X", handle)}
+
+		existingURLs = append(existingURLs, keyURL.String())
 	}
 
-	return handles, nil
+	checkUrls(t, expectedURLs, existingURLs)
 }
 
-func getKeyFiles(storagePath string) (files []string, err error) {
+func checkKeyURLs(t *testing.T, storagePath string, expectedURLs []string) {
+	t.Helper()
+
 	content, err := ioutil.ReadDir(storagePath)
 	if err != nil {
-		return nil, err
+		t.Fatalf("Can't read storage dir: %s", err)
 	}
+
+	existingURLs := make([]string, 0)
 
 	for _, item := range content {
 		if item.IsDir() {
 			continue
 		}
 
-		if path.Ext(item.Name()) != ".key" {
+		absItemPath := path.Join(storagePath, item.Name())
+
+		data, err := ioutil.ReadFile(absItemPath)
+		if err != nil {
 			continue
 		}
 
-		files = append(files, path.Join(storagePath, item.Name()))
+		block, _ := pem.Decode([]byte(data))
+
+		if block == nil {
+			continue
+		}
+
+		if block.Type != "RSA PRIVATE KEY" {
+			continue
+		}
+
+		keyURL := url.URL{Scheme: "file", Path: absItemPath}
+
+		existingURLs = append(existingURLs, keyURL.String())
 	}
 
-	return files, nil
+	checkUrls(t, expectedURLs, existingURLs)
 }
 
-func getCertFiles(storagePath string) (files []string, err error) {
+func checkCertURLs(t *testing.T, storagePath string, expectedURLs []string) {
+	t.Helper()
+
 	content, err := ioutil.ReadDir(storagePath)
 	if err != nil {
-		return nil, err
+		t.Fatalf("Can't read storage dir: %s", err)
 	}
+
+	existingURLs := make([]string, 0)
 
 	for _, item := range content {
 		if item.IsDir() {
 			continue
 		}
 
-		if path.Ext(item.Name()) != ".crt" {
+		absItemPath := path.Join(storagePath, item.Name())
+
+		data, err := ioutil.ReadFile(absItemPath)
+		if err != nil {
 			continue
 		}
 
-		files = append(files, path.Join(storagePath, item.Name()))
+		block, _ := pem.Decode([]byte(data))
+
+		if block == nil {
+			continue
+		}
+
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+
+		certURL := url.URL{Scheme: "file", Path: absItemPath}
+
+		existingURLs = append(existingURLs, certURL.String())
 	}
 
-	return files, nil
+	checkUrls(t, expectedURLs, existingURLs)
 }

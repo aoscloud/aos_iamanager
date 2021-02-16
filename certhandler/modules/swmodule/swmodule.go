@@ -55,7 +55,6 @@ const (
 type SWModule struct {
 	certType string
 	config   moduleConfig
-	storage  certhandler.CertStorage
 
 	currentKey *rsa.PrivateKey
 }
@@ -73,10 +72,10 @@ type moduleConfig struct {
  ******************************************************************************/
 
 // New creates ssh module instance
-func New(certType string, configJSON json.RawMessage, storage certhandler.CertStorage) (module certhandler.CertModule, err error) {
+func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create SW module")
 
-	swModule := &SWModule{certType: certType, storage: storage}
+	swModule := &SWModule{certType: certType}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &swModule.config); err != nil {
@@ -120,49 +119,108 @@ func (module *SWModule) Clear() (err error) {
 	return nil
 }
 
-// SyncStorage syncs cert storage
-func (module *SWModule) SyncStorage() (err error) {
-	log.WithFields(log.Fields{"certType": module.certType}).Debug("Sync storage")
+// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
+func (module *SWModule) ValidateCertificates() (
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
-	if err = module.updateStorage(); err != nil {
-		return err
-	}
+	keyMap := make(map[string]crypto.PublicKey)
 
-	files, err := getFilesByExt(module.config.StoragePath, crtExt)
+	content, err := ioutil.ReadDir(module.config.StoragePath)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 
-	infos, err := module.storage.GetCertificates(module.certType)
-	if err != nil {
-		return err
+	// Collect keys
+
+	for _, item := range content {
+		absItemPath := path.Join(module.config.StoragePath, item.Name())
+
+		if item.IsDir() {
+			continue
+		}
+
+		key, err := getKeyByFileName(absItemPath)
+		if err != nil {
+			continue
+		}
+
+		keyMap[absItemPath] = key.Public()
 	}
 
-	// FS certs that need to be updated
+	for _, item := range content {
+		absItemPath := path.Join(module.config.StoragePath, item.Name())
 
-	var updateFiles []string
+		if item.IsDir() {
+			log.WithFields(log.Fields{
+				"certType": module.certType,
+				"dir":      absItemPath}).Warn("Unexpected dir found in storage, remove it")
 
-	for _, file := range files {
-		found := false
+			if err = os.RemoveAll(absItemPath); err != nil {
+				return nil, nil, nil, err
+			}
 
-		for _, info := range infos {
-			if fileToURL(file) == info.CertURL {
-				found = true
+			continue
+		}
+
+		x509Cert, err := getCertByFileName(absItemPath)
+		if err != nil {
+			if _, ok := keyMap[absItemPath]; !ok {
+				log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
+
+				invalidCerts = append(invalidCerts, fileToURL(absItemPath))
+			}
+
+			continue
+		}
+
+		keyFound := false
+
+		for keyFilePath, publicKey := range keyMap {
+			if checkCert(x509Cert, publicKey) == nil {
+				validInfos = append(validInfos, certhandler.CertInfo{
+					CertURL:  fileToURL(absItemPath),
+					KeyURL:   fileToURL(keyFilePath),
+					Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
+					Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
+					NotAfter: x509Cert.NotAfter,
+				})
+
+				keyFound = true
 
 				break
 			}
 		}
 
-		if !found {
-			updateFiles = append(updateFiles, file)
+		if !keyFound {
+			log.WithFields(log.Fields{
+				"certType": module.certType,
+				"file":     absItemPath}).Warn("Found certificate without corresponding key")
+
+			invalidCerts = append(invalidCerts, fileToURL(absItemPath))
 		}
 	}
 
-	if err = module.updateCerts(updateFiles); err != nil {
-		return err
+	for _, info := range validInfos {
+		key, err := url.Parse(info.KeyURL)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if _, ok := keyMap[key.Path]; ok {
+			delete(keyMap, key.Path)
+		}
 	}
 
-	return nil
+	for keyFilePath := range keyMap {
+		log.WithFields(log.Fields{
+			"certType": module.certType,
+			"file":     keyFilePath}).Warn("Found key without corresponding certificate")
+
+		invalidKeys = append(invalidKeys, fileToURL(keyFilePath))
+	}
+
+	return validInfos, invalidCerts, invalidKeys, nil
 }
 
 // CreateKey creates key pair
@@ -182,6 +240,8 @@ func (module *SWModule) CreateKey(password string) (key interface{}, err error) 
 
 // ApplyCertificate applies certificate
 func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
+	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
+
 	if module.currentKey == nil {
 		return certhandler.CertInfo{}, "", errors.New("no key created")
 	}
@@ -220,25 +280,23 @@ func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.Cert
 	certInfo.KeyURL = fileToURL(keyFileName)
 	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Cert.RawIssuer)
 	certInfo.Serial = fmt.Sprintf("%X", x509Cert.SerialNumber)
+	certInfo.NotAfter = x509Cert.NotAfter
+
+	log.WithFields(log.Fields{
+		"certType": module.certType,
+		"certURL":  certInfo.CertURL,
+		"keyURL":   certInfo.KeyURL,
+		"notAfter": certInfo.NotAfter,
+	}).Debug("Certificate applied")
 
 	return certInfo, "", nil
 }
 
-// RemoveCertificate removes certificate and corresponding key
-func (module *SWModule) RemoveCertificate(certURL, keyURL, password string) (err error) {
+// RemoveCertificate removes certificate
+func (module *SWModule) RemoveCertificate(certURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"certURL":  certURL,
-		"keyURL":   keyURL}).Debug("Remove certificate")
-
-	key, err := url.Parse(keyURL)
-	if err != nil {
-		return err
-	}
-
-	if err = os.Remove(key.Path); err != nil {
-		return err
-	}
+		"certURL":  certURL}).Debug("Remove certificate")
 
 	cert, err := url.Parse(certURL)
 	if err != nil {
@@ -246,6 +304,24 @@ func (module *SWModule) RemoveCertificate(certURL, keyURL, password string) (err
 	}
 
 	if err = os.Remove(cert.Path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RemoveKey removes key
+func (module *SWModule) RemoveKey(keyURL, password string) (err error) {
+	log.WithFields(log.Fields{
+		"certType": module.certType,
+		"keyURL":   keyURL}).Debug("Remove key")
+
+	key, err := url.Parse(keyURL)
+	if err != nil {
+		return err
+	}
+
+	if err = os.Remove(key.Path); err != nil {
 		return err
 	}
 
@@ -290,7 +366,9 @@ func saveCert(storageDir string, cert string) (fileName string, err error) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(cert)
+	if _, err = file.WriteString(cert); err != nil {
+		return "", err
+	}
 
 	return file.Name(), err
 }
@@ -310,142 +388,14 @@ func saveKey(storageDir string, key *rsa.PrivateKey) (fileName string, err error
 	return file.Name(), nil
 }
 
-func (module *SWModule) removeCert(cert certhandler.CertInfo) (err error) {
-	log.WithFields(log.Fields{
-		"certType": module.certType,
-		"certURL":  cert.CertURL,
-		"keyURL":   cert.KeyURL,
-		"notAfter": cert.NotAfter}).Debug("Remove certificate")
-
-	if err = module.storage.RemoveCertificate(module.certType, cert.CertURL); err != nil {
-		return err
-	}
-
-	keyURL, err := url.Parse(cert.KeyURL)
-	if err != nil {
-		return err
-	}
-
-	if err = os.Remove(keyURL.Path); err != nil {
-		return err
-	}
-
-	certURL, err := url.Parse(cert.CertURL)
-	if err != nil {
-		return err
-	}
-
-	if err = os.Remove(certURL.Path); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getFilesByExt(storagePath, ext string) (files []string, err error) {
-	content, err := ioutil.ReadDir(storagePath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, item := range content {
-		if item.IsDir() {
-			continue
-		}
-
-		if path.Ext(item.Name()) != ext {
-			continue
-		}
-
-		files = append(files, path.Join(storagePath, item.Name()))
-	}
-
-	return files, nil
-}
-
 func fileToURL(file string) (urlStr string) {
 	urlVal := url.URL{Scheme: "file", Path: file}
 
 	return urlVal.String()
 }
 
-func (module *SWModule) updateStorage() (err error) {
-	infos, err := module.storage.GetCertificates(module.certType)
-	if err != nil {
-		return err
-	}
-
-	for _, info := range infos {
-		if err = func() (err error) {
-			x509Cert, err := getCertByURL(info.CertURL)
-			if err != nil {
-				return err
-			}
-
-			if info.Serial != fmt.Sprintf("%X", x509Cert.SerialNumber) {
-				return errors.New("invalid certificate serial number")
-			}
-
-			if info.Issuer != base64.StdEncoding.EncodeToString(x509Cert.RawIssuer) {
-				return errors.New("invalid certificate issuer")
-			}
-
-			key, err := getKeyByURL(info.KeyURL)
-			if err != nil {
-				return err
-			}
-
-			if err = checkCert(x509Cert, key.Public()); err != nil {
-				return err
-			}
-
-			return nil
-		}(); err != nil {
-			log.WithFields(log.Fields{"certType": module.certType,
-				"certURL": info.CertURL, "keyURL": info.KeyURL}).Errorf("Invalid storage entry: %s", err)
-
-			log.WithFields(log.Fields{"certType": module.certType, "certURL": info.CertURL}).Warn("Remove invalid storage entry")
-
-			if err = module.storage.RemoveCertificate(module.certType, info.CertURL); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (module *SWModule) storeCert(x509Cert *x509.Certificate, certURL, keyURL string) (err error) {
-	certInfo := certhandler.CertInfo{
-		Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-		Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
-		CertURL:  certURL,
-		KeyURL:   keyURL,
-		NotAfter: x509Cert.NotAfter,
-	}
-
-	if err = module.storage.AddCertificate(module.certType, certInfo); err != nil {
-		return err
-	}
-
-	log.WithFields(log.Fields{
-		"certType": module.certType,
-		"issuer":   certInfo.Issuer,
-		"serial":   certInfo.Serial,
-		"certURL":  certInfo.CertURL,
-		"keyURL":   certInfo.KeyURL,
-		"notAfter": x509Cert.NotAfter}).Debug("Add certificate")
-
-	return nil
-}
-
-func getCertByURL(urlStr string) (x509Cert *x509.Certificate, err error) {
-	urlVal, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-
-	certPem, err := ioutil.ReadFile(urlVal.Path)
+func getCertByFileName(fileName string) (x509Cert *x509.Certificate, err error) {
+	certPem, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -453,13 +403,8 @@ func getCertByURL(urlStr string) (x509Cert *x509.Certificate, err error) {
 	return pemToX509Cert(string(certPem))
 }
 
-func getKeyByURL(urlStr string) (key *rsa.PrivateKey, err error) {
-	urlVal, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-
-	pemKey, err := ioutil.ReadFile(urlVal.Path)
+func getKeyByFileName(fileName string) (key *rsa.PrivateKey, err error) {
+	pemKey, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -469,54 +414,13 @@ func getKeyByURL(urlStr string) (key *rsa.PrivateKey, err error) {
 		return nil, err
 	}
 
+	if block == nil {
+		return nil, errors.New("invalid PEM Block")
+	}
+
 	if block.Type != "RSA PRIVATE KEY" || len(block.Headers) != 0 {
 		return nil, errors.New("invalid PEM Block")
 	}
 
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
-}
-
-func (module *SWModule) updateCerts(files []string) (err error) {
-	keyFiles, err := getFilesByExt(module.config.StoragePath, keyExt)
-	if err != nil {
-		return err
-	}
-
-	for _, certFile := range files {
-		x509Cert, err := getCertByURL(fileToURL(certFile))
-		if err != nil {
-			return err
-		}
-
-		foundKeyFile := ""
-
-		for _, keyFile := range keyFiles {
-			key, err := getKeyByURL(fileToURL(keyFile))
-			if err != nil {
-				return err
-			}
-
-			if err = checkCert(x509Cert, key.Public()); err == nil {
-				foundKeyFile = keyFile
-
-				break
-			}
-		}
-
-		if foundKeyFile != "" {
-			log.WithFields(log.Fields{"certType": module.certType, "file": certFile}).Warn("Store valid certificate")
-
-			if err = module.storeCert(x509Cert, fileToURL(certFile), fileToURL(foundKeyFile)); err != nil {
-				return err
-			}
-		} else {
-			log.WithFields(log.Fields{"certType": module.certType, "file": certFile}).Warn("Remove invalid certificate")
-
-			if err = os.Remove(certFile); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
