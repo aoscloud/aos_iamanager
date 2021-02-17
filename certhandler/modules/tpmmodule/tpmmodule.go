@@ -53,17 +53,20 @@ const (
 	crtExt = ".crt"
 )
 
+const maxPendingKeys = 16
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
 // TPMModule TPM certificate module
 type TPMModule struct {
-	certType string
-	config   moduleConfig
-	device   io.ReadWriteCloser
+	certType      string
+	config        moduleConfig
+	device        io.ReadWriteCloser
+	primaryHandle tpmutil.Handle
 
-	currentKey *key
+	pendingKeys []*key
 }
 
 type moduleConfig struct {
@@ -72,11 +75,12 @@ type moduleConfig struct {
 }
 
 type key struct {
-	device    io.ReadWriteCloser
-	handle    tpmutil.Handle
-	pub       tpm2.Public
-	publicKey crypto.PublicKey
-	password  string
+	device        io.ReadWriteCloser
+	primaryHandle tpmutil.Handle
+	publicKey     crypto.PublicKey
+	privateBlob   []byte
+	publicBlob    []byte
+	password      string
 }
 
 /*******************************************************************************
@@ -123,6 +127,10 @@ func New(certType string, configJSON json.RawMessage,
 		return nil, err
 	}
 
+	if err = tpmModule.flushTransientHandles(); err != nil {
+		return nil, err
+	}
+
 	return tpmModule, nil
 }
 
@@ -130,8 +138,8 @@ func New(certType string, configJSON json.RawMessage,
 func (module *TPMModule) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close TPM module")
 
-	if module.currentKey != nil {
-		if flushErr := module.currentKey.flush(); flushErr != nil {
+	if module.primaryHandle != 0 {
+		if flushErr := tpm2.FlushContext(module.device, module.primaryHandle); flushErr != nil {
 			if err == nil {
 				err = flushErr
 			}
@@ -299,37 +307,44 @@ func (module *TPMModule) Clear() (err error) {
 func (module *TPMModule) CreateKey(password string) (key interface{}, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
-	if module.currentKey != nil {
-		log.Warning("Current key exists. Flushing...")
-
-		if err = module.currentKey.flush(); err != nil {
-			return nil, err
-		}
-	}
-
-	if module.currentKey, err = module.newKey(password); err != nil {
+	newKey, err := module.newKey(password)
+	if err != nil {
 		return "", err
 	}
 
-	return module.currentKey, nil
+	if len(module.pendingKeys) < maxPendingKeys {
+		module.pendingKeys = append(module.pendingKeys, newKey)
+	} else {
+		log.WithFields(log.Fields{"certType": module.certType}).Warn("Max pending keys reached. Remove old one")
+
+		module.pendingKeys[0] = newKey
+	}
+
+	return newKey, nil
 }
 
 // ApplyCertificate applies certificate
 func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
-	if module.currentKey == nil {
-		return certhandler.CertInfo{}, "", errors.New("no key created")
-	}
-	defer func() { module.currentKey = nil }()
-
 	x509Cert, err := pemToX509Cert(cert)
 	if err != nil {
 		return certhandler.CertInfo{}, "", nil
 	}
 
-	if err = checkCert(x509Cert, module.currentKey.publicKey); err != nil {
-		return certhandler.CertInfo{}, "", err
+	var currentKey *key
+
+	for i, key := range module.pendingKeys {
+		if err = checkCert(x509Cert, key.Public()); err == nil {
+			currentKey = key
+			module.pendingKeys = append(module.pendingKeys[:i], module.pendingKeys[i+1:]...)
+
+			break
+		}
+	}
+
+	if currentKey == nil {
+		return certhandler.CertInfo{}, "", errors.New("no key found")
 	}
 
 	certFileName, err := saveCert(module.config.StoragePath, cert)
@@ -342,7 +357,7 @@ func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.Cer
 		return certhandler.CertInfo{}, "", err
 	}
 
-	if err = module.currentKey.makePersistent(persistentHandle); err != nil {
+	if err = currentKey.makePersistent(persistentHandle); err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
 
@@ -359,7 +374,7 @@ func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.Cer
 		"notAfter": certInfo.NotAfter,
 	}).Debug("Certificate applied")
 
-	return certInfo, module.currentKey.password, nil
+	return certInfo, currentKey.password, nil
 }
 
 // RemoveCertificate removes certificate
@@ -429,9 +444,7 @@ func (module *TPMModule) isOwnerSet() (result bool, err error) {
 	return false, nil
 }
 
-func (module *TPMModule) newKey(password string) (k *key, err error) {
-	k = &key{device: module.device, password: password}
-
+func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmutil.Handle, err error) {
 	primaryKeyTemplate := tpm2.Public{
 		Type:    tpm2.AlgRSA,
 		NameAlg: tpm2.AlgSHA256,
@@ -447,6 +460,23 @@ func (module *TPMModule) newKey(password string) (k *key, err error) {
 		},
 	}
 
+	if handle, _, err = tpm2.CreatePrimary(device, tpm2.HandleOwner, tpm2.PCRSelection{},
+		password, password, primaryKeyTemplate); err != nil {
+		return 0, err
+	}
+
+	return handle, nil
+}
+
+func (module *TPMModule) newKey(password string) (k *key, err error) {
+	if module.primaryHandle == 0 {
+		if module.primaryHandle, err = createPrimaryKey(module.device, password); err != nil {
+			return nil, err
+		}
+	}
+
+	k = &key{device: module.device, password: password, primaryHandle: module.primaryHandle}
+
 	keyTemplate := tpm2.Public{
 		Type:    tpm2.AlgRSA,
 		NameAlg: tpm2.AlgSHA256,
@@ -461,47 +491,36 @@ func (module *TPMModule) newKey(password string) (k *key, err error) {
 		},
 	}
 
-	primaryHandle, _, err := tpm2.CreatePrimary(module.device, tpm2.HandleOwner, tpm2.PCRSelection{}, k.password, k.password, primaryKeyTemplate)
+	if k.privateBlob, k.publicBlob, _, _, _, err = tpm2.CreateKey(module.device, k.primaryHandle,
+		tpm2.PCRSelection{}, k.password, "", keyTemplate); err != nil {
+		return nil, err
+	}
+
+	tpmPublic, err := tpm2.DecodePublic(k.publicBlob)
 	if err != nil {
 		return nil, err
 	}
-	defer tpm2.FlushContext(module.device, primaryHandle)
 
-	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKey(module.device, primaryHandle, tpm2.PCRSelection{}, k.password, "", keyTemplate)
-	if err != nil {
-		return nil, err
-	}
-
-	if k.pub, err = tpm2.DecodePublic(publicBlob); err != nil {
-		return nil, err
-	}
-
-	if k.publicKey, err = k.pub.Key(); err != nil {
-		return nil, err
-	}
-
-	if k.handle, _, err = tpm2.Load(module.device, primaryHandle, k.password, publicBlob, privateBlob); err != nil {
+	if k.publicKey, err = tpmPublic.Key(); err != nil {
 		return nil, err
 	}
 
 	return k, nil
 }
 
-func (k *key) flush() (err error) {
-	return tpm2.FlushContext(k.device, k.handle)
-}
-
-func (k *key) makePersistent(handle tpmutil.Handle) (err error) {
-	// Clear slot
-	tpm2.EvictControl(k.device, k.password, tpm2.HandleOwner, handle, handle)
-
-	if err = tpm2.EvictControl(k.device, k.password, tpm2.HandleOwner, k.handle, handle); err != nil {
+func (k *key) makePersistent(persistentHandle tpmutil.Handle) (err error) {
+	keyHandle, _, err := tpm2.Load(k.device, k.primaryHandle, k.password, k.publicBlob, k.privateBlob)
+	if err != nil {
 		return err
 	}
+	defer tpm2.FlushContext(k.device, keyHandle)
 
-	k.flush()
+	// Clear slot
+	tpm2.EvictControl(k.device, k.password, tpm2.HandleOwner, persistentHandle, persistentHandle)
 
-	k.handle = handle
+	if err = tpm2.EvictControl(k.device, k.password, tpm2.HandleOwner, keyHandle, persistentHandle); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -535,7 +554,13 @@ func (k *key) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signatur
 		Hash: tpmHash,
 	}
 
-	sig, err := tpm2.Sign(k.device, k.handle, "", digest, nil, scheme)
+	keyHandle, _, err := tpm2.Load(k.device, k.primaryHandle, k.password, k.publicBlob, k.privateBlob)
+	if err != nil {
+		return nil, err
+	}
+	defer tpm2.FlushContext(k.device, keyHandle)
+
+	sig, err := tpm2.Sign(k.device, keyHandle, "", digest, nil, scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -600,7 +625,7 @@ func saveCert(storageDir string, cert string) (fileName string, err error) {
 
 func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err error) {
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
-		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
+		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst)+1, uint32(tpm2.PersistentFirst))
 	if err != nil {
 		return 0, err
 	}
@@ -629,6 +654,26 @@ func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err
 	}
 
 	return 0, errors.New("no empty persistent slot found")
+}
+
+func (module *TPMModule) flushTransientHandles() (err error) {
+	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
+		uint32(tpm2.PersistentFirst)-uint32(tpm2.TransientFirst), uint32(tpm2.TransientFirst))
+	if err != nil {
+		return err
+	}
+	for _, value := range values {
+		handle, ok := value.(tpmutil.Handle)
+		if !ok {
+			continue
+		}
+
+		if err = tpm2.FlushContext(module.device, handle); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func getCertFiles(storagePath string) (files []string, err error) {

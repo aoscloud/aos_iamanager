@@ -107,6 +107,8 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestUpdateCertificate(t *testing.T) {
+	numKeys := 16
+
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
 		certStorage := path.Join(tmpDir, "certStorage")
 
@@ -116,6 +118,19 @@ func TestUpdateCertificate(t *testing.T) {
 		}
 		defer module.Close()
 
+		var maxPendingKeys = 0
+		var maxApplyKeys = 0
+
+		switch module.(type) {
+		case *swmodule.SWModule:
+			maxPendingKeys = 16
+			maxApplyKeys = 16
+
+		case *tpmmodule.TPMModule:
+			maxPendingKeys = 16
+			maxApplyKeys = 7
+		}
+
 		// Set owner
 
 		password := "password"
@@ -124,94 +139,105 @@ func TestUpdateCertificate(t *testing.T) {
 			t.Fatalf("Can't set owner: %s", err)
 		}
 
-		// Create key
+		// Create keys
 
-		key, err := module.CreateKey(password)
-		if err != nil {
-			t.Fatalf("Can't create key: %s", err)
-		}
+		keys := make([]interface{}, 0)
 
-		// Create CSR
-
-		csr, err := createCSR(key)
-		if err != nil {
-			t.Fatalf("Can't create CSR: %s", err)
-		}
-
-		// Verify CSR
-
-		csrFile := path.Join(tmpDir, "data.csr")
-
-		if err = ioutil.WriteFile(csrFile, csr, 0644); err != nil {
-			t.Fatalf("Can't write CSR to file: %s", err)
-		}
-
-		out, err := exec.Command("openssl", "req", "-text", "-noout", "-verify", "-inform", "PEM", "-in", csrFile).CombinedOutput()
-		if err != nil {
-			t.Fatalf("Can't verify CSR: %s, %s", out, err)
-		}
-
-		// Apply certificate
-
-		cert, err := generateCertificate(csr)
-		if err != nil {
-			t.Fatalf("Can't generate certificate: %s", err)
-		}
-
-		certInfo, _, err := module.ApplyCertificate(cert)
-		if err != nil {
-			t.Fatalf("Can't apply certificate: %s", err)
-		}
-
-		// Check encrypt/decrypt with private key
-
-		keyVal, err := url.Parse(certInfo.KeyURL)
-		if err != nil {
-			t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
-		}
-
-		originMessage := []byte("This is origin message")
-		var decryptedData []byte
-
-		switch keyVal.Scheme {
-		case "file":
-			key, err := getKey(keyVal.Path)
+		for i := 0; i < numKeys; i++ {
+			key, err := module.CreateKey(password)
 			if err != nil {
-				t.Fatalf("Can't get key: %s", err)
+				t.Fatalf("Can't create key: %s", err)
 			}
 
-			encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, &key.PublicKey, originMessage)
-			if err != nil {
-				t.Errorf("Can't encrypt message: %s", err)
-			}
-
-			if decryptedData, err = rsa.DecryptPKCS1v15(rand.Reader, key, encryptedData); err != nil {
-				t.Errorf("Can't decrypt message: %s", err)
-			}
-
-		case "tpm":
-			handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
-			if err != nil {
-				t.Fatalf("Can't parse key URL: %s", err)
-			}
-
-			originMessage := []byte("This is origin message")
-
-			encryptedData, err := tpm2.RSAEncrypt(tpmSimulator, tpmutil.Handle(handle), originMessage, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, "")
-			if err != nil {
-				t.Errorf("Can't encrypt message: %s", err)
-			}
-
-			if decryptedData, err = tpm2.RSADecrypt(tpmSimulator, tpmutil.Handle(handle), "", encryptedData, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, ""); err != nil {
-				t.Errorf("Can't decrypt message: %s", err)
-			}
-
-		default:
-			t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
+			keys = append(keys, key)
 		}
 
-		if !bytes.Equal(originMessage, decryptedData) {
-			t.Error("Decrypt error")
+		if numKeys >= maxPendingKeys {
+			keys = keys[numKeys-maxPendingKeys : numKeys-maxPendingKeys+maxApplyKeys]
+		}
+
+		for _, key := range keys {
+			// Create CSR
+
+			csr, err := createCSR(key)
+			if err != nil {
+				t.Fatalf("Can't create CSR: %s", err)
+			}
+
+			// Verify CSR
+
+			csrFile := path.Join(tmpDir, "data.csr")
+
+			if err = ioutil.WriteFile(csrFile, csr, 0644); err != nil {
+				t.Fatalf("Can't write CSR to file: %s", err)
+			}
+
+			out, err := exec.Command("openssl", "req", "-text", "-noout", "-verify", "-inform", "PEM", "-in", csrFile).CombinedOutput()
+			if err != nil {
+				t.Fatalf("Can't verify CSR: %s, %s", out, err)
+			}
+
+			// Apply certificate
+
+			cert, err := generateCertificate(csr)
+			if err != nil {
+				t.Fatalf("Can't generate certificate: %s", err)
+			}
+
+			certInfo, _, err := module.ApplyCertificate(cert)
+			if err != nil {
+				t.Fatalf("Can't apply certificate: %s", err)
+			}
+			// Check encrypt/decrypt with private key
+
+			keyVal, err := url.Parse(certInfo.KeyURL)
+			if err != nil {
+				t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
+			}
+
+			var originMessage = []byte("This is origin message")
+			var decryptedData []byte
+
+			switch keyVal.Scheme {
+			case "file":
+				key, err := getKey(keyVal.Path)
+				if err != nil {
+					t.Fatalf("Can't get key: %s", err)
+				}
+
+				encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, &key.PublicKey, originMessage)
+				if err != nil {
+					t.Errorf("Can't encrypt message: %s", err)
+				}
+
+				if decryptedData, err = rsa.DecryptPKCS1v15(rand.Reader, key, encryptedData); err != nil {
+					t.Errorf("Can't decrypt message: %s", err)
+				}
+
+			case "tpm":
+				handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
+				if err != nil {
+					t.Fatalf("Can't parse key URL: %s", err)
+				}
+
+				originMessage := []byte("This is origin message")
+
+				encryptedData, err := tpm2.RSAEncrypt(tpmSimulator, tpmutil.Handle(handle), originMessage, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, "")
+				if err != nil {
+					t.Errorf("Can't encrypt message: %s", err)
+				}
+
+				if decryptedData, err = tpm2.RSADecrypt(tpmSimulator, tpmutil.Handle(handle), "", encryptedData, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, ""); err != nil {
+					t.Errorf("Can't decrypt message: %s", err)
+				}
+
+			default:
+				t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
+			}
+
+			if !bytes.Equal(originMessage, decryptedData) {
+				t.Error("Decrypt error")
+			}
 		}
 	}
 }

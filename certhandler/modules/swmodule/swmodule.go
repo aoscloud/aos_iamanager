@@ -47,6 +47,8 @@ const (
 	keyExt = ".key"
 )
 
+const maxPendingKeys = 16
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -56,7 +58,7 @@ type SWModule struct {
 	certType string
 	config   moduleConfig
 
-	currentKey *rsa.PrivateKey
+	pendingKeys []*rsa.PrivateKey
 }
 
 type moduleConfig struct {
@@ -227,25 +229,25 @@ func (module *SWModule) ValidateCertificates() (
 func (module *SWModule) CreateKey(password string) (key interface{}, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
-	if module.currentKey != nil {
-		log.Warning("Current key exists. Flushing...")
-	}
-
-	if module.currentKey, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
+	newKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
 		return nil, err
 	}
 
-	return module.currentKey, nil
+	if len(module.pendingKeys) < maxPendingKeys {
+		module.pendingKeys = append(module.pendingKeys, newKey)
+	} else {
+		log.WithFields(log.Fields{"certType": module.certType}).Warn("Max pending keys reached. Remove old one")
+
+		module.pendingKeys[0] = newKey
+	}
+
+	return newKey, nil
 }
 
 // ApplyCertificate applies certificate
 func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
-
-	if module.currentKey == nil {
-		return certhandler.CertInfo{}, "", errors.New("no key created")
-	}
-	defer func() { module.currentKey = nil }()
 
 	block, _ := pem.Decode([]byte(cert))
 
@@ -262,8 +264,19 @@ func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.Cert
 		return certhandler.CertInfo{}, "", err
 	}
 
-	if err = checkCert(x509Cert, module.currentKey.Public()); err != nil {
-		return certhandler.CertInfo{}, "", err
+	var currentKey *rsa.PrivateKey
+
+	for i, key := range module.pendingKeys {
+		if err = checkCert(x509Cert, key.Public()); err == nil {
+			currentKey = key
+			module.pendingKeys = append(module.pendingKeys[:i], module.pendingKeys[i+1:]...)
+
+			break
+		}
+	}
+
+	if currentKey == nil {
+		return certhandler.CertInfo{}, "", errors.New("no key found")
 	}
 
 	certFileName, err := saveCert(module.config.StoragePath, cert)
@@ -271,7 +284,7 @@ func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.Cert
 		return certhandler.CertInfo{}, "", err
 	}
 
-	keyFileName, err := saveKey(module.config.StoragePath, module.currentKey)
+	keyFileName, err := saveKey(module.config.StoragePath, currentKey)
 	if err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
