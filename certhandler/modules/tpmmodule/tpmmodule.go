@@ -55,6 +55,10 @@ const (
 
 const maxPendingKeys = 16
 
+const (
+	rsaKeyLength = 2048
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -453,10 +457,10 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 		RSAParameters: &tpm2.RSAParams{
 			Symmetric: &tpm2.SymScheme{
 				Alg:     tpm2.AlgAES,
-				KeyBits: 128,
+				KeyBits: 256,
 				Mode:    tpm2.AlgCFB,
 			},
-			KeyBits: 2048,
+			KeyBits: rsaKeyLength,
 		},
 	}
 
@@ -483,11 +487,7 @@ func (module *TPMModule) newKey(password string) (k *key, err error) {
 		Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin |
 			tpm2.FlagUserWithAuth | tpm2.FlagDecrypt | tpm2.FlagSign,
 		RSAParameters: &tpm2.RSAParams{
-			Sign: &tpm2.SigScheme{
-				Alg:  tpm2.AlgNull,
-				Hash: tpm2.AlgNull,
-			},
-			KeyBits: 2048,
+			KeyBits: rsaKeyLength,
 		},
 	}
 

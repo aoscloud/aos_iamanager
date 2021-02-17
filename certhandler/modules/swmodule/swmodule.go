@@ -49,6 +49,10 @@ const (
 
 const maxPendingKeys = 16
 
+const (
+	rsaKeyLength = 2048
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -229,7 +233,7 @@ func (module *SWModule) ValidateCertificates() (
 func (module *SWModule) CreateKey(password string) (key interface{}, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
-	newKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	newKey, err := rsa.GenerateKey(rand.Reader, rsaKeyLength)
 	if err != nil {
 		return nil, err
 	}
