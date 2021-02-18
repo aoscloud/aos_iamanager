@@ -18,6 +18,7 @@
 package swmodule
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -58,7 +59,7 @@ type SWModule struct {
 	certType string
 	config   moduleConfig
 
-	pendingKeys []interface{}
+	pendingKeys []crypto.PrivateKey
 }
 
 type moduleConfig struct {
@@ -129,7 +130,7 @@ func (module *SWModule) ValidateCertificates() (
 	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
-	keyMap := make(map[string]interface{})
+	keyMap := make(map[string]crypto.PrivateKey)
 
 	content, err := ioutil.ReadDir(module.config.StoragePath)
 	if err != nil {
@@ -229,7 +230,7 @@ func (module *SWModule) ValidateCertificates() (
 }
 
 // CreateKey creates key pair
-func (module *SWModule) CreateKey(password, algorithm string) (key interface{}, err error) {
+func (module *SWModule) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
 	switch strings.ToLower(algorithm) {
@@ -267,7 +268,7 @@ func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cert
 		return certhandler.CertInfo{}, "", err
 	}
 
-	var currentKey interface{}
+	var currentKey crypto.PrivateKey
 
 	for i, key := range module.pendingKeys {
 		if err = cryptutils.CheckCertificate(x509Certs[0], key); err == nil {

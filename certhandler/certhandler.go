@@ -18,6 +18,7 @@
 package certhandler
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -94,7 +95,7 @@ type CertModule interface {
 	ValidateCertificates() (validInfos []CertInfo, invalidCerts, invalidKeys []string, err error)
 	SetOwner(password string) (err error)
 	Clear() (err error)
-	CreateKey(password, algorithm string) (key interface{}, err error)
+	CreateKey(password, algorithm string) (key crypto.PrivateKey, err error)
 	ApplyCertificate(cert []byte) (certInfo CertInfo, password string, err error)
 	RemoveCertificate(certURL, password string) (err error)
 	RemoveKey(certURL, password string) (err error)
@@ -347,7 +348,7 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key interface{}) (csr []byte, err error) {
+func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (csr []byte, err error) {
 	template := &x509.CertificateRequest{
 		Subject:  pkix.Name{CommonName: systemID},
 		DNSNames: alternativeNames,

@@ -18,6 +18,7 @@
 package tpmmodule
 
 import (
+	"crypto"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -275,7 +276,7 @@ func (module *TPMModule) Clear() (err error) {
 }
 
 // CreateKey creates key pair
-func (module *TPMModule) CreateKey(password, algorithm string) (key interface{}, err error) {
+func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
 	newKey, err := module.newKey(password, algorithm)

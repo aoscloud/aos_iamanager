@@ -149,7 +149,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 			// Create keys
 
-			keys := make([]interface{}, 0)
+			keys := make([]crypto.PrivateKey, 0)
 
 			for i := 0; i < numKeys; i++ {
 				key, err := module.CreateKey(password, algorithm)
@@ -204,7 +204,7 @@ func TestUpdateCertificate(t *testing.T) {
 					t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
 				}
 
-				var currentKey interface{}
+				var currentKey crypto.PrivateKey
 
 				switch keyVal.Scheme {
 				case cryptutils.SchemeFile:
@@ -571,7 +571,7 @@ func TestSetOwnerClear(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func createCSR(key interface{}) (csr []byte, err error) {
+func createCSR(key crypto.PrivateKey) (csr []byte, err error) {
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
 	if err != nil {
 		return nil, err

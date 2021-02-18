@@ -48,7 +48,7 @@ import (
  ******************************************************************************/
 
 type moduleData struct {
-	key        interface{}
+	key        crypto.PrivateKey
 	certInfo   certhandler.CertInfo
 	removeCert string
 	removeKey  string
@@ -427,7 +427,7 @@ func (module *testModule) Clear() (err error) {
 	return nil
 }
 
-func (module *testModule) CreateKey(password, algorithm string) (key interface{}, err error) {
+func (module *testModule) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
 	if module.data.key, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
 		return nil, err
 	}
