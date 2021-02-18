@@ -104,23 +104,15 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		return server, err
 	}
 
-	_, crtErr := cryptutils.GetCertFileFromDir(cfg.CertStorage)
-
-	_, keyErr := cryptutils.GetKeyFileFromDir(cfg.CertStorage)
-
-	if crtErr != nil && keyErr != nil {
-		insecure = true
-	}
-
 	var opts []grpc.ServerOption
 
 	if insecure == false {
 		tlsConfig, err := cryptutils.GetServerTLSConfig(cfg.CACert, cfg.CertStorage)
 		if err != nil {
-			return server, err
+			log.Errorf("Can't get TLS config: %s", err)
+		} else {
+			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 		}
-
-		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	} else {
 		log.Warnf("IAM server uses insecure connection")
 	}

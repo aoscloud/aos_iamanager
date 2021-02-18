@@ -19,6 +19,7 @@ package certmodules_test
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -37,6 +38,8 @@ import (
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/tpmkey"
 
 	"aos_iamanager/certhandler"
 	"aos_iamanager/certhandler/modules/swmodule"
@@ -188,6 +191,7 @@ func TestUpdateCertificate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't apply certificate: %s", err)
 			}
+
 			// Check encrypt/decrypt with private key
 
 			keyVal, err := url.Parse(certInfo.KeyURL)
@@ -196,43 +200,46 @@ func TestUpdateCertificate(t *testing.T) {
 			}
 
 			var originMessage = []byte("This is origin message")
-			var decryptedData []byte
+			var currentKey interface{}
 
 			switch keyVal.Scheme {
-			case "file":
-				key, err := getKey(keyVal.Path)
-				if err != nil {
+			case cryptutils.SchemeFile:
+				if currentKey, err = cryptutils.LoadKey(keyVal.Path); err != nil {
 					t.Fatalf("Can't get key: %s", err)
 				}
 
-				encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, &key.PublicKey, originMessage)
-				if err != nil {
-					t.Errorf("Can't encrypt message: %s", err)
-				}
-
-				if decryptedData, err = rsa.DecryptPKCS1v15(rand.Reader, key, encryptedData); err != nil {
-					t.Errorf("Can't decrypt message: %s", err)
-				}
-
-			case "tpm":
+			case cryptutils.SchemeTPM:
 				handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
 				if err != nil {
 					t.Fatalf("Can't parse key URL: %s", err)
 				}
 
-				originMessage := []byte("This is origin message")
-
-				encryptedData, err := tpm2.RSAEncrypt(tpmSimulator, tpmutil.Handle(handle), originMessage, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, "")
-				if err != nil {
-					t.Errorf("Can't encrypt message: %s", err)
-				}
-
-				if decryptedData, err = tpm2.RSADecrypt(tpmSimulator, tpmutil.Handle(handle), "", encryptedData, &tpm2.AsymScheme{Alg: tpm2.AlgRSAES}, ""); err != nil {
-					t.Errorf("Can't decrypt message: %s", err)
+				if currentKey, err = tpmkey.CreateFromPersistent(tpmSimulator, tpmutil.Handle(handle)); err != nil {
+					t.Fatalf("Can't create key: %s", err)
 				}
 
 			default:
 				t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
+			}
+
+			decrypter, ok := currentKey.(crypto.Decrypter)
+			if !ok {
+				t.Fatal("Key doesn't implement decrypter interface")
+			}
+
+			rsaPublic, ok := decrypter.Public().(*rsa.PublicKey)
+			if !ok {
+				t.Fatal("Key is not RSA key")
+			}
+
+			encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, rsaPublic, originMessage)
+			if err != nil {
+				t.Errorf("Can't encrypt message: %s", err)
+			}
+
+			decryptedData, err := decrypter.Decrypt(rand.Reader, encryptedData, nil)
+			if err != nil {
+				t.Errorf("Can't decrypt message: %s", err)
 			}
 
 			if !bytes.Equal(originMessage, decryptedData) {
@@ -315,12 +322,12 @@ func TestValidateCertificates(t *testing.T) {
 
 			case "onlyCert":
 				switch keyVal.Scheme {
-				case "file":
+				case cryptutils.SchemeFile:
 					if err = os.Remove(keyVal.Path); err != nil {
 						t.Errorf("Can't remove key file: %s", err)
 					}
 
-				case "tpm":
+				case cryptutils.SchemeTPM:
 					handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
 					if err != nil {
 						t.Errorf("Can't parse key handle: %s", err)
@@ -488,10 +495,10 @@ func TestSetOwnerClear(t *testing.T) {
 		checkCertURLs(t, certStorage, []string{certInfo.CertURL})
 
 		switch keyVal.Scheme {
-		case "file":
+		case cryptutils.SchemeFile:
 			checkKeyURLs(t, certStorage, []string{certInfo.KeyURL})
 
-		case "tpm":
+		case cryptutils.SchemeTPM:
 			checkHandleURLs(t, certStorage, []string{certInfo.KeyURL})
 
 		default:
@@ -509,10 +516,10 @@ func TestSetOwnerClear(t *testing.T) {
 		checkCertURLs(t, certStorage, nil)
 
 		switch keyVal.Scheme {
-		case "file":
+		case cryptutils.SchemeFile:
 			checkKeyURLs(t, certStorage, nil)
 
-		case "tpm":
+		case cryptutils.SchemeTPM:
 			checkHandleURLs(t, certStorage, nil)
 
 		default:
@@ -533,7 +540,7 @@ func createCSR(key interface{}) (csr []byte, err error) {
 		return nil, err
 	}
 
-	csr = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+	csr = pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificateRequest, Bytes: csrDER})
 
 	return csr, nil
 }
@@ -694,20 +701,6 @@ IP.1 = 127.0.0.1`
 	return certData, nil
 }
 
-func getKey(filePath string) (key *rsa.PrivateKey, err error) {
-	keyData, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	keyPem, _ := pem.Decode(keyData)
-	if err != nil {
-		return nil, err
-	}
-
-	return x509.ParsePKCS1PrivateKey(keyPem.Bytes)
-}
-
 func checkFileURL(strURL string, file string) (err error) {
 	valURL, err := url.Parse(strURL)
 	if err != nil {
@@ -779,7 +772,7 @@ func checkHandleURLs(t *testing.T, storagePath string, expectedURLs []string) {
 			t.Fatal("Wrong TPM data format")
 		}
 
-		keyURL := url.URL{Scheme: "tpm", Host: fmt.Sprintf("0x%X", handle)}
+		keyURL := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
 
 		existingURLs = append(existingURLs, keyURL.String())
 	}
@@ -804,22 +797,11 @@ func checkKeyURLs(t *testing.T, storagePath string, expectedURLs []string) {
 
 		absItemPath := path.Join(storagePath, item.Name())
 
-		data, err := ioutil.ReadFile(absItemPath)
-		if err != nil {
+		if _, err = cryptutils.LoadKey(absItemPath); err != nil {
 			continue
 		}
 
-		block, _ := pem.Decode([]byte(data))
-
-		if block == nil {
-			continue
-		}
-
-		if block.Type != "RSA PRIVATE KEY" {
-			continue
-		}
-
-		keyURL := url.URL{Scheme: "file", Path: absItemPath}
+		keyURL := url.URL{Scheme: cryptutils.SchemeFile, Path: absItemPath}
 
 		existingURLs = append(existingURLs, keyURL.String())
 	}
@@ -844,22 +826,11 @@ func checkCertURLs(t *testing.T, storagePath string, expectedURLs []string) {
 
 		absItemPath := path.Join(storagePath, item.Name())
 
-		data, err := ioutil.ReadFile(absItemPath)
-		if err != nil {
+		if _, err = cryptutils.LoadCertificate(absItemPath); err != nil {
 			continue
 		}
 
-		block, _ := pem.Decode([]byte(data))
-
-		if block == nil {
-			continue
-		}
-
-		if block.Type != "CERTIFICATE" {
-			continue
-		}
-
-		certURL := url.URL{Scheme: "file", Path: absItemPath}
+		certURL := url.URL{Scheme: cryptutils.SchemeFile, Path: absItemPath}
 
 		existingURLs = append(existingURLs, certURL.String())
 	}

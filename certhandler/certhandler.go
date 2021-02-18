@@ -32,6 +32,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 
 	"aos_iamanager/config"
 )
@@ -44,8 +45,6 @@ const (
 	clientAuth = "clientauth"
 	serverAuth = "serverauth"
 )
-
-const csrBlockType = "CERTIFICATE REQUEST"
 
 /*******************************************************************************
  * Vars
@@ -385,7 +384,7 @@ func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key
 		return nil, err
 	}
 
-	return pem.EncodeToMemory(&pem.Block{Type: csrBlockType, Bytes: csrDER}), nil
+	return pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificateRequest, Bytes: csrDER}), nil
 }
 
 func (handler *Handler) createModule(cfg config.ModuleConfig) (descriptor moduleDescriptor, err error) {

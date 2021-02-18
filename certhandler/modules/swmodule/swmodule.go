@@ -18,14 +18,10 @@
 package swmodule
 
 import (
-	"bytes"
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -34,6 +30,7 @@ import (
 	"path"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 
 	"aos_iamanager/certhandler"
 )
@@ -41,11 +38,6 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
-
-const (
-	crtExt = ".crt"
-	keyExt = ".key"
-)
 
 const maxPendingKeys = 16
 
@@ -130,7 +122,7 @@ func (module *SWModule) ValidateCertificates() (
 	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
-	keyMap := make(map[string]crypto.PublicKey)
+	keyMap := make(map[string]interface{})
 
 	content, err := ioutil.ReadDir(module.config.StoragePath)
 	if err != nil {
@@ -146,12 +138,12 @@ func (module *SWModule) ValidateCertificates() (
 			continue
 		}
 
-		key, err := getKeyByFileName(absItemPath)
+		key, err := cryptutils.LoadKey(absItemPath)
 		if err != nil {
 			continue
 		}
 
-		keyMap[absItemPath] = key.Public()
+		keyMap[absItemPath] = key
 	}
 
 	for _, item := range content {
@@ -169,7 +161,7 @@ func (module *SWModule) ValidateCertificates() (
 			continue
 		}
 
-		x509Cert, err := getCertByFileName(absItemPath)
+		x509Certs, err := cryptutils.LoadCertificate(absItemPath)
 		if err != nil {
 			if _, ok := keyMap[absItemPath]; !ok {
 				log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
@@ -182,14 +174,14 @@ func (module *SWModule) ValidateCertificates() (
 
 		keyFound := false
 
-		for keyFilePath, publicKey := range keyMap {
-			if checkCert(x509Cert, publicKey) == nil {
+		for keyFilePath, key := range keyMap {
+			if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
 				validInfos = append(validInfos, certhandler.CertInfo{
 					CertURL:  fileToURL(absItemPath),
 					KeyURL:   fileToURL(keyFilePath),
-					Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-					Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
-					NotAfter: x509Cert.NotAfter,
+					Issuer:   base64.StdEncoding.EncodeToString(x509Certs[0].RawIssuer),
+					Serial:   fmt.Sprintf("%X", x509Certs[0].SerialNumber),
+					NotAfter: x509Certs[0].NotAfter,
 				})
 
 				keyFound = true
@@ -253,7 +245,7 @@ func (module *SWModule) CreateKey(password string) (key interface{}, err error) 
 func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
-	x509Cert, err := pemToX509Cert(cert)
+	x509Certs, err := cryptutils.PEMToX509Cert(cert)
 	if err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
@@ -261,7 +253,7 @@ func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cert
 	var currentKey *rsa.PrivateKey
 
 	for i, key := range module.pendingKeys {
-		if err = checkCert(x509Cert, key.Public()); err == nil {
+		if err = cryptutils.CheckCertificate(x509Certs[0], key); err == nil {
 			currentKey = key
 			module.pendingKeys = append(module.pendingKeys[:i], module.pendingKeys[i+1:]...)
 
@@ -273,21 +265,29 @@ func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cert
 		return certhandler.CertInfo{}, "", errors.New("no key found")
 	}
 
-	certFileName, err := saveCert(module.config.StoragePath, cert)
+	certFileName, err := createPEMFile(module.config.StoragePath)
 	if err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
 
-	keyFileName, err := saveKey(module.config.StoragePath, currentKey)
+	if err = cryptutils.SaveCertificate(certFileName, x509Certs); err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
+
+	keyFileName, err := createPEMFile(module.config.StoragePath)
 	if err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
+
+	if err = cryptutils.SaveKey(keyFileName, currentKey); err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
 
 	certInfo.CertURL = fileToURL(certFileName)
 	certInfo.KeyURL = fileToURL(keyFileName)
-	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Cert.RawIssuer)
-	certInfo.Serial = fmt.Sprintf("%X", x509Cert.SerialNumber)
-	certInfo.NotAfter = x509Cert.NotAfter
+	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Certs[0].RawIssuer)
+	certInfo.Serial = fmt.Sprintf("%X", x509Certs[0].SerialNumber)
+	certInfo.NotAfter = x509Certs[0].NotAfter
 
 	log.WithFields(log.Fields{
 		"certType": module.certType,
@@ -339,95 +339,18 @@ func (module *SWModule) RemoveKey(keyURL, password string) (err error) {
  * Private
  ******************************************************************************/
 
-func pemToX509Cert(certPem []byte) (cert *x509.Certificate, err error) {
-	block, _ := pem.Decode(certPem)
-
-	if block == nil {
-		return nil, errors.New("invalid PEM Block")
-	}
-
-	if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-		return nil, errors.New("invalid PEM Block")
-	}
-
-	return x509.ParseCertificate(block.Bytes)
-}
-
-func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
-	pub, err := x509.MarshalPKIXPublicKey(publicKey)
-	if err != nil {
-		return err
-	}
-
-	if !bytes.Equal(pub, cert.RawSubjectPublicKeyInfo) {
-		return errors.New("certificate verification error")
-	}
-
-	return nil
-}
-
-func saveCert(storageDir string, cert []byte) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	if _, err = file.Write(cert); err != nil {
-		return "", err
-	}
-
-	return file.Name(), err
-}
-
-func saveKey(storageDir string, key *rsa.PrivateKey) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*"+keyExt)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	err = pem.Encode(file, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	if err != nil {
-		return "", err
-	}
-
-	return file.Name(), nil
-}
-
 func fileToURL(file string) (urlStr string) {
-	urlVal := url.URL{Scheme: "file", Path: file}
+	urlVal := url.URL{Scheme: cryptutils.SchemeFile, Path: file}
 
 	return urlVal.String()
 }
 
-func getCertByFileName(fileName string) (x509Cert *x509.Certificate, err error) {
-	certPem, err := ioutil.ReadFile(fileName)
+func createPEMFile(storageDir string) (fileName string, err error) {
+	file, err := ioutil.TempFile(storageDir, "*."+cryptutils.PEMExt)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
+	defer file.Close()
 
-	return pemToX509Cert(certPem)
-}
-
-func getKeyByFileName(fileName string) (key *rsa.PrivateKey, err error) {
-	pemKey, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	block, _ := pem.Decode(pemKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if block == nil {
-		return nil, errors.New("invalid PEM Block")
-	}
-
-	if block.Type != "RSA PRIVATE KEY" || len(block.Headers) != 0 {
-		return nil, errors.New("invalid PEM Block")
-	}
-
-	return x509.ParsePKCS1PrivateKey(block.Bytes)
+	return file.Name(), err
 }

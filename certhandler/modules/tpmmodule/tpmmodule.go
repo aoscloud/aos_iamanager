@@ -18,19 +18,12 @@
 package tpmmodule
 
 import (
-	"bytes"
-	"crypto"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/big"
 	"net/url"
 	"os"
 	"path"
@@ -39,6 +32,8 @@ import (
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/tpmkey"
 
 	"aos_iamanager/certhandler"
 )
@@ -48,10 +43,6 @@ import (
  ******************************************************************************/
 
 const tpmPermanentOwnerAuthSet = 0x00000001
-
-const (
-	crtExt = ".crt"
-)
 
 const maxPendingKeys = 16
 
@@ -70,32 +61,12 @@ type TPMModule struct {
 	device        io.ReadWriteCloser
 	primaryHandle tpmutil.Handle
 
-	pendingKeys []*key
+	pendingKeys []tpmkey.TPMKey
 }
 
 type moduleConfig struct {
 	Device      string `json:"device"`
 	StoragePath string `json:"storagePath"`
-}
-
-type key struct {
-	device        io.ReadWriteCloser
-	primaryHandle tpmutil.Handle
-	publicKey     crypto.PublicKey
-	privateBlob   []byte
-	publicBlob    []byte
-	password      string
-}
-
-/*******************************************************************************
- * Types
- ******************************************************************************/
-
-var supportedHash = map[crypto.Hash]tpm2.Algorithm{
-	crypto.SHA1:   tpm2.AlgSHA1,
-	crypto.SHA256: tpm2.AlgSHA256,
-	crypto.SHA384: tpm2.AlgSHA384,
-	crypto.SHA512: tpm2.AlgSHA512,
 }
 
 /*******************************************************************************
@@ -171,17 +142,15 @@ func (module *TPMModule) ValidateCertificates() (
 		return nil, nil, nil, err
 	}
 
-	keyMap := make(map[string]crypto.PublicKey)
+	keyMap := make(map[string]tpmkey.TPMKey)
 
 	for _, handle := range handles {
-		keyURL := handleToURL(handle)
-
-		publicKey, err := module.getPublicKeyByURL(keyURL)
+		key, err := tpmkey.CreateFromPersistent(module.device, handle)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		keyMap[keyURL] = publicKey
+		keyMap[handleToURL(handle)] = key
 	}
 
 	content, err := ioutil.ReadDir(module.config.StoragePath)
@@ -204,30 +173,26 @@ func (module *TPMModule) ValidateCertificates() (
 			continue
 		}
 
-		x509Cert, err := getCertByFileName(absItemPath)
+		x509Certs, err := cryptutils.LoadCertificate(absItemPath)
 		if err != nil {
-			if _, ok := keyMap[absItemPath]; !ok {
-				log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
+			log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
 
-				invalidCerts = append(invalidCerts, fileToURL(absItemPath))
-			}
+			invalidCerts = append(invalidCerts, fileToURL(absItemPath))
 
 			continue
 		}
 
 		keyFound := false
 
-		for keyURL, publicKey := range keyMap {
-			if checkCert(x509Cert, publicKey) == nil {
+		for keyURL, key := range keyMap {
+			if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
 				validInfos = append(validInfos, certhandler.CertInfo{
 					CertURL:  fileToURL(absItemPath),
 					KeyURL:   keyURL,
-					Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-					Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
-					NotAfter: x509Cert.NotAfter,
+					Issuer:   base64.StdEncoding.EncodeToString(x509Certs[0].RawIssuer),
+					Serial:   fmt.Sprintf("%X", x509Certs[0].SerialNumber),
+					NotAfter: x509Certs[0].NotAfter,
 				})
-
-				delete(keyMap, keyURL)
 
 				keyFound = true
 
@@ -331,15 +296,15 @@ func (module *TPMModule) CreateKey(password string) (key interface{}, err error)
 func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
-	x509Cert, err := pemToX509Cert(cert)
+	x509Certs, err := cryptutils.PEMToX509Cert(cert)
 	if err != nil {
 		return certhandler.CertInfo{}, "", nil
 	}
 
-	var currentKey *key
+	var currentKey tpmkey.TPMKey
 
 	for i, key := range module.pendingKeys {
-		if err = checkCert(x509Cert, key.Public()); err == nil {
+		if err = cryptutils.CheckCertificate(x509Certs[0], key); err == nil {
 			currentKey = key
 			module.pendingKeys = append(module.pendingKeys[:i], module.pendingKeys[i+1:]...)
 
@@ -351,8 +316,12 @@ func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cer
 		return certhandler.CertInfo{}, "", errors.New("no key found")
 	}
 
-	certFileName, err := saveCert(module.config.StoragePath, cert)
+	certFileName, err := createPEMFile(module.config.StoragePath)
 	if err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
+
+	if err = cryptutils.SaveCertificate(certFileName, x509Certs); err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
 
@@ -361,15 +330,15 @@ func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cer
 		return certhandler.CertInfo{}, "", err
 	}
 
-	if err = currentKey.makePersistent(persistentHandle); err != nil {
+	if err = currentKey.MakePersistent(persistentHandle); err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
 
 	certInfo.CertURL = fileToURL(certFileName)
 	certInfo.KeyURL = handleToURL(persistentHandle)
-	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Cert.RawIssuer)
-	certInfo.Serial = fmt.Sprintf("%X", x509Cert.SerialNumber)
-	certInfo.NotAfter = x509Cert.NotAfter
+	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Certs[0].RawIssuer)
+	certInfo.Serial = fmt.Sprintf("%X", x509Certs[0].SerialNumber)
+	certInfo.NotAfter = x509Certs[0].NotAfter
 
 	log.WithFields(log.Fields{
 		"certType": module.certType,
@@ -378,7 +347,7 @@ func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cer
 		"notAfter": certInfo.NotAfter,
 	}).Debug("Certificate applied")
 
-	return certInfo, currentKey.password, nil
+	return certInfo, currentKey.Password(), nil
 }
 
 // RemoveCertificate removes certificate
@@ -472,14 +441,12 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 	return handle, nil
 }
 
-func (module *TPMModule) newKey(password string) (k *key, err error) {
+func (module *TPMModule) newKey(password string) (key tpmkey.TPMKey, err error) {
 	if module.primaryHandle == 0 {
 		if module.primaryHandle, err = createPrimaryKey(module.device, password); err != nil {
 			return nil, err
 		}
 	}
-
-	k = &key{device: module.device, password: password, primaryHandle: module.primaryHandle}
 
 	keyTemplate := tpm2.Public{
 		Type:    tpm2.AlgRSA,
@@ -491,136 +458,13 @@ func (module *TPMModule) newKey(password string) (k *key, err error) {
 		},
 	}
 
-	if k.privateBlob, k.publicBlob, _, _, _, err = tpm2.CreateKey(module.device, k.primaryHandle,
-		tpm2.PCRSelection{}, k.password, "", keyTemplate); err != nil {
-		return nil, err
-	}
-
-	tpmPublic, err := tpm2.DecodePublic(k.publicBlob)
+	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKey(module.device, module.primaryHandle,
+		tpm2.PCRSelection{}, password, "", keyTemplate)
 	if err != nil {
 		return nil, err
 	}
 
-	if k.publicKey, err = tpmPublic.Key(); err != nil {
-		return nil, err
-	}
-
-	return k, nil
-}
-
-func (k *key) makePersistent(persistentHandle tpmutil.Handle) (err error) {
-	keyHandle, _, err := tpm2.Load(k.device, k.primaryHandle, k.password, k.publicBlob, k.privateBlob)
-	if err != nil {
-		return err
-	}
-	defer tpm2.FlushContext(k.device, keyHandle)
-
-	// Clear slot
-	tpm2.EvictControl(k.device, k.password, tpm2.HandleOwner, persistentHandle, persistentHandle)
-
-	if err = tpm2.EvictControl(k.device, k.password, tpm2.HandleOwner, keyHandle, persistentHandle); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (k *key) Public() crypto.PublicKey {
-	return k.publicKey
-}
-
-func (k *key) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
-	alg := tpm2.AlgRSASSA
-
-	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		if pssOpts.SaltLength != rsa.PSSSaltLengthAuto {
-			return nil, fmt.Errorf("salt length must be rsa.PSSSaltLengthAuto")
-		}
-
-		alg = tpm2.AlgRSAPSS
-	}
-
-	tpmHash, ok := supportedHash[opts.HashFunc()]
-	if !ok {
-		return nil, fmt.Errorf("unsupported hash algorithm: %v", opts.HashFunc())
-	}
-
-	if len(digest) != opts.HashFunc().Size() {
-		return nil, fmt.Errorf("wrong digest length: got %d, want %d", digest, opts.HashFunc().Size())
-	}
-
-	scheme := &tpm2.SigScheme{
-		Alg:  alg,
-		Hash: tpmHash,
-	}
-
-	keyHandle, _, err := tpm2.Load(k.device, k.primaryHandle, k.password, k.publicBlob, k.privateBlob)
-	if err != nil {
-		return nil, err
-	}
-	defer tpm2.FlushContext(k.device, keyHandle)
-
-	sig, err := tpm2.Sign(k.device, keyHandle, "", digest, nil, scheme)
-	if err != nil {
-		return nil, err
-	}
-
-	switch sig.Alg {
-	case tpm2.AlgRSASSA:
-		return sig.RSA.Signature, nil
-
-	case tpm2.AlgRSAPSS:
-		return sig.RSA.Signature, nil
-
-	case tpm2.AlgECDSA:
-		sigStruct := struct{ R, S *big.Int }{sig.ECC.R, sig.ECC.S}
-
-		return asn1.Marshal(sigStruct)
-
-	default:
-		return nil, errors.New("unsupported signing algorithm")
-	}
-}
-
-func pemToX509Cert(certPem []byte) (cert *x509.Certificate, err error) {
-	block, _ := pem.Decode(certPem)
-
-	if block == nil {
-		return nil, errors.New("invalid PEM Block")
-	}
-
-	if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-		return nil, errors.New("invalid PEM Block")
-	}
-
-	return x509.ParseCertificate(block.Bytes)
-}
-
-func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
-	pub, err := x509.MarshalPKIXPublicKey(publicKey)
-	if err != nil {
-		return err
-	}
-
-	if !bytes.Equal(pub, cert.RawSubjectPublicKeyInfo) {
-		return errors.New("certificate verification error")
-	}
-
-	return nil
-}
-
-func saveCert(storageDir string, cert []byte) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	if _, err = file.Write(cert); err != nil {
-		return "", err
-	}
-
-	return file.Name(), err
+	return tpmkey.CreateFromBlobs(module.device, module.primaryHandle, password, privateBlob, publicBlob)
 }
 
 func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err error) {
@@ -676,65 +520,16 @@ func (module *TPMModule) flushTransientHandles() (err error) {
 	return nil
 }
 
-func getCertFiles(storagePath string) (files []string, err error) {
-	content, err := ioutil.ReadDir(storagePath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, item := range content {
-		if item.IsDir() {
-			continue
-		}
-
-		files = append(files, path.Join(storagePath, item.Name()))
-	}
-
-	return files, nil
-}
-
 func fileToURL(file string) (urlStr string) {
-	urlVal := url.URL{Scheme: "file", Path: file}
+	urlVal := url.URL{Scheme: cryptutils.SchemeFile, Path: file}
 
 	return urlVal.String()
 }
 
 func handleToURL(handle tpmutil.Handle) (urlStr string) {
-	urlVal := url.URL{Scheme: "tpm", Host: fmt.Sprintf("0x%X", handle)}
+	urlVal := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
 
 	return urlVal.String()
-}
-
-func getCertByFileName(fileName string) (x509Cert *x509.Certificate, err error) {
-	certPem, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	return pemToX509Cert(certPem)
-}
-
-func (module *TPMModule) getPublicKeyByURL(urlStr string) (publicKey crypto.PublicKey, err error) {
-	urlVal, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-
-	handle, err := strconv.ParseUint(urlVal.Hostname(), 0, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	pubData, _, _, err := tpm2.ReadPublic(module.device, tpmutil.Handle(handle))
-	if err != nil {
-		return nil, err
-	}
-
-	if publicKey, err = pubData.Key(); err != nil {
-		return nil, err
-	}
-
-	return publicKey, nil
 }
 
 func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err error) {
@@ -754,4 +549,14 @@ func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err e
 	}
 
 	return handles, nil
+}
+
+func createPEMFile(storageDir string) (fileName string, err error) {
+	file, err := ioutil.TempFile(storageDir, "*."+cryptutils.PEMExt)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	return file.Name(), err
 }
