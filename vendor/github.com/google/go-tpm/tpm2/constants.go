@@ -28,11 +28,17 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 )
 
-var hashMapping = map[Algorithm]crypto.Hash{
-	AlgSHA1:   crypto.SHA1,
-	AlgSHA256: crypto.SHA256,
-	AlgSHA384: crypto.SHA384,
-	AlgSHA512: crypto.SHA512,
+var hashInfo = []struct {
+	alg  Algorithm
+	hash crypto.Hash
+}{
+	{AlgSHA1, crypto.SHA1},
+	{AlgSHA256, crypto.SHA256},
+	{AlgSHA384, crypto.SHA384},
+	{AlgSHA512, crypto.SHA512},
+	{AlgSHA3_256, crypto.SHA3_256},
+	{AlgSHA3_384, crypto.SHA3_384},
+	{AlgSHA3_512, crypto.SHA3_512},
 }
 
 // MAX_DIGEST_BUFFER is the maximum size of []byte request or response fields.
@@ -42,6 +48,16 @@ const maxDigestBuffer = 1024
 
 // Algorithm represents a TPM_ALG_ID value.
 type Algorithm uint16
+
+// HashToAlgorithm looks up the TPM2 algorithm corresponding to the provided crypto.Hash
+func HashToAlgorithm(hash crypto.Hash) (Algorithm, error) {
+	for _, info := range hashInfo {
+		if info.hash == hash {
+			return info.alg, nil
+		}
+	}
+	return AlgUnknown, fmt.Errorf("go hash algorithm #%d has no TPM2 algorithm", hash)
+}
 
 // IsNull returns true if a is AlgNull or zero (unset).
 func (a Algorithm) IsNull() bool {
@@ -61,14 +77,15 @@ func (a Algorithm) UsesHash() bool {
 // Hash returns a crypto.Hash based on the given TPM_ALG_ID.
 // An error is returned if the given algorithm is not a hash algorithm or is not available.
 func (a Algorithm) Hash() (crypto.Hash, error) {
-	hash, ok := hashMapping[a]
-	if !ok {
-		return crypto.Hash(0), fmt.Errorf("hash algorithm not supported: 0x%x", a)
+	for _, info := range hashInfo {
+		if info.alg == a {
+			if !info.hash.Available() {
+				return crypto.Hash(0), fmt.Errorf("go hash algorithm #%d not available", info.hash)
+			}
+			return info.hash, nil
+		}
 	}
-	if !hash.Available() {
-		return crypto.Hash(0), fmt.Errorf("go hash algorithm #%d not available", hash)
-	}
-	return hash, nil
+	return crypto.Hash(0), fmt.Errorf("hash algorithm not supported: 0x%x", a)
 }
 
 // Supported Algorithms.
@@ -94,6 +111,9 @@ const (
 	AlgKDF2      Algorithm = 0x0021
 	AlgECC       Algorithm = 0x0023
 	AlgSymCipher Algorithm = 0x0025
+	AlgSHA3_256  Algorithm = 0x0027
+	AlgSHA3_384  Algorithm = 0x0028
+	AlgSHA3_512  Algorithm = 0x0029
 	AlgCTR       Algorithm = 0x0040
 	AlgOFB       Algorithm = 0x0041
 	AlgCBC       Algorithm = 0x0042
@@ -361,6 +381,7 @@ const (
 	CmdDictionaryAttackLockReset  tpmutil.Command = 0x00000139
 	CmdDictionaryAttackParameters tpmutil.Command = 0x0000013A
 	CmdPCREvent                   tpmutil.Command = 0x0000013C
+	CmdSequenceComplete           tpmutil.Command = 0x0000013E
 	CmdStartup                    tpmutil.Command = 0x00000144
 	CmdShutdown                   tpmutil.Command = 0x00000145
 	CmdActivateCredential         tpmutil.Command = 0x00000147
@@ -375,6 +396,7 @@ const (
 	CmdLoad                       tpmutil.Command = 0x00000157
 	CmdQuote                      tpmutil.Command = 0x00000158
 	CmdRSADecrypt                 tpmutil.Command = 0x00000159
+	CmdSequenceUpdate             tpmutil.Command = 0x0000015C
 	CmdSign                       tpmutil.Command = 0x0000015D
 	CmdUnseal                     tpmutil.Command = 0x0000015E
 	CmdContextLoad                tpmutil.Command = 0x00000161
@@ -397,6 +419,8 @@ const (
 	CmdPolicyPCR                  tpmutil.Command = 0x0000017F
 	CmdReadClock                  tpmutil.Command = 0x00000181
 	CmdPCRExtend                  tpmutil.Command = 0x00000182
+	CmdEventSequenceComplete      tpmutil.Command = 0x00000185
+	CmdHashSequenceStart          tpmutil.Command = 0x00000186
 	CmdPolicyGetDigest            tpmutil.Command = 0x00000189
 	CmdPolicyPassword             tpmutil.Command = 0x0000018C
 	CmdEncryptDecrypt2            tpmutil.Command = 0x00000193
