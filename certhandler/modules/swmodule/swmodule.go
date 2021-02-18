@@ -18,6 +18,8 @@
 package swmodule
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -28,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
@@ -54,7 +57,7 @@ type SWModule struct {
 	certType string
 	config   moduleConfig
 
-	pendingKeys []*rsa.PrivateKey
+	pendingKeys []interface{}
 }
 
 type moduleConfig struct {
@@ -62,8 +65,10 @@ type moduleConfig struct {
 }
 
 /*******************************************************************************
- * Variables
+ * Vars
  ******************************************************************************/
+
+var ecsdaCurveID = elliptic.P384()
 
 /*******************************************************************************
  * Public
@@ -222,23 +227,33 @@ func (module *SWModule) ValidateCertificates() (
 }
 
 // CreateKey creates key pair
-func (module *SWModule) CreateKey(password string) (key interface{}, err error) {
+func (module *SWModule) CreateKey(password, algorithm string) (key interface{}, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
-	newKey, err := rsa.GenerateKey(rand.Reader, rsaKeyLength)
-	if err != nil {
-		return nil, err
+	switch strings.ToLower(algorithm) {
+	case cryptutils.AlgRSA:
+		if key, err = rsa.GenerateKey(rand.Reader, rsaKeyLength); err != nil {
+			return nil, err
+		}
+
+	case cryptutils.AlgECC:
+		if key, err = ecdsa.GenerateKey(ecsdaCurveID, rand.Reader); err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
 	if len(module.pendingKeys) < maxPendingKeys {
-		module.pendingKeys = append(module.pendingKeys, newKey)
+		module.pendingKeys = append(module.pendingKeys, key)
 	} else {
 		log.WithFields(log.Fields{"certType": module.certType}).Warn("Max pending keys reached. Remove old one")
 
-		module.pendingKeys[0] = newKey
+		module.pendingKeys[0] = key
 	}
 
-	return newKey, nil
+	return key, nil
 }
 
 // ApplyCertificate applies certificate
@@ -250,7 +265,7 @@ func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cert
 		return certhandler.CertInfo{}, "", err
 	}
 
-	var currentKey *rsa.PrivateKey
+	var currentKey interface{}
 
 	for i, key := range module.pendingKeys {
 		if err = cryptutils.CheckCertificate(x509Certs[0], key); err == nil {

@@ -94,7 +94,7 @@ type CertModule interface {
 	ValidateCertificates() (validInfos []CertInfo, invalidCerts, invalidKeys []string, err error)
 	SetOwner(password string) (err error)
 	Clear() (err error)
-	CreateKey(password string) (key interface{}, err error)
+	CreateKey(password, algorithm string) (key interface{}, err error)
 	ApplyCertificate(cert []byte) (certInfo CertInfo, password string, err error)
 	RemoveCertificate(certURL, password string) (err error)
 	RemoveKey(certURL, password string) (err error)
@@ -224,7 +224,7 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 
 	descriptor.invalidKeys = nil
 
-	key, err := descriptor.module.CreateKey(password)
+	key, err := descriptor.module.CreateKey(password, descriptor.config.Algorithm)
 	if err != nil {
 		return nil, err
 	}
@@ -398,6 +398,10 @@ func (handler *Handler) createModule(cfg config.ModuleConfig) (descriptor module
 	}
 
 	descriptor.config = cfg
+
+	if descriptor.config.Algorithm == "" {
+		descriptor.config.Algorithm = cryptutils.AlgRSA
+	}
 
 	return descriptor, nil
 }

@@ -28,6 +28,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -48,6 +49,7 @@ const maxPendingKeys = 16
 
 const (
 	rsaKeyLength = 2048
+	ecsdaCurveID = tpm2.CurveNISTP384
 )
 
 /*******************************************************************************
@@ -273,10 +275,10 @@ func (module *TPMModule) Clear() (err error) {
 }
 
 // CreateKey creates key pair
-func (module *TPMModule) CreateKey(password string) (key interface{}, err error) {
+func (module *TPMModule) CreateKey(password, algorithm string) (key interface{}, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
-	newKey, err := module.newKey(password)
+	newKey, err := module.newKey(password, algorithm)
 	if err != nil {
 		return "", err
 	}
@@ -441,21 +443,40 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 	return handle, nil
 }
 
-func (module *TPMModule) newKey(password string) (key tpmkey.TPMKey, err error) {
+func (module *TPMModule) newKey(password, algorithm string) (key tpmkey.TPMKey, err error) {
 	if module.primaryHandle == 0 {
 		if module.primaryHandle, err = createPrimaryKey(module.device, password); err != nil {
 			return nil, err
 		}
 	}
 
-	keyTemplate := tpm2.Public{
-		Type:    tpm2.AlgRSA,
-		NameAlg: tpm2.AlgSHA256,
-		Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin |
-			tpm2.FlagUserWithAuth | tpm2.FlagDecrypt | tpm2.FlagSign,
-		RSAParameters: &tpm2.RSAParams{
-			KeyBits: rsaKeyLength,
-		},
+	var keyTemplate tpm2.Public
+
+	switch strings.ToLower(algorithm) {
+	case cryptutils.AlgRSA:
+		keyTemplate = tpm2.Public{
+			Type:    tpm2.AlgRSA,
+			NameAlg: tpm2.AlgSHA256,
+			Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin |
+				tpm2.FlagUserWithAuth | tpm2.FlagDecrypt | tpm2.FlagSign,
+			RSAParameters: &tpm2.RSAParams{
+				KeyBits: rsaKeyLength,
+			},
+		}
+
+	case cryptutils.AlgECC:
+		keyTemplate = tpm2.Public{
+			Type:    tpm2.AlgECC,
+			NameAlg: tpm2.AlgSHA256,
+			Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin |
+				tpm2.FlagUserWithAuth | tpm2.FlagDecrypt | tpm2.FlagSign,
+			ECCParameters: &tpm2.ECCParams{
+				CurveID: ecsdaCurveID,
+			},
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
 	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKey(module.device, module.primaryHandle,

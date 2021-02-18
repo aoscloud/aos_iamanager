@@ -427,7 +427,7 @@ func (module *testModule) Clear() (err error) {
 	return nil
 }
 
-func (module *testModule) CreateKey(password string) (key interface{}, err error) {
+func (module *testModule) CreateKey(password, algorithm string) (key interface{}, err error) {
 	if module.data.key, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
 		return nil, err
 	}

@@ -91,6 +91,10 @@ func TestModules(t *testing.T) {
 		t.Error("Wrong plugin value")
 	}
 
+	if cfg.CertModules[0].Algorithm != "rsa" || cfg.CertModules[1].Algorithm != "ecc" || cfg.CertModules[2].Algorithm != "rsa" {
+		t.Error("Wrong plugin value")
+	}
+
 	if cfg.CertModules[0].MaxItems != 1 || cfg.CertModules[1].MaxItems != 2 || cfg.CertModules[2].MaxItems != 3 {
 		t.Error("Wrong max items value")
 	}
@@ -184,6 +188,7 @@ func setup() (err error) {
 		"CertModules":[{
 			"ID": "id1",
 			"Plugin": "test1",
+			"Algorithm": "rsa",
 			"MaxItems": 1,
 			"ExtendedKeyUsage": ["clientAuth"],
 			"AlternativeNames": ["host1"],
@@ -194,6 +199,7 @@ func setup() (err error) {
 		}, {
 			"ID": "id2",
 			"Plugin": "test2",
+			"Algorithm": "ecc",
 			"MaxItems": 2,
 			"ExtendedKeyUsage": ["serverAuth"],
 			"AlternativeNames": ["host2"],
@@ -204,6 +210,7 @@ func setup() (err error) {
 		}, {
 			"ID": "id3",
 			"Plugin": "test3",
+			"Algorithm": "rsa",
 			"MaxItems": 3,
 			"ExtendedKeyUsage": ["clientAuth", "serverAuth"],
 			"AlternativeNames": ["host3"],

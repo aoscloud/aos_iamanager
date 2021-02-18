@@ -45,6 +45,7 @@ type Config struct {
 type ModuleConfig struct {
 	ID               string          `json:"id"`
 	Plugin           string          `json:"plugin"`
+	Algorithm        string          `json:"algorithm"`
 	MaxItems         int             `json:"maxItems"`
 	ExtendedKeyUsage []string        `json:"extendedKeyUsage"`
 	AlternativeNames []string        `json:"alternativeNames"`
