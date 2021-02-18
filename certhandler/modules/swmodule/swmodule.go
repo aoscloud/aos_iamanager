@@ -250,20 +250,10 @@ func (module *SWModule) CreateKey(password string) (key interface{}, err error) 
 }
 
 // ApplyCertificate applies certificate
-func (module *SWModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
-	block, _ := pem.Decode([]byte(cert))
-
-	if block == nil {
-		return certhandler.CertInfo{}, "", errors.New("invalid PEM Block")
-	}
-
-	if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-		return certhandler.CertInfo{}, "", errors.New("invalid PEM Block")
-	}
-
-	x509Cert, err := x509.ParseCertificate(block.Bytes)
+	x509Cert, err := pemToX509Cert(cert)
 	if err != nil {
 		return certhandler.CertInfo{}, "", err
 	}
@@ -349,8 +339,8 @@ func (module *SWModule) RemoveKey(keyURL, password string) (err error) {
  * Private
  ******************************************************************************/
 
-func pemToX509Cert(certPem string) (cert *x509.Certificate, err error) {
-	block, _ := pem.Decode([]byte(certPem))
+func pemToX509Cert(certPem []byte) (cert *x509.Certificate, err error) {
+	block, _ := pem.Decode(certPem)
 
 	if block == nil {
 		return nil, errors.New("invalid PEM Block")
@@ -376,14 +366,14 @@ func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
 	return nil
 }
 
-func saveCert(storageDir string, cert string) (fileName string, err error) {
+func saveCert(storageDir string, cert []byte) (fileName string, err error) {
 	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	if _, err = file.WriteString(cert); err != nil {
+	if _, err = file.Write(cert); err != nil {
 		return "", err
 	}
 
@@ -417,7 +407,7 @@ func getCertByFileName(fileName string) (x509Cert *x509.Certificate, err error) 
 		return nil, err
 	}
 
-	return pemToX509Cert(string(certPem))
+	return pemToX509Cert(certPem)
 }
 
 func getKeyByFileName(fileName string) (key *rsa.PrivateKey, err error) {

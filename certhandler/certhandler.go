@@ -96,7 +96,7 @@ type CertModule interface {
 	SetOwner(password string) (err error)
 	Clear() (err error)
 	CreateKey(password string) (key interface{}, err error)
-	ApplyCertificate(cert string) (certInfo CertInfo, password string, err error)
+	ApplyCertificate(cert []byte) (certInfo CertInfo, password string, err error)
 	RemoveCertificate(certURL, password string) (err error)
 	RemoveKey(certURL, password string) (err error)
 	Close() (err error)
@@ -239,7 +239,7 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 }
 
 // ApplyCertificate applies certificate
-func (handler *Handler) ApplyCertificate(certType string, cert string) (certURL string, err error) {
+func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 

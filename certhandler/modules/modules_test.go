@@ -566,7 +566,7 @@ func createTpmModule(storagePath string, doReset bool) (module certhandler.CertM
 	return tpmmodule.New("test", config, tpmSimulator)
 }
 
-func generateCertificate(csr []byte) (cert string, err error) {
+func generateCertificate(csr []byte) (cert []byte, err error) {
 	caCert :=
 		`-----BEGIN CERTIFICATE-----
 MIIDYTCCAkmgAwIBAgIUefLO+XArcR2jeqrgGqQlTM20N/swDQYJKoZIhvcNAQEL
@@ -659,39 +659,39 @@ IP.1 = 127.0.0.1`
 	unitCertFile := path.Join(tmpDir, "unit.der")
 
 	if err = ioutil.WriteFile(csrFile, []byte(csr), 0644); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if err = ioutil.WriteFile(caCertFile, []byte(caCert), 0644); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if err = ioutil.WriteFile(caKeyFile, []byte(caKey), 0644); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if err = ioutil.WriteFile(csrConfFile, []byte(csrConf), 0644); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var out []byte
 
 	if out, err = exec.Command("openssl", "req", "-inform", "PEM", "-in", csrFile, "-out", csrFile+".pem").CombinedOutput(); err != nil {
-		return "", fmt.Errorf("message: %s, %s", string(out), err)
+		return nil, fmt.Errorf("message: %s, %s", string(out), err)
 	}
 
 	if out, err = exec.Command("openssl", "x509", "-req", "-in", csrFile+".pem",
 		"-CA", caCertFile, "-CAkey", caKeyFile, "-extfile", csrConfFile, "-extensions", "ext",
 		"-outform", "PEM", "-out", unitCertFile, "-CAcreateserial", "-days", "3650").CombinedOutput(); err != nil {
-		return "", fmt.Errorf("message: %s, %s", string(out), err)
+		return nil, fmt.Errorf("message: %s, %s", string(out), err)
 	}
 
 	certData, err := ioutil.ReadFile(unitCertFile)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(certData), nil
+	return certData, nil
 }
 
 func getKey(filePath string) (key *rsa.PrivateKey, err error) {

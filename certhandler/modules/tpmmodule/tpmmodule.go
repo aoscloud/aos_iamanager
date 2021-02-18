@@ -328,7 +328,7 @@ func (module *TPMModule) CreateKey(password string) (key interface{}, err error)
 }
 
 // ApplyCertificate applies certificate
-func (module *TPMModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
 	x509Cert, err := pemToX509Cert(cert)
@@ -582,8 +582,8 @@ func (k *key) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signatur
 	}
 }
 
-func pemToX509Cert(certPem string) (cert *x509.Certificate, err error) {
-	block, _ := pem.Decode([]byte(certPem))
+func pemToX509Cert(certPem []byte) (cert *x509.Certificate, err error) {
+	block, _ := pem.Decode(certPem)
 
 	if block == nil {
 		return nil, errors.New("invalid PEM Block")
@@ -609,14 +609,14 @@ func checkCert(cert *x509.Certificate, publicKey crypto.PublicKey) (err error) {
 	return nil
 }
 
-func saveCert(storageDir string, cert string) (fileName string, err error) {
+func saveCert(storageDir string, cert []byte) (fileName string, err error) {
 	file, err := ioutil.TempFile(storageDir, "*"+crtExt)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	if _, err = file.WriteString(cert); err != nil {
+	if _, err = file.Write(cert); err != nil {
 		return "", err
 	}
 
@@ -711,7 +711,7 @@ func getCertByFileName(fileName string) (x509Cert *x509.Certificate, err error) 
 		return nil, err
 	}
 
-	return pemToX509Cert(string(certPem))
+	return pemToX509Cert(certPem)
 }
 
 func (module *TPMModule) getPublicKeyByURL(urlStr string) (publicKey crypto.PublicKey, err error) {

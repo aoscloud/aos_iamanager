@@ -67,7 +67,7 @@ type CertHandler interface {
 	SetOwner(certType, password string) (err error)
 	Clear(certType string) (err error)
 	CreateKey(certType, password string) (csr []byte, err error)
-	ApplyCertificate(certType string, cert string) (certURL string, err error)
+	ApplyCertificate(certType string, cert []byte) (certURL string, err error)
 	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
 }
 
@@ -230,7 +230,7 @@ func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertReq) (
 
 	log.WithField("type", req.Type).Debug("Process apply cert request")
 
-	if rsp.CertUrl, err = server.certHandler.ApplyCertificate(req.Type, req.Cert); err != nil {
+	if rsp.CertUrl, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert)); err != nil {
 		return rsp, err
 	}
 

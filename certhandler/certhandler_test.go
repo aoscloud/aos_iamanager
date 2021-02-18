@@ -270,7 +270,7 @@ func TestApplyCertificate(t *testing.T) {
 		KeyURL:  "keyURL",
 	}
 
-	certURL, err := handler.ApplyCertificate("cert1", "this is certificate")
+	certURL, err := handler.ApplyCertificate("cert1", []byte("this is certificate"))
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %s", err)
 	}
@@ -344,7 +344,7 @@ func TestMaxItems(t *testing.T) {
 			NotAfter: time.Now(),
 		}
 
-		if _, err = handler.ApplyCertificate("cert1", "this is certificate"); err != nil {
+		if _, err = handler.ApplyCertificate("cert1", []byte("this is certificate")); err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
@@ -435,7 +435,7 @@ func (module *testModule) CreateKey(password string) (key interface{}, err error
 	return module.data.key, nil
 }
 
-func (module *testModule) ApplyCertificate(cert string) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *testModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
 	return module.data.certInfo, "", nil
 }
 

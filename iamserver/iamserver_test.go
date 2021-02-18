@@ -490,7 +490,7 @@ func (handler *testCertHandler) CreateKey(certType, password string) (csr []byte
 	return handler.csr, handler.err
 }
 
-func (handler *testCertHandler) ApplyCertificate(certType string, cert string) (certURL string, err error) {
+func (handler *testCertHandler) ApplyCertificate(certType string, cert []byte) (certURL string, err error) {
 	return handler.certURL, handler.err
 }
 
