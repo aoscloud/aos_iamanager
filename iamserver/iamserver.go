@@ -107,7 +107,7 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 	var opts []grpc.ServerOption
 
 	if insecure == false {
-		tlsConfig, err := cryptutils.GetServerTLSConfig(cfg.CACert, cfg.CertStorage)
+		tlsConfig, err := cryptutils.GetServerMutualTLSConfig(cfg.CACert, cfg.CertStorage)
 		if err != nil {
 			log.Errorf("Can't get TLS config: %s", err)
 		} else {
