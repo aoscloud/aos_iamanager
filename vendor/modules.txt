@@ -30,7 +30,7 @@ github.com/mattn/go-sqlite3
 # github.com/sirupsen/logrus v1.7.0
 ## explicit
 github.com/sirupsen/logrus
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210219143607-3d89a40326f0
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210309145032-e209a86370e0
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
 gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils
