@@ -53,8 +53,11 @@ type Server struct {
 
 	identHandler              IdentHandler
 	certHandler               CertHandler
+	permissionHandler         PermissionHandler
 	listener                  net.Listener
+	listenerPublic            net.Listener
 	grpcServer                *grpc.Server
+	grpcServerPublic          *grpc.Server
 	usersChangedStreams       []pb.IAManager_SubscribeUsersChangedServer
 	closeChannel              chan struct{}
 	streamsWg                 sync.WaitGroup
@@ -80,17 +83,23 @@ type IdentHandler interface {
 	UsersChangedChannel() (channel <-chan []string)
 }
 
+// PermissionHandler interface
+type PermissionHandler interface {
+	RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error)
+	UnregisterService(serviceID string)
+	GetPermissions(secret, funcServerId string) (permissions map[string]string, err error)
+}
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // New creates new IAM server instance
-func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler, insecure bool) (server *Server, err error) {
-	log.WithField("url", cfg.ServerURL).Debug("Create IAM server")
-
+func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler, permissionHandler PermissionHandler, insecure bool) (server *Server, err error) {
 	server = &Server{
 		identHandler:              identHandler,
 		certHandler:               certHandler,
+		permissionHandler:         permissionHandler,
 		closeChannel:              make(chan struct{}, 1),
 		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs}
 
@@ -100,28 +109,13 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		}
 	}()
 
-	if server.listener, err = net.Listen("tcp", cfg.ServerURL); err != nil {
+	if err := server.createServerProtected(cfg, insecure); err != nil {
 		return server, err
 	}
 
-	var opts []grpc.ServerOption
-
-	if insecure == false {
-		tlsConfig, err := cryptutils.GetServerMutualTLSConfig(cfg.CACert, cfg.CertStorage)
-		if err != nil {
-			log.Errorf("Can't get TLS config: %s", err)
-		} else {
-			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
-		}
-	} else {
-		log.Warnf("IAM server uses insecure connection")
+	if err := server.createServerPublic(cfg, insecure); err != nil {
+		return server, err
 	}
-
-	server.grpcServer = grpc.NewServer(opts...)
-
-	pb.RegisterIAManagerServer(server.grpcServer, server)
-
-	go server.grpcServer.Serve(server.listener)
 
 	go server.handleUsersChanged()
 
@@ -130,23 +124,17 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 
 // Close closes IAM server instance
 func (server *Server) Close() (err error) {
-	log.Debug("Close IAM server")
-
-	if server.grpcServer != nil {
-		server.grpcServer.Stop()
-	}
-
-	if server.listener != nil {
-		if listenerErr := server.listener.Close(); listenerErr != nil {
-			if err == nil {
-				err = listenerErr
-			}
+	if errCloseServerProtected := server.closeServerProtected(); errCloseServerProtected != nil {
+		if err == nil {
+			err = errCloseServerProtected
 		}
 	}
 
-	server.closeChannel <- struct{}{}
-
-	server.streamsWg.Wait()
+	if errCloseServerPublic := server.closeServerPublic(); errCloseServerPublic != nil {
+		if err == nil {
+			err = errCloseServerPublic
+		}
+	}
 
 	return err
 }
@@ -323,9 +311,156 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty, stream pb.IAMa
 	return nil
 }
 
+// RegisterService registers new service and creates secret
+func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServiceReq) (rsp *pb.RegisterServiceRsp, err error) {
+	rsp = &pb.RegisterServiceRsp{}
+
+	log.WithField("serviceID", req.ServiceId).Debug("Process register service")
+
+	permissions := make(map[string]map[string]string)
+	for key, value := range req.Permissions {
+		permissions[key] = value.Permissions
+	}
+
+	secret, err := server.permissionHandler.RegisterService(req.ServiceId, permissions)
+	if err != nil {
+		return rsp, err
+	}
+
+	rsp.Secret = secret
+
+	return rsp, nil
+}
+
+// UnregisterService unregisters service
+func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterServiceReq) (rsp *empty.Empty, err error) {
+	rsp = &empty.Empty{}
+
+	log.WithField("serviceID", req.ServiceId).Debug("Process unregister service")
+
+	server.permissionHandler.UnregisterService(req.ServiceId)
+
+	return rsp, nil
+}
+
+// GetPermissions returns permissions by secret and functional server ID
+func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissionsReq) (rsp *pb.Permissions, err error) {
+	rsp = &pb.Permissions{}
+
+	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")
+
+	perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
+	if err != nil {
+		return rsp, err
+	}
+
+	rsp.Permissions = perm
+
+	return rsp, nil
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (err error) {
+	log.WithField("url", cfg.ServerURL).Debug("Create IAM protected server")
+
+	if server.listener, err = net.Listen("tcp", cfg.ServerURL); err != nil {
+		return err
+	}
+
+	var opts []grpc.ServerOption
+
+	if insecure == false {
+		tlsConfig, err := cryptutils.GetServerMutualTLSConfig(cfg.CACert, cfg.CertStorage)
+		if err != nil {
+			log.Errorf("Can't get mTLS config: %s", err)
+		} else {
+			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		}
+	} else {
+		log.Warnf("IAM server uses insecure connection")
+	}
+
+	server.grpcServer = grpc.NewServer(opts...)
+
+	pb.RegisterIAManagerServer(server.grpcServer, server)
+	pb.RegisterIAManagerPublicServer(server.grpcServer, server)
+
+	go server.grpcServer.Serve(server.listener)
+
+	return nil
+}
+
+func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err error) {
+	log.WithField("url", cfg.ServerPublicURL).Debug("Create IAM public server")
+
+	if server.listenerPublic, err = net.Listen("tcp", cfg.ServerPublicURL); err != nil {
+		return err
+	}
+
+	var opts []grpc.ServerOption
+
+	if insecure == false {
+		tlsConfig, err := cryptutils.GetServerTLSConfig(cfg.CertStorage)
+		if err != nil {
+			log.Errorf("Can't get TLS config: %s", err)
+		} else {
+			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		}
+	} else {
+		log.Warnf("IAM public server uses insecure connection")
+	}
+
+	server.grpcServerPublic = grpc.NewServer(opts...)
+
+	pb.RegisterIAManagerPublicServer(server.grpcServerPublic, server)
+
+	go server.grpcServerPublic.Serve(server.listenerPublic)
+
+	return nil
+}
+
+func (server *Server) closeServerProtected() (err error) {
+	log.Debug("Close IAM protected server")
+
+	if server.grpcServer != nil {
+		server.grpcServer.Stop()
+	}
+
+	if server.listener != nil {
+		if listenerErr := server.listener.Close(); listenerErr != nil {
+			if err == nil {
+				err = listenerErr
+			}
+		}
+	}
+
+	server.closeChannel <- struct{}{}
+
+	server.streamsWg.Wait()
+
+	return err
+}
+
+func (server *Server) closeServerPublic() (err error) {
+	log.Debug("Close IAM public server")
+
+	if server.grpcServerPublic != nil {
+		server.grpcServerPublic.Stop()
+	}
+
+	if server.listenerPublic != nil {
+		if listenerErr := server.listenerPublic.Close(); listenerErr != nil {
+			if err == nil {
+				err = listenerErr
+			}
+		}
+	}
+
+	return err
+}
 
 func (server *Server) handleUsersChanged() {
 	for {
