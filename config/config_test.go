@@ -59,8 +59,12 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetCredentials(t *testing.T) {
-	if cfg.ServerURL != "localhost:8090" {
+	if cfg.ServerURL != "localhost:8089" {
 		t.Errorf("Wrong ServerURL value: %s", cfg.ServerURL)
+	}
+
+	if cfg.ServerPublicURL != "localhost:8090" {
+		t.Errorf("Wrong ServerURLPublic value: %s", cfg.ServerPublicURL)
 	}
 
 	if cfg.CACert != "/etc/ssl/certs/rootCA.crt" {
@@ -178,7 +182,8 @@ func setup() (err error) {
 	}
 
 	configContent := `{
-		"ServerUrl": "localhost:8090",
+		"ServerUrl": "localhost:8089",
+		"ServerPublicUrl": "localhost:8090",
 		"CACert": "/etc/ssl/certs/rootCA.crt",
 		"CertStorage": "/var/aos/crypt/iam/",
 		"WorkingDir": "/var/aos/iamanager",

@@ -30,6 +30,7 @@ import (
 // Config instance
 type Config struct {
 	ServerURL                 string         `json:"serverURL"`
+	ServerPublicURL           string         `json:"serverPublicURL"`
 	CACert                    string         `json:"caCert"`
 	CertStorage               string         `json:"certStorage"`
 	WorkingDir                string         `json:"workingDir"`
