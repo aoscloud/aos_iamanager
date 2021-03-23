@@ -33,21 +33,27 @@ import (
 
 	"aos_iamanager/config"
 	"aos_iamanager/iamserver"
+	"aos_iamanager/permhandler"
 )
 
 /*******************************************************************************
  * Consts
  ******************************************************************************/
 
-const serverURL = "localhost:8088"
+const (
+	serverURL       = "localhost:8088"
+	serverPublicURL = "localhost:8089"
+)
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
 type testClient struct {
-	connection *grpc.ClientConn
-	pbclient   pb.IAManagerClient
+	connection       *grpc.ClientConn
+	connectionPublic *grpc.ClientConn
+	pbclient         pb.IAManagerClient
+	pbclientPublic   pb.IAManagerPublicClient
 }
 
 type testCertHandler struct {
@@ -94,7 +100,7 @@ func init() {
 func TestGetCertTypes(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -132,7 +138,8 @@ func TestFinishProvisioning(t *testing.T) {
 
 	server, err := iamserver.New(&config.Config{
 		ServerURL:                 serverURL,
-		FinishProvisioningCmdArgs: []string{"touch", finishFile}}, &testIdentHandler{}, &testCertHandler{}, true)
+		ServerPublicURL:           serverPublicURL,
+		FinishProvisioningCmdArgs: []string{"touch", finishFile}}, &testIdentHandler{}, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -159,7 +166,7 @@ func TestFinishProvisioning(t *testing.T) {
 func TestSetOwner(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -200,7 +207,7 @@ func TestSetOwner(t *testing.T) {
 func TestCreateKey(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -236,7 +243,7 @@ func TestCreateKey(t *testing.T) {
 func TestApplyCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -272,7 +279,7 @@ func TestApplyCert(t *testing.T) {
 func TestGetCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, &testIdentHandler{}, certHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -313,7 +320,7 @@ func TestGetCert(t *testing.T) {
 func TestGetSystemInfo(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -348,7 +355,7 @@ func TestGetSystemInfo(t *testing.T) {
 func TestGetUsers(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -378,7 +385,7 @@ func TestGetUsers(t *testing.T) {
 func TestSetUsers(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -406,10 +413,211 @@ func TestSetUsers(t *testing.T) {
 	}
 }
 
+func TestRegisterService(t *testing.T) {
+	permHandler, err := permhandler.New()
+	if err != nil {
+		t.Fatalf("Can't create permissions handler: %s", err)
+	}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	permission := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
+	req := &pb.RegisterServiceReq{ServiceId: "serviceID1", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err := client.pbclient.RegisterService(ctx, req)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if resp.Secret == "" {
+		t.Fatal("Incorrect secret")
+	}
+
+	req = &pb.RegisterServiceReq{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err = client.pbclient.RegisterService(ctx, req)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if resp.Secret == "" {
+		t.Fatal("Incorrect secret")
+	}
+
+	secretServiceID2 := resp.Secret
+
+	req = &pb.RegisterServiceReq{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err = client.pbclient.RegisterService(ctx, req)
+	if err != nil || resp.Secret != secretServiceID2 {
+		t.Fatalf("Can't send request: %s", err)
+	}
+}
+
+func TestUnregisterService(t *testing.T) {
+	permHandler, err := permhandler.New()
+	if err != nil {
+		t.Fatalf("Can't create permissions handler: %s", err)
+	}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	permission := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
+	req := &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err := client.pbclient.RegisterService(ctx, req)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: "serviceID"})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	req = &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp2, err := client.pbclient.RegisterService(ctx, req)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if resp.Secret == resp2.Secret {
+		t.Fatal("Secrets must be different")
+	}
+}
+
+func TestGetPermissions(t *testing.T) {
+	permHandler, err := permhandler.New()
+	if err != nil {
+		t.Fatalf("Can't create permissions handler: %s", err)
+	}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
+	req := &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": vis}}
+	resp, err := client.pbclient.RegisterService(ctx, req)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	reqPerm := &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
+	perm, err := client.pbclientPublic.GetPermissions(ctx, reqPerm)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if !reflect.DeepEqual(perm.Permissions, vis.Permissions) {
+		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
+	}
+
+	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: "serviceID"})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	reqPerm = &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
+	perm, err = client.pbclientPublic.GetPermissions(ctx, reqPerm)
+	if err == nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+}
+
+func TestGetPermissionsServerPublic(t *testing.T) {
+	permHandler, err := permhandler.New()
+	if err != nil {
+		t.Fatalf("Can't create permissions handler: %s", err)
+	}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	clientPublic, err := newTestClientPublic(serverPublicURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
+	req := &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": vis}}
+	resp, err := client.pbclient.RegisterService(ctx, req)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	reqPerm := &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
+	perm, err := clientPublic.pbclientPublic.GetPermissions(ctx, reqPerm)
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if !reflect.DeepEqual(perm.Permissions, vis.Permissions) {
+		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
+	}
+
+	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: "serviceID"})
+	if err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	reqPerm = &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
+	perm, err = clientPublic.pbclientPublic.GetPermissions(ctx, reqPerm)
+	if err == nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+}
+
 func TestUsersChanged(t *testing.T) {
 	identHandler := &testIdentHandler{usersChangedChannel: make(chan []string, 1)}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL}, identHandler, &testCertHandler{}, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -460,6 +668,21 @@ func newTestClient(url string) (client *testClient, err error) {
 	}
 
 	client.pbclient = pb.NewIAManagerClient(client.connection)
+	client.pbclientPublic = pb.NewIAManagerPublicClient(client.connection)
+
+	return client, nil
+}
+
+func newTestClientPublic(url string) (client *testClient, err error) {
+	client = &testClient{}
+
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+	if client.connectionPublic, err = grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock()); err != nil {
+		return nil, err
+	}
+
+	client.pbclientPublic = pb.NewIAManagerPublicClient(client.connectionPublic)
 
 	return client, nil
 }
