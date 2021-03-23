@@ -37,6 +37,7 @@ import (
 	"aos_iamanager/iamserver"
 	"aos_iamanager/identhandler"
 	_ "aos_iamanager/identhandler/modules"
+	"aos_iamanager/permhandler"
 )
 
 /*******************************************************************************
@@ -198,7 +199,12 @@ func main() {
 	}
 	defer certHandler.Close()
 
-	server, err := iamserver.New(cfg, identHandler, certHandler, false)
+	permissionsHandler, err := permhandler.New()
+	if err != nil {
+		log.Fatalf("Can't create permissions handler: %s", err)
+	}
+
+	server, err := iamserver.New(cfg, identHandler, certHandler, permissionsHandler, false)
 	if err != nil {
 		log.Fatalf("Can't create IAM server: %s", err)
 	}
