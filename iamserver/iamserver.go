@@ -87,7 +87,7 @@ type IdentHandler interface {
 type PermissionHandler interface {
 	RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error)
 	UnregisterService(serviceID string)
-	GetPermissions(secret, funcServerId string) (permissions map[string]string, err error)
+	GetPermissions(secret, funcServerId string) (serviceID string, permissions map[string]string, err error)
 }
 
 /*******************************************************************************
@@ -344,17 +344,18 @@ func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterS
 }
 
 // GetPermissions returns permissions by secret and functional server ID
-func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissionsReq) (rsp *pb.Permissions, err error) {
-	rsp = &pb.Permissions{}
+func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissionsReq) (rsp *pb.GetPermissionsRsp, err error) {
+	rsp = &pb.GetPermissionsRsp{}
 
 	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")
 
-	perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
+	serviceID, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
 	if err != nil {
 		return rsp, err
 	}
 
-	rsp.Permissions = perm
+	rsp.ServiceId = serviceID
+	rsp.Permissions = &pb.Permissions{Permissions: perm}
 
 	return rsp, nil
 }

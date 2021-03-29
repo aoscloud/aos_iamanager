@@ -529,8 +529,9 @@ func TestGetPermissions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	serviceID := "serviceID"
 	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	req := &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": vis}}
+	req := &pb.RegisterServiceReq{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
 	resp, err := client.pbclient.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -542,17 +543,21 @@ func TestGetPermissions(t *testing.T) {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if !reflect.DeepEqual(perm.Permissions, vis.Permissions) {
+	if !reflect.DeepEqual(perm.Permissions.Permissions, vis.Permissions) {
 		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
 	}
 
-	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: "serviceID"})
+	if perm.ServiceId != serviceID {
+		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
+	}
+
+	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: serviceID})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
 	reqPerm = &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
-	perm, err = client.pbclientPublic.GetPermissions(ctx, reqPerm)
+	_, err = client.pbclientPublic.GetPermissions(ctx, reqPerm)
 	if err == nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -585,8 +590,9 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	serviceID := "serviceID"
 	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	req := &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": vis}}
+	req := &pb.RegisterServiceReq{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
 	resp, err := client.pbclient.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -598,17 +604,21 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if !reflect.DeepEqual(perm.Permissions, vis.Permissions) {
+	if !reflect.DeepEqual(perm.Permissions.Permissions, vis.Permissions) {
 		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
 	}
 
-	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: "serviceID"})
+	if perm.ServiceId != serviceID {
+		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
+	}
+
+	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: serviceID})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
 	reqPerm = &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
-	perm, err = clientPublic.pbclientPublic.GetPermissions(ctx, reqPerm)
+	_, err = clientPublic.pbclientPublic.GetPermissions(ctx, reqPerm)
 	if err == nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
