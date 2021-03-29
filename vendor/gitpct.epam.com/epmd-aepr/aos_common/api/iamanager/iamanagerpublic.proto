@@ -7,10 +7,15 @@ import "iamanagercommon.proto";
 package iamanager;
 
 service IAManagerPublic {
-    rpc GetPermissions(GetPermissionsReq) returns (Permissions) {}
+    rpc GetPermissions(GetPermissionsReq) returns (GetPermissionsRsp) {}
 }
 
 message GetPermissionsReq {
     string secret = 1;
     string functional_server_id = 2;
+}
+
+message GetPermissionsRsp {
+    string service_id = 1;
+    Permissions permissions = 2;
 }

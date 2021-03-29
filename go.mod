@@ -11,7 +11,7 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/mattn/go-sqlite3 v1.14.2
 	github.com/sirupsen/logrus v1.7.0
-	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210318140034-0415736a7207
+	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210329120743-7acb8a870628
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	google.golang.org/grpc v1.33.1
 	google.golang.org/protobuf v1.25.0 // indirect
