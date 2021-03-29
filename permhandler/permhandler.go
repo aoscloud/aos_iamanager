@@ -107,8 +107,8 @@ func (handler *Handler) UnregisterService(serviceID string) {
 	delete(handler.secrets, secretKey(secret))
 }
 
-// GetPermissions returns permissions by secret and functional server ID
-func (handler *Handler) GetPermissions(secret, funcServerId string) (permissions map[string]string, err error) {
+// GetPermissions returns service id and permissions by secret and functional server ID
+func (handler *Handler) GetPermissions(secret, funcServerId string) (serviceID string, permissions map[string]string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -116,15 +116,15 @@ func (handler *Handler) GetPermissions(secret, funcServerId string) (permissions
 
 	funcServersPermissions, ok := handler.secrets[secretKey(secret)]
 	if !ok {
-		return nil, fmt.Errorf("secret not found")
+		return "", nil, fmt.Errorf("secret not found")
 	}
 
 	permissions, ok = funcServersPermissions.permissions[funcServerId]
 	if !ok {
-		return nil, fmt.Errorf("permissions for functional server %s not found", funcServerId)
+		return "", nil, fmt.Errorf("permissions for functional server %s not found", funcServerId)
 	}
 
-	return permissions, nil
+	return funcServersPermissions.serviceID, permissions, nil
 }
 
 /*******************************************************************************

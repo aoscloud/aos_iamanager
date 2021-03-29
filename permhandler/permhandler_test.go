@@ -91,32 +91,40 @@ func TestGetPermissions(t *testing.T) {
 		t.Fatalf("Can't register service: %s", err)
 	}
 
-	perm, err := permissionHandler.GetPermissions(secret1, "vis")
+	serviceID, perm, err := permissionHandler.GetPermissions(secret1, "vis")
 	if err != nil {
 		t.Fatalf("Can't get permissions: %s", err)
+	}
+
+	if serviceID != serviceID1 {
+		t.Errorf("Wrong serviceID: %s", serviceID)
 	}
 
 	if !reflect.DeepEqual(perm, vis) {
 		t.Errorf("Wrong perm: %v", perm)
 	}
 
-	perm, err = permissionHandler.GetPermissions(secret1, "systemCore")
+	serviceID, perm, err = permissionHandler.GetPermissions(secret1, "systemCore")
 	if err != nil {
 		t.Fatalf("Can't get permissions: %s", err)
+	}
+
+	if serviceID != serviceID1 {
+		t.Errorf("Wrong serviceID: %s", serviceID)
 	}
 
 	if !reflect.DeepEqual(perm, systemCore) {
 		t.Errorf("Wrong perm: %v", perm)
 	}
 
-	_, err = permissionHandler.GetPermissions(secret1, "functionalServerID")
+	_, _, err = permissionHandler.GetPermissions(secret1, "functionalServerID")
 	if err == nil {
 		t.Fatalf("Wrong perm for functional server")
 	}
 
 	permissionHandler.UnregisterService(serviceID1)
 
-	_, err = permissionHandler.GetPermissions(secret1, "systemCore")
+	_, _, err = permissionHandler.GetPermissions(secret1, "systemCore")
 	if err == nil {
 		t.Fatalf("Getting permissions after the service has been deleted")
 	}
