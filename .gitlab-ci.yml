@@ -3,7 +3,7 @@ image: golang:1.14
 stages:
   - build
   - test
-  - cyclonedx
+  - dependency
 
 build:
   tags:
@@ -23,14 +23,12 @@ test:
     - go test $(go list ./... | grep -v "/vendor") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
-dependency:
+whitesource:
   only:
-    refs: 
+    refs:
      - master
   tags:
-    - cyclonedx_ci
-  stage: cyclonedx
+    - whitesource_ci
+  stage: dependency
   script:
-    - sed -i '/aos_common/d' ./go.mod
-    - cyclonedx-go -o /tmp/iam_bom.xml
-    - curl -X 'POST' 'https://aos-dependency.westeurope.cloudapp.azure.com/api/v1/bom' -H "X-Api-Key:$DEP_API_KEY" -F 'projectName=aos-iamanager' -F 'autoCreate=true' -F 'bom=@/tmp/iam_bom.xml'
+    - java -jar /usr/bin/wss-unified-agent.jar -apiKey $WSS_API_KEY -projectToken $WSS_IAM_TOKEN -userKey $WSS_USER_KEY  -c ./ci/wss-iam.conf -d ./ -scanComment $CI_COMMIT_SHORT_SHA
