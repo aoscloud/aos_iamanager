@@ -42,7 +42,7 @@ import (
  * Consts
  ******************************************************************************/
 
-const serverURL = "wss://localhost:8088"
+const serverURL = "wss://localhost:443"
 
 /*******************************************************************************
  * Types
@@ -215,7 +215,7 @@ func setup() (err error) {
 
 	time.Sleep(1 * time.Second)
 
-	if vis, err = visidentifier.New([]byte(`{"VisServer": "wss://localhost:8088"}`)); err != nil {
+	if vis, err = visidentifier.New([]byte(`{"VisServer": "wss://localhost:443"}`)); err != nil {
 		return err
 	}
 
