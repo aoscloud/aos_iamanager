@@ -59,14 +59,14 @@ type certDesc struct {
 	certInfo certhandler.CertInfo
 }
 
-type createModuleType func(storagePath string, doReset bool) (module certhandler.CertModule, err error)
+type createModuleType func(doReset bool) (module certhandler.CertModule, err error)
 
 /*******************************************************************************
  * Var
  ******************************************************************************/
 
 var tmpDir string
-
+var certStorage string
 var tpmSimulator *simulator.Simulator
 
 /*******************************************************************************
@@ -94,6 +94,8 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
+	certStorage = path.Join(tmpDir, "certStorage")
+
 	if tpmSimulator, err = simulator.Get(); err != nil {
 		log.Fatalf("Can't get TPM simulator: %s", err)
 	}
@@ -118,9 +120,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
 		for _, algorithm := range []string{cryptutils.AlgRSA, cryptutils.AlgECC} {
-			certStorage := path.Join(tmpDir, "certStorage")
-
-			module, err := createModule(certStorage, true)
+			module, err := createModule(true)
 			if err != nil {
 				t.Fatalf("Can't create module: %s", err)
 			}
@@ -296,9 +296,7 @@ func TestValidateCertificates(t *testing.T) {
 	testData := []string{"valid", "onlyCert", "valid", "onlyKey", "invalidFile"}
 
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
-		certStorage := path.Join(tmpDir, "certStorage")
-
-		module, err := createModule(certStorage, true)
+		module, err := createModule(true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -475,9 +473,7 @@ func TestValidateCertificates(t *testing.T) {
 
 func TestSetOwnerClear(t *testing.T) {
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
-		certStorage := path.Join(tmpDir, "certStorage")
-
-		module, err := createModule(certStorage, true)
+		module, err := createModule(true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
@@ -570,9 +566,8 @@ func TestSetOwnerClear(t *testing.T) {
 // Test for TPM only
 func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 	password := "password"
-	certStorage := path.Join(tmpDir, "certStorage")
 
-	module, err := createTpmModule(certStorage, true)
+	module, err := createTpmModule(true)
 	if err != nil {
 		t.Fatalf("Can't create module: %s", err)
 	}
@@ -605,8 +600,7 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	password := "password"
 	pcrSelection7 := tpm2.PCRSelection{Hash: tpm2.AlgSHA1, PCRs: []int{7}}
 
-	certStorage := path.Join(tmpDir, "certStorage")
-	module, err := createTpmModule(certStorage, true)
+	module, err := createTpmModule(true)
 	if err != nil {
 		t.Fatalf("Can't create module: %s", err)
 	}
@@ -661,23 +655,21 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func createSwModule(storagePath string, doReset bool) (module certhandler.CertModule, err error) {
+func createSwModule(doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
-		if err := os.RemoveAll(storagePath); err != nil {
+		if err := os.RemoveAll(certStorage); err != nil {
 			return nil, err
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, storagePath))
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, certStorage))
 
 	return swmodule.New("test", config)
 }
 
-func createTpmModule(storagePath string, doReset bool) (module certhandler.CertModule, err error) {
-	// Dictionary attack paramters
-	lockoutMaxRetries, recoveryTime, lockoutRecoveryTime := 3, 1000, 1000
+func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
-		if err := os.RemoveAll(storagePath); err != nil {
+		if err := os.RemoveAll(certStorage); err != nil {
 			return nil, err
 		}
 
@@ -686,8 +678,11 @@ func createTpmModule(storagePath string, doReset bool) (module certhandler.CertM
 		}
 	}
 
+	// Dictionary attack paramters
+	lockoutMaxRetries, recoveryTime, lockoutRecoveryTime := 3, 1000, 1000
+
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s", "lockoutMaxTry": %d,
-		"recoveryTime": %d, "lockoutRecoveryTime": %d}`, storagePath, lockoutMaxRetries, recoveryTime, lockoutRecoveryTime))
+		"recoveryTime": %d, "lockoutRecoveryTime": %d}`, certStorage, lockoutMaxRetries, recoveryTime, lockoutRecoveryTime))
 
 	return tpmmodule.New("test", config, tpmSimulator)
 }
