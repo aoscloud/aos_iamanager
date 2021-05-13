@@ -1,3 +1,5 @@
+# github.com/ThalesIgnite/crypto11 v1.2.4
+## explicit
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/journal
@@ -27,6 +29,9 @@ github.com/gorilla/websocket
 # github.com/mattn/go-sqlite3 v1.14.2
 ## explicit
 github.com/mattn/go-sqlite3
+# github.com/miekg/pkcs11 v1.0.3
+## explicit
+github.com/miekg/pkcs11
 # github.com/sirupsen/logrus v1.7.0
 ## explicit
 github.com/sirupsen/logrus

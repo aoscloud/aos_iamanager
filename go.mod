@@ -3,6 +3,7 @@ module aos_iamanager
 go 1.14
 
 require (
+	github.com/ThalesIgnite/crypto11 v1.2.4 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/golang/protobuf v1.4.3
 	github.com/google/go-tpm v0.3.2
@@ -10,6 +11,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.4.1
 	github.com/mattn/go-sqlite3 v1.14.2
+	github.com/miekg/pkcs11 v1.0.3
 	github.com/sirupsen/logrus v1.7.0
 	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210329120743-7acb8a870628
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
