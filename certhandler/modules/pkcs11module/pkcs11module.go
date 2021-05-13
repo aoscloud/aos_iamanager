@@ -20,7 +20,11 @@ package pkcs11module
 import (
 	"crypto"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
 
+	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
 
 	"aos_iamanager/certhandler"
@@ -38,6 +42,7 @@ import (
 type PKCS11Module struct {
 	certType string
 	config   moduleConfig
+	ctx      *pkcs11.Ctx
 }
 
 type moduleConfig struct {
@@ -49,6 +54,9 @@ type moduleConfig struct {
  * Vars
  ******************************************************************************/
 
+var ctxMutex = sync.Mutex{}
+var ctxCount = map[string]int{}
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
@@ -59,10 +67,20 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 
 	pkcs11Module := &PKCS11Module{certType: certType}
 
+	defer func() {
+		if err != nil {
+			pkcs11Module.Close()
+		}
+	}()
+
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &pkcs11Module.config); err != nil {
 			return nil, err
 		}
+	}
+
+	if err = pkcs11Module.initContext(); err != nil {
+		return nil, err
 	}
 
 	return pkcs11Module, nil
@@ -72,11 +90,20 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 func (module *PKCS11Module) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close PKCS11 module")
 
+	if ctxErr := module.releaseContext(); ctxErr != nil {
+		if err == nil {
+			err = ctxErr
+		}
+	}
+
 	return err
 }
 
 // SetOwner owns slot
 func (module *PKCS11Module) SetOwner(password string) (err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Set owner")
 
 	return nil
@@ -84,6 +111,9 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 
 // Clear clears security storage
 func (module *PKCS11Module) Clear() (err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
 	return nil
@@ -92,6 +122,9 @@ func (module *PKCS11Module) Clear() (err error) {
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
 func (module *PKCS11Module) ValidateCertificates() (
 	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
 	return validInfos, invalidCerts, invalidKeys, nil
@@ -99,6 +132,9 @@ func (module *PKCS11Module) ValidateCertificates() (
 
 // CreateKey creates key pair
 func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
 	return key, nil
@@ -106,6 +142,9 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 // ApplyCertificate applies certificate
 func (module *PKCS11Module) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
 	log.WithFields(log.Fields{
@@ -120,6 +159,9 @@ func (module *PKCS11Module) ApplyCertificate(cert []byte) (certInfo certhandler.
 
 // RemoveCertificate removes certificate
 func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{
 		"certType": module.certType,
 		"certURL":  certURL}).Debug("Remove certificate")
@@ -129,6 +171,9 @@ func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err err
 
 // RemoveKey removes key
 func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	log.WithFields(log.Fields{
 		"certType": module.certType,
 		"keyURL":   keyURL}).Debug("Remove key")
@@ -139,3 +184,64 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (module *PKCS11Module) initContext() (err error) {
+	module.ctx = pkcs11.New(module.config.Library)
+
+	if module.ctx == nil {
+		return fmt.Errorf("can't open PKCS11 library: %s", module.config.Library)
+	}
+
+	// PKCS11 lib can be initialized only once per application handle multiple instances
+	// with ctxMutex and ctxCount
+
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
+	count := ctxCount[module.config.Library]
+
+	if count == 0 {
+		log.WithField("library", module.config.Library).Debug("Initialize PKCS11 library")
+
+		if err = module.ctx.Initialize(); err != nil {
+			return err
+		}
+	}
+
+	ctxCount[module.config.Library] = count + 1
+
+	return nil
+}
+
+func (module *PKCS11Module) releaseContext() (err error) {
+	if module.ctx == nil {
+		return nil
+	}
+
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
+	count := ctxCount[module.config.Library] - 1
+
+	if count == 0 {
+		log.WithField("library", module.config.Library).Debug("Finalize PKCS11 library")
+
+		if ctxErr := module.ctx.Finalize(); ctxErr != nil {
+			if err == nil {
+				err = ctxErr
+			}
+		}
+	}
+
+	if count >= 0 {
+		ctxCount[module.config.Library] = count
+	} else {
+		if err == nil {
+			err = errors.New("wrong PKCS11 context count")
+		}
+	}
+
+	module.ctx.Destroy()
+
+	return err
+}
