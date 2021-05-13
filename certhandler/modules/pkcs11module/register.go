@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Copyright 2019 Renesas Inc.
-// Copyright 2019 EPAM Systems Inc.
+// Copyright 2021 Renesas Inc.
+// Copyright 2021 EPAM Systems Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package certmodules
+package pkcs11module
 
 import (
-	// include all supported plugins
-	_ "aos_iamanager/certhandler/modules/pkcs11module"
-	_ "aos_iamanager/certhandler/modules/swmodule"
-	_ "aos_iamanager/certhandler/modules/tpmmodule"
+	"aos_iamanager/certhandler"
 )
+
+/*******************************************************************************
+ * Init
+ ******************************************************************************/
+
+func init() {
+	certhandler.RegisterPlugin("pkcs11module", New)
+}
