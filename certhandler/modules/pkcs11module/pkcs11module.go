@@ -34,19 +34,26 @@ import (
  * Consts
  ******************************************************************************/
 
+const defaultTokenLabel = "aos"
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
 // PKCS11Module PKCS11 certificate module
 type PKCS11Module struct {
-	certType string
-	config   moduleConfig
-	ctx      *pkcs11.Ctx
+	certType   string
+	config     moduleConfig
+	ctx        *pkcs11.Ctx
+	slotID     uint
+	tokenLabel string
 }
 
 type moduleConfig struct {
 	Library          string   `json:"library"`
+	SlotID           *uint    `json:"slotId"`
+	SlotIndex        *int     `json:"slotIndex"`
+	TokenLabel       string   `json:"tokenLabel"`
 	ClearHookCmdArgs []string `json:"clearHookCmdArgs"`
 }
 
@@ -83,6 +90,10 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		return nil, err
 	}
 
+	if err = pkcs11Module.displayInfo(pkcs11Module.slotID); err != nil {
+		return nil, err
+	}
+
 	return pkcs11Module, nil
 }
 
@@ -104,7 +115,11 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()
 
-	log.WithFields(log.Fields{"certType": module.certType}).Debug("Set owner")
+	log.WithFields(log.Fields{"certType": module.certType, "slotID": module.slotID}).Debug("Set owner")
+
+	if err = module.ctx.InitToken(module.slotID, password, module.tokenLabel); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -210,6 +225,12 @@ func (module *PKCS11Module) initContext() (err error) {
 
 	ctxCount[module.config.Library] = count + 1
 
+	module.tokenLabel = module.getTokenLabel()
+
+	if module.slotID, err = module.getSlotID(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -244,4 +265,134 @@ func (module *PKCS11Module) releaseContext() (err error) {
 	module.ctx.Destroy()
 
 	return err
+}
+
+func (module *PKCS11Module) getTokenLabel() (label string) {
+	if module.config.TokenLabel != "" {
+		return module.config.TokenLabel
+	}
+
+	return defaultTokenLabel
+}
+
+func (module *PKCS11Module) getSlotID() (id uint, err error) {
+	// Find our slot either by slotId or by slot index or by tokenLabel
+	// If neither one is specified try to find slot by default token label.
+	// If slot is not found, try to find first free slot.
+
+	paramCount := 0
+
+	if module.config.SlotID != nil {
+		paramCount++
+	}
+
+	if module.config.SlotIndex != nil {
+		paramCount++
+	}
+
+	if module.config.TokenLabel != "" {
+		paramCount++
+	}
+
+	if paramCount >= 2 {
+		return 0, errors.New("only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
+	}
+
+	if module.config.SlotID != nil {
+		return *module.config.SlotID, nil
+	}
+
+	slotIDs, err := module.ctx.GetSlotList(false)
+	if err != nil {
+		return 0, err
+	}
+
+	if module.config.SlotIndex != nil {
+		if *module.config.SlotIndex >= len(slotIDs) || *module.config.SlotIndex < 0 {
+			return 0, errors.New("invalid slot index")
+		}
+
+		return slotIDs[*module.config.SlotIndex], nil
+	}
+
+	var (
+		freeID    uint
+		freeFound bool
+	)
+
+	for _, id := range slotIDs {
+		slotInfo, err := module.ctx.GetSlotInfo(id)
+		if err != nil {
+			return 0, err
+		}
+
+		if slotInfo.Flags&pkcs11.CKF_TOKEN_PRESENT != 0 {
+			tokenInfo, err := module.ctx.GetTokenInfo(id)
+			if err != nil {
+				return 0, err
+			}
+
+			if tokenInfo.Label == module.tokenLabel {
+				return id, nil
+			}
+
+			if tokenInfo.Flags&pkcs11.CKF_TOKEN_INITIALIZED == 0 && !freeFound {
+				freeID = id
+				freeFound = true
+			}
+		}
+	}
+
+	if freeFound {
+		return freeID, nil
+	}
+
+	return 0, errors.New("no suitable slot found")
+}
+
+func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
+	libInfo, err := module.ctx.GetInfo()
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"library":         module.config.Library,
+		"cryptokiVersion": fmt.Sprintf("%d.%d", libInfo.CryptokiVersion.Major, libInfo.CryptokiVersion.Minor),
+		"manufacturer":    libInfo.ManufacturerID,
+		"description":     libInfo.LibraryDescription,
+		"libraryVersion":  fmt.Sprintf("%d.%d", libInfo.LibraryVersion.Major, libInfo.LibraryVersion.Minor),
+	}).Debug("Library info")
+
+	slotInfo, err := module.ctx.GetSlotInfo(slotID)
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"slotID":       slotID,
+		"manufacturer": slotInfo.ManufacturerID,
+		"description":  slotInfo.SlotDescription,
+		"hwVersion":    fmt.Sprintf("%d.%d", slotInfo.HardwareVersion.Major, slotInfo.HardwareVersion.Major),
+		"fwVersion":    fmt.Sprintf("%d.%d", slotInfo.FirmwareVersion.Major, slotInfo.FirmwareVersion.Major),
+	}).Debug("Slot info")
+
+	tokenInfo, err := module.ctx.GetTokenInfo(slotID)
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"slotID":        slotID,
+		"label":         tokenInfo.Label,
+		"manufacturer":  tokenInfo.ManufacturerID,
+		"model":         tokenInfo.Model,
+		"serial":        tokenInfo.SerialNumber,
+		"hwVersion":     fmt.Sprintf("%d.%d", tokenInfo.HardwareVersion.Major, tokenInfo.HardwareVersion.Major),
+		"fwVersion":     fmt.Sprintf("%d.%d", tokenInfo.FirmwareVersion.Major, tokenInfo.FirmwareVersion.Major),
+		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
+		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
+	}).Debug("Token info")
+
+	return nil
 }
