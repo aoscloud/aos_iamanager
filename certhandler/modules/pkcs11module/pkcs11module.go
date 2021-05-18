@@ -36,6 +36,14 @@ import (
 
 const defaultTokenLabel = "aos"
 
+const (
+	CKS_RO_PUBLIC_SESSION = iota
+	CKS_RO_USER_FUNCTIONS
+	CKS_RW_PUBLIC_SESSION
+	CKS_RW_USER_FUNCTIONS
+	CKS_RW_SO_FUNCTIONS
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -45,7 +53,9 @@ type PKCS11Module struct {
 	certType   string
 	config     moduleConfig
 	ctx        *pkcs11.Ctx
+	session    pkcs11.SessionHandle
 	slotID     uint
+	userPIN    string
 	tokenLabel string
 }
 
@@ -54,6 +64,7 @@ type moduleConfig struct {
 	SlotID           *uint    `json:"slotId"`
 	SlotIndex        *int     `json:"slotIndex"`
 	TokenLabel       string   `json:"tokenLabel"`
+	UserPIN          string   `json:"userPin"`
 	ClearHookCmdArgs []string `json:"clearHookCmdArgs"`
 }
 
@@ -101,6 +112,12 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 func (module *PKCS11Module) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close PKCS11 module")
 
+	if sessionErr := module.releaseSession(); sessionErr != nil {
+		if err == nil {
+			err = sessionErr
+		}
+	}
+
 	if ctxErr := module.releaseContext(); ctxErr != nil {
 		if err == nil {
 			err = ctxErr
@@ -116,8 +133,33 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	defer ctxMutex.Unlock()
 
 	log.WithFields(log.Fields{"certType": module.certType, "slotID": module.slotID}).Debug("Set owner")
+	log.WithFields(log.Fields{"slotID": module.slotID}).Debug("Close all sessions")
+
+	if err = module.ctx.CloseAllSessions(module.slotID); err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{"slotID": module.slotID, "label": module.tokenLabel}).Debug("Init token")
 
 	if err = module.ctx.InitToken(module.slotID, password, module.tokenLabel); err != nil {
+		return err
+	}
+
+	session, err := module.getSession(false)
+	if err != nil {
+		return err
+	}
+
+	if err = module.ctx.Login(session, pkcs11.CKU_SO, password); err != nil {
+		return err
+	}
+	defer func() {
+		err = module.ctx.Logout(session)
+	}()
+
+	log.WithFields(log.Fields{"session": session}).Debug("Init PIN")
+
+	if err = module.ctx.InitPIN(session, module.userPIN); err != nil {
 		return err
 	}
 
@@ -226,6 +268,7 @@ func (module *PKCS11Module) initContext() (err error) {
 	ctxCount[module.config.Library] = count + 1
 
 	module.tokenLabel = module.getTokenLabel()
+	module.userPIN = module.getUserPIN()
 
 	if module.slotID, err = module.getSlotID(); err != nil {
 		return err
@@ -265,6 +308,87 @@ func (module *PKCS11Module) releaseContext() (err error) {
 	module.ctx.Destroy()
 
 	return err
+}
+
+func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHandle, err error) {
+	session = module.session
+
+	info, err := module.ctx.GetSessionInfo(module.session)
+	if err != nil {
+		pkcs11Err, ok := err.(pkcs11.Error)
+
+		if !ok || uint(pkcs11Err) != pkcs11.CKR_SESSION_HANDLE_INVALID {
+			return 0, err
+		}
+
+		if session, err = module.ctx.OpenSession(module.slotID,
+			pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION); err != nil {
+			return 0, err
+		}
+
+		log.WithFields(log.Fields{"session": session, "slotID": module.slotID}).Debug("Open session")
+
+		if info, err = module.ctx.GetSessionInfo(session); err != nil {
+			return 0, err
+		}
+	}
+
+	isUserLoggedIn := info.State == CKS_RO_USER_FUNCTIONS || info.State == CKS_RW_USER_FUNCTIONS
+	isSOLoggedIn := info.State == CKS_RW_SO_FUNCTIONS
+
+	if isSOLoggedIn {
+		if err = module.ctx.Logout(session); err != nil {
+			return 0, err
+		}
+	}
+
+	if userLogin && !isUserLoggedIn {
+		log.WithFields(log.Fields{"session": session, "slotID": module.slotID, "userPin": module.userPIN}).Debug("User login")
+
+		if err = module.ctx.Login(session, pkcs11.CKU_USER, module.userPIN); err != nil {
+			pkcs11Err, ok := err.(pkcs11.Error)
+
+			if !ok || pkcs11Err != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
+				return 0, err
+			}
+		}
+	}
+
+	if !userLogin && isUserLoggedIn {
+		log.WithFields(log.Fields{"session": session, "slotID": module.slotID}).Debug("User logout")
+
+		if err = module.ctx.Logout(session); err != nil {
+			pkcs11Err, ok := err.(pkcs11.Error)
+
+			if !ok || pkcs11Err != pkcs11.CKR_USER_NOT_LOGGED_IN {
+				return 0, err
+			}
+		}
+	}
+
+	module.session = session
+
+	return session, nil
+}
+
+func (module *PKCS11Module) releaseSession() (err error) {
+	if module.session != 0 {
+		log.WithFields(log.Fields{"session": module.session, "slotID": module.slotID}).Debug("Close session")
+
+		if err = module.ctx.CloseSession(module.session); err != nil {
+			pkcs11Err, ok := err.(pkcs11.Error)
+
+			if !ok || uint(pkcs11Err) != pkcs11.CKR_SESSION_HANDLE_INVALID {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (module *PKCS11Module) getUserPIN() (pin string) {
+	return module.config.UserPIN
 }
 
 func (module *PKCS11Module) getTokenLabel() (label string) {
