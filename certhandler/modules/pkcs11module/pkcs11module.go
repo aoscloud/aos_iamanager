@@ -22,8 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
 
@@ -42,6 +45,11 @@ const (
 	CKS_RW_PUBLIC_SESSION
 	CKS_RW_USER_FUNCTIONS
 	CKS_RW_SO_FUNCTIONS
+)
+
+const (
+	envLoginType = "CKTEEC_LOGIN_TYPE"
+	envLoginGID  = "CKTEEC_LOGIN_GID"
 )
 
 /*******************************************************************************
@@ -65,6 +73,9 @@ type moduleConfig struct {
 	SlotIndex        *int     `json:"slotIndex"`
 	TokenLabel       string   `json:"tokenLabel"`
 	UserPIN          string   `json:"userPin"`
+	TEELoginType     string   `json:"teeLoginType"`
+	UID              uint32   `json:"uid"`
+	GID              uint32   `json:"gid"`
 	ClearHookCmdArgs []string `json:"clearHookCmdArgs"`
 }
 
@@ -74,6 +85,10 @@ type moduleConfig struct {
 
 var ctxMutex = sync.Mutex{}
 var ctxCount = map[string]int{}
+
+// TEE Client UUID name space identifier (UUIDv4) from linux kernel
+// https://github.com/OP-TEE/optee_os/pull/4222
+var teeClientUuidNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6"))
 
 /*******************************************************************************
  * Public
@@ -95,6 +110,10 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		if err = json.Unmarshal(configJSON, &pkcs11Module.config); err != nil {
 			return nil, err
 		}
+	}
+
+	if (pkcs11Module.config.UserPIN == "") == (pkcs11Module.config.TEELoginType == "") {
+		return nil, errors.New("either userPin or teeLoginType should be used")
 	}
 
 	if err = pkcs11Module.initContext(); err != nil {
@@ -139,9 +158,20 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		return err
 	}
 
+	soPIN := password
+	userPIN := module.userPIN
+
+	if module.config.TEELoginType != "" {
+		soPIN = ""
+
+		if userPIN, err = getTeeUserPIN(module.config.TEELoginType, module.config.UID, module.config.GID); err != nil {
+			return err
+		}
+	}
+
 	log.WithFields(log.Fields{"slotID": module.slotID, "label": module.tokenLabel}).Debug("Init token")
 
-	if err = module.ctx.InitToken(module.slotID, password, module.tokenLabel); err != nil {
+	if err = module.ctx.InitToken(module.slotID, soPIN, module.tokenLabel); err != nil {
 		return err
 	}
 
@@ -150,16 +180,20 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		return err
 	}
 
-	if err = module.ctx.Login(session, pkcs11.CKU_SO, password); err != nil {
+	if err = module.ctx.Login(session, pkcs11.CKU_SO, soPIN); err != nil {
 		return err
 	}
 	defer func() {
 		err = module.ctx.Logout(session)
 	}()
 
-	log.WithFields(log.Fields{"session": session}).Debug("Init PIN")
+	if module.config.TEELoginType != "" {
+		log.WithFields(log.Fields{"pin": userPIN, "session": session}).Debug("Init PIN")
+	} else {
+		log.WithFields(log.Fields{"session": session}).Debug("Init PIN")
+	}
 
-	if err = module.ctx.InitPIN(session, module.userPIN); err != nil {
+	if err = module.ctx.InitPIN(session, userPIN); err != nil {
 		return err
 	}
 
@@ -242,6 +276,52 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
  * Private
  ******************************************************************************/
 
+func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error) {
+	switch loginType {
+	case "public":
+		return loginType, nil
+
+	case "user":
+		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("uid=%d", uid)))), nil
+
+	case "group":
+		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("gid=%d", gid)))), nil
+
+	default:
+		return "", fmt.Errorf("wrong TEE login type: %s", loginType)
+	}
+}
+
+func setTeeEnvVars(loginType string, gid uint32) (err error) {
+	switch loginType {
+	case "user", "group", "public":
+		if os.Getenv(envLoginType) != loginType {
+			log.WithFields(log.Fields{"name": envLoginType, "value": loginType}).Debug("Set environment variable")
+
+			if err = os.Setenv(envLoginType, loginType); err != nil {
+				return err
+			}
+		}
+
+		if loginType == "group" {
+			gidStr := strconv.FormatUint(uint64(gid), 32)
+
+			log.WithFields(log.Fields{"name": envLoginGID, "value": gidStr}).Debug("Set environment variable")
+
+			if os.Getenv(envLoginGID) != gidStr {
+				if err = os.Setenv(envLoginGID, gidStr); err != nil {
+					return err
+				}
+			}
+		}
+
+	default:
+		return fmt.Errorf("wrong TEE identity: %s", loginType)
+	}
+
+	return nil
+}
+
 func (module *PKCS11Module) initContext() (err error) {
 	module.ctx = pkcs11.New(module.config.Library)
 
@@ -259,6 +339,12 @@ func (module *PKCS11Module) initContext() (err error) {
 
 	if count == 0 {
 		log.WithField("library", module.config.Library).Debug("Initialize PKCS11 library")
+
+		if module.config.TEELoginType != "" {
+			if err = setTeeEnvVars(module.config.TEELoginType, module.config.GID); err != nil {
+				return err
+			}
+		}
 
 		if err = module.ctx.Initialize(); err != nil {
 			return err
@@ -388,6 +474,10 @@ func (module *PKCS11Module) releaseSession() (err error) {
 }
 
 func (module *PKCS11Module) getUserPIN() (pin string) {
+	if module.config.TEELoginType != "" {
+		return ""
+	}
+
 	return module.config.UserPIN
 }
 
