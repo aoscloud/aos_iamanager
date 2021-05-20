@@ -19,16 +19,19 @@ package pkcs11module
 
 import (
 	"crypto"
+	"crypto/elliptic"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 
 	"aos_iamanager/certhandler"
 )
@@ -51,6 +54,8 @@ const (
 	envLoginType = "CKTEEC_LOGIN_TYPE"
 	envLoginGID  = "CKTEEC_LOGIN_GID"
 )
+
+const rsaKeyLength = 2048
 
 /*******************************************************************************
  * Types
@@ -89,6 +94,8 @@ var ctxCount = map[string]int{}
 // TEE Client UUID name space identifier (UUIDv4) from linux kernel
 // https://github.com/OP-TEE/optee_os/pull/4222
 var teeClientUuidNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6"))
+
+var ecsdaCurveID = elliptic.P384()
 
 /*******************************************************************************
  * Public
@@ -228,7 +235,31 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
-	return key, nil
+	session, err := module.getSession(true)
+	if err != nil {
+		return nil, err
+	}
+
+	var privateKey privateKey
+
+	id := uuid.New().String()
+
+	switch strings.ToLower(algorithm) {
+	case cryptutils.AlgRSA:
+		privateKey, err = createRSAKey(module.ctx, session, id, module.certType, rsaKeyLength)
+
+	case cryptutils.AlgECC:
+		privateKey, err = createECCKey(module.ctx, session, id, module.certType, ecsdaCurveID)
+
+	default:
+		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
+	}
+
+	if err = module.tokenMemInfo(); err != nil {
+		return nil, err
+	}
+
+	return privateKey, err
 }
 
 // ApplyCertificate applies certificate
@@ -607,6 +638,19 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
 		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
 	}).Debug("Token info")
+
+	return nil
+}
+
+func (module *PKCS11Module) tokenMemInfo() (err error) {
+	tokenInfo, err := module.ctx.GetTokenInfo(module.slotID)
+	if err != nil {
+		return err
+	}
+	log.WithFields(log.Fields{
+		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
+		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
+	}).Debug("Token mem info")
 
 	return nil
 }

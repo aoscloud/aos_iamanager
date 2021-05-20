@@ -1,0 +1,230 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// Copyright 2021 Renesas Inc.
+// Copyright 2021 EPAM Systems Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package pkcs11module
+
+import (
+	"crypto"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+	"math/big"
+	"unsafe"
+
+	"github.com/miekg/pkcs11"
+	log "github.com/sirupsen/logrus"
+)
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+type pkcs11PrivateKey struct {
+	pkcs11Object
+	publicKey       crypto.PublicKey
+	publicKeyHandle pkcs11.ObjectHandle
+}
+
+type pkcs11PrivateKeyRSA struct {
+	pkcs11PrivateKey
+}
+
+type privateKey interface {
+}
+
+/*******************************************************************************
+ * Vars
+ ******************************************************************************/
+
+var pkcs1Prefix = map[crypto.Hash][]byte{
+	crypto.SHA1:   {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14},
+	crypto.SHA224: {0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04, 0x05, 0x00, 0x04, 0x1c},
+	crypto.SHA256: {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20},
+	crypto.SHA384: {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30},
+	crypto.SHA512: {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
+}
+
+/*******************************************************************************
+ * Interfaces
+ ******************************************************************************/
+
+func (key *pkcs11PrivateKey) Public() (publicKey crypto.PublicKey) {
+	return key.publicKey
+}
+
+func (key *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+	var mechanisms []*pkcs11.Mechanism
+
+	switch opts := opts.(type) {
+	case *rsa.PSSOptions:
+		hashAlg, mgfAlg, hashLen, err := hashToPKCS11(opts.Hash)
+		if err != nil {
+			return nil, err
+		}
+
+		saltLen := uint32(opts.SaltLength)
+
+		switch opts.SaltLength {
+		case rsa.PSSSaltLengthAuto:
+			return nil, fmt.Errorf("unsupported salt length: %v", opts.SaltLength)
+
+		case rsa.PSSSaltLengthEqualsHash:
+			saltLen = hashLen
+		}
+
+		parameters := []byte{}
+
+		parameters = append(parameters, uin32ToBytes(hashAlg)...)
+		parameters = append(parameters, uin32ToBytes(mgfAlg)...)
+		parameters = append(parameters, uin32ToBytes(saltLen)...)
+
+		mechanisms = []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_PSS, parameters)}
+
+	default:
+		oid, ok := pkcs1Prefix[opts.HashFunc()]
+		if !ok {
+			return nil, fmt.Errorf("unsupported hash function: %v", opts.HashFunc())
+		}
+
+		digest = append(oid, digest...)
+		mechanisms = []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil)}
+	}
+
+	if err = key.ctx.SignInit(key.session, mechanisms, key.handle); err != nil {
+		return nil, err
+	}
+
+	return key.ctx.Sign(key.session, digest)
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func uin32ToBytes(value uint32) (result []byte) {
+	result = make([]byte, unsafe.Sizeof(value))
+
+	binary.LittleEndian.PutUint32(result, value)
+
+	return result
+}
+
+func hashToPKCS11(hashFunction crypto.Hash) (hashAlg uint32, mgfAlg uint32, hashLen uint32, err error) {
+	switch hashFunction {
+	case crypto.SHA1:
+		return pkcs11.CKM_SHA_1, uint32(pkcs11.CKG_MGF1_SHA1), 20, nil
+	case crypto.SHA224:
+		return pkcs11.CKM_SHA224, uint32(pkcs11.CKG_MGF1_SHA224), 28, nil
+	case crypto.SHA256:
+		return pkcs11.CKM_SHA256, uint32(pkcs11.CKG_MGF1_SHA256), 32, nil
+	case crypto.SHA384:
+		return pkcs11.CKM_SHA384, uint32(pkcs11.CKG_MGF1_SHA384), 48, nil
+	case crypto.SHA512:
+		return pkcs11.CKM_SHA512, uint32(pkcs11.CKG_MGF1_SHA512), 64, nil
+	default:
+		return 0, 0, 0, fmt.Errorf("unsupported hash function: %v", hashFunction)
+	}
+}
+
+func (key *pkcs11PrivateKeyRSA) loadPublicKey() (err error) {
+	template := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_MODULUS, nil),
+		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, nil),
+	}
+
+	attributes, err := key.ctx.GetAttributeValue(key.session, key.publicKeyHandle, template)
+	if err != nil {
+		return err
+	}
+
+	var modulus = new(big.Int).SetBytes(attributes[0].Value)
+	var exponent = new(big.Int).SetBytes(attributes[1].Value)
+
+	if exponent.BitLen() > 32 || exponent.Sign() < 1 || int(exponent.Uint64()) < 2 {
+		return errors.New("invalid RSA public key")
+	}
+
+	key.publicKey = &rsa.PublicKey{N: modulus, E: int(exponent.Int64())}
+
+	return nil
+}
+
+func createRSAKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
+	id, label string, keyLength int) (key privateKey, err error) {
+	publicTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
+		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
+		pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, keyLength),
+	}
+
+	privateTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
+		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+	}
+
+	mechanisms := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)}
+
+	publicHandle, privateHandle, err := ctx.GenerateKeyPair(session, mechanisms, publicTemplate, privateTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	log.WithFields(log.Fields{
+		"session":       session,
+		"id":            id,
+		"label":         label,
+		"publicHandle":  publicHandle,
+		"privateHandle": privateHandle}).Debug("Generate RSA key")
+
+	rsaKey := &pkcs11PrivateKeyRSA{
+		pkcs11PrivateKey: pkcs11PrivateKey{
+			pkcs11Object: pkcs11Object{
+				ctx:     ctx,
+				session: session,
+				handle:  privateHandle,
+				id:      id,
+				label:   label,
+			},
+			publicKeyHandle: publicHandle,
+		},
+	}
+
+	if err = rsaKey.loadPublicKey(); err != nil {
+		return nil, err
+	}
+
+	return rsaKey, nil
+}
+
+func createECCKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
+	id, label string, curve elliptic.Curve) (key privateKey, err error) {
+	return nil, nil
+}
