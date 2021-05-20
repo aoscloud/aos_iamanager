@@ -18,6 +18,7 @@
 package pkcs11module
 
 import (
+	"container/list"
 	"crypto"
 	"crypto/elliptic"
 	"encoding/json"
@@ -42,6 +43,8 @@ import (
 
 const defaultTokenLabel = "aos"
 
+const maxPendingKeys = 16
+
 const (
 	CKS_RO_PUBLIC_SESSION = iota
 	CKS_RO_USER_FUNCTIONS
@@ -63,13 +66,14 @@ const rsaKeyLength = 2048
 
 // PKCS11Module PKCS11 certificate module
 type PKCS11Module struct {
-	certType   string
-	config     moduleConfig
-	ctx        *pkcs11.Ctx
-	session    pkcs11.SessionHandle
-	slotID     uint
-	userPIN    string
-	tokenLabel string
+	certType    string
+	config      moduleConfig
+	ctx         *pkcs11.Ctx
+	session     pkcs11.SessionHandle
+	slotID      uint
+	userPIN     string
+	tokenLabel  string
+	pendingKeys *list.List
 }
 
 type moduleConfig struct {
@@ -105,7 +109,7 @@ var ecsdaCurveID = elliptic.P384()
 func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create PKCS11 module")
 
-	pkcs11Module := &PKCS11Module{certType: certType}
+	pkcs11Module := &PKCS11Module{certType: certType, pendingKeys: list.New()}
 
 	defer func() {
 		if err != nil {
@@ -165,6 +169,8 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		return err
 	}
 
+	module.pendingKeys = list.New()
+
 	soPIN := password
 	userPIN := module.userPIN
 
@@ -214,6 +220,8 @@ func (module *PKCS11Module) Clear() (err error) {
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
+	module.pendingKeys = list.New()
+
 	return nil
 }
 
@@ -259,6 +267,13 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 		return nil, err
 	}
 
+	module.pendingKeys.PushBack(privateKey)
+
+	if module.pendingKeys.Len() > maxPendingKeys {
+		log.WithFields(log.Fields{"certType": module.certType}).Warn("Max pending keys reached. Remove old one")
+
+		module.pendingKeys.Remove(module.pendingKeys.Front())
+	}
 	return privateKey, err
 }
 

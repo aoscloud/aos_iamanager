@@ -58,6 +58,7 @@ type ecdsaSignature struct {
 }
 
 type privateKey interface {
+	delete() (err error)
 }
 
 /*******************************************************************************
@@ -237,6 +238,35 @@ func unmarshalECDSASignature(data []byte) (signature ecdsaSignature, err error) 
 	signature.S.SetBytes(data[n:])
 
 	return signature, nil
+}
+
+func (object *pkcs11Object) delete() (err error) {
+	log.WithFields(log.Fields{"session": object.session, "handle": object.handle}).Debug("Delete object")
+
+	if err = object.ctx.DestroyObject(object.session, object.handle); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (key *pkcs11PrivateKey) delete() (err error) {
+	publicObject := pkcs11Object{
+		ctx:     key.ctx,
+		session: key.session,
+		handle:  key.publicKeyHandle,
+		id:      key.id,
+	}
+
+	if err = publicObject.delete(); err != nil {
+		return err
+	}
+
+	if err = key.pkcs11Object.delete(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (key *pkcs11PrivateKeyRSA) loadPublicKey() (err error) {
