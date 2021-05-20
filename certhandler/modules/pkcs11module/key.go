@@ -18,9 +18,12 @@
 package pkcs11module
 
 import (
+	"bytes"
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
+	"encoding/asn1"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -46,6 +49,14 @@ type pkcs11PrivateKeyRSA struct {
 	pkcs11PrivateKey
 }
 
+type pkcs11PrivateKeyECC struct {
+	pkcs11PrivateKey
+}
+
+type ecdsaSignature struct {
+	R, S *big.Int
+}
+
 type privateKey interface {
 }
 
@@ -59,6 +70,13 @@ var pkcs1Prefix = map[crypto.Hash][]byte{
 	crypto.SHA256: {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20},
 	crypto.SHA384: {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30},
 	crypto.SHA512: {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
+}
+
+var curvesMap = map[elliptic.Curve][]byte{
+	elliptic.P224(): mustMarshalASN1(asn1.ObjectIdentifier{1, 3, 132, 0, 33}),
+	elliptic.P256(): mustMarshalASN1(asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}),
+	elliptic.P384(): mustMarshalASN1(asn1.ObjectIdentifier{1, 3, 132, 0, 34}),
+	elliptic.P521(): mustMarshalASN1(asn1.ObjectIdentifier{1, 3, 132, 0, 35}),
 }
 
 /*******************************************************************************
@@ -114,6 +132,25 @@ func (key *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.
 	return key.ctx.Sign(key.session, digest)
 }
 
+func (key *pkcs11PrivateKeyECC) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+	mechanisms := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)}
+
+	if err = key.ctx.SignInit(key.session, mechanisms, key.handle); err != nil {
+		return nil, err
+	}
+
+	if signature, err = key.ctx.Sign(key.session, digest); err != nil {
+		return nil, err
+	}
+
+	ecdsaSignature, err := unmarshalECDSASignature(signature)
+	if err != nil {
+		return nil, err
+	}
+
+	return asn1.Marshal(ecdsaSignature)
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -143,6 +180,65 @@ func hashToPKCS11(hashFunction crypto.Hash) (hashAlg uint32, mgfAlg uint32, hash
 	}
 }
 
+func mustMarshalASN1(val interface{}) (oid []byte) {
+	var err error
+
+	if oid, err = asn1.Marshal(val); err != nil {
+		panic(err)
+	}
+
+	return oid
+}
+
+func marshalCurve(curve elliptic.Curve) (oid []byte, err error) {
+	var ok bool
+
+	if oid, ok = curvesMap[curve]; !ok {
+		return nil, fmt.Errorf("unsupported curve: %s", curve.Params().Name)
+	}
+
+	return oid, err
+}
+
+func unmarshalCurve(oid []byte) (curve elliptic.Curve, err error) {
+	for curve, curveOid := range curvesMap {
+		if bytes.Equal(curveOid, oid) {
+			return curve, nil
+		}
+	}
+
+	return nil, errors.New("unsupported curve")
+}
+
+func unmarshalECPoint(point []byte, curve elliptic.Curve) (x *big.Int, y *big.Int, err error) {
+	var pointBytes []byte
+
+	if _, err = asn1.Unmarshal(point, &pointBytes); err != nil {
+		return nil, nil, errors.New("can't unmarshal EC point")
+	}
+
+	if x, y = elliptic.Unmarshal(curve, pointBytes); x == nil || y == nil {
+		return nil, nil, errors.New("can't unmarshal EC point")
+	}
+
+	return x, y, nil
+}
+
+func unmarshalECDSASignature(data []byte) (signature ecdsaSignature, err error) {
+	if len(data) == 0 || len(data)%2 != 0 {
+		return ecdsaSignature{}, errors.New("ECDSA signature length is invalid from")
+	}
+
+	n := len(data) / 2
+
+	signature.R, signature.S = new(big.Int), new(big.Int)
+
+	signature.R.SetBytes(data[:n])
+	signature.S.SetBytes(data[n:])
+
+	return signature, nil
+}
+
 func (key *pkcs11PrivateKeyRSA) loadPublicKey() (err error) {
 	template := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_MODULUS, nil),
@@ -162,6 +258,32 @@ func (key *pkcs11PrivateKeyRSA) loadPublicKey() (err error) {
 	}
 
 	key.publicKey = &rsa.PublicKey{N: modulus, E: int(exponent.Int64())}
+
+	return nil
+}
+
+func (key *pkcs11PrivateKeyECC) loadPublicKey() (err error) {
+	template := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, nil),
+		pkcs11.NewAttribute(pkcs11.CKA_EC_POINT, nil),
+	}
+
+	attributes, err := key.ctx.GetAttributeValue(key.session, key.publicKeyHandle, template)
+	if err != nil {
+		return err
+	}
+
+	var publicKey ecdsa.PublicKey
+
+	if publicKey.Curve, err = unmarshalCurve(attributes[0].Value); err != nil {
+		return err
+	}
+
+	if publicKey.X, publicKey.Y, err = unmarshalECPoint(attributes[1].Value, publicKey.Curve); err != nil {
+		return err
+	}
+
+	key.publicKey = &publicKey
 
 	return nil
 }
@@ -226,5 +348,60 @@ func createRSAKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 func createECCKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	id, label string, curve elliptic.Curve) (key privateKey, err error) {
-	return nil, nil
+	parameters, err := marshalCurve(curve)
+	if err != nil {
+		return nil, err
+	}
+
+	publicTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+		pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, parameters),
+	}
+
+	privateTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+	}
+
+	mechanisms := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
+
+	publicHandle, privateHandle, err := ctx.GenerateKeyPair(session, mechanisms, publicTemplate, privateTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	log.WithFields(log.Fields{
+		"session":       session,
+		"id":            id,
+		"label":         label,
+		"publicHandle":  publicHandle,
+		"privateHandle": privateHandle}).Debug("Generate ECC key")
+
+	eccKey := &pkcs11PrivateKeyECC{
+		pkcs11PrivateKey: pkcs11PrivateKey{
+			pkcs11Object: pkcs11Object{
+				ctx:     ctx,
+				session: session,
+				handle:  privateHandle,
+				id:      id,
+				label:   label,
+			},
+			publicKeyHandle: publicHandle,
+		},
+	}
+
+	if err = eccKey.loadPublicKey(); err != nil {
+		return nil, err
+	}
+
+	return eccKey, nil
 }
