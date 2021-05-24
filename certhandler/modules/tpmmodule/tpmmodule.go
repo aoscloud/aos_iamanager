@@ -18,6 +18,7 @@
 package tpmmodule
 
 import (
+	"container/list"
 	"crypto"
 	"encoding/base64"
 	"encoding/json"
@@ -64,7 +65,7 @@ type TPMModule struct {
 	device        io.ReadWriteCloser
 	primaryHandle tpmutil.Handle
 
-	pendingKeys []tpmkey.TPMKey
+	pendingKeys *list.List
 }
 
 type moduleConfig struct {
@@ -84,7 +85,7 @@ func New(certType string, configJSON json.RawMessage,
 	device io.ReadWriteCloser) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create TPM module")
 
-	tpmModule := &TPMModule{certType: certType}
+	tpmModule := &TPMModule{certType: certType, pendingKeys: list.New()}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &tpmModule.config); err != nil {
@@ -296,12 +297,12 @@ func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.Priva
 		return "", err
 	}
 
-	if len(module.pendingKeys) < maxPendingKeys {
-		module.pendingKeys = append(module.pendingKeys, newKey)
-	} else {
+	module.pendingKeys.PushBack(newKey)
+
+	if module.pendingKeys.Len() > maxPendingKeys {
 		log.WithFields(log.Fields{"certType": module.certType}).Warn("Max pending keys reached. Remove old one")
 
-		module.pendingKeys[0] = newKey
+		module.pendingKeys.Remove(module.pendingKeys.Front())
 	}
 
 	return newKey, nil
@@ -317,11 +318,21 @@ func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cer
 	}
 
 	var currentKey tpmkey.TPMKey
+	var next *list.Element
 
-	for i, key := range module.pendingKeys {
-		if err = cryptutils.CheckCertificate(x509Certs[0], key); err == nil {
+	for e := module.pendingKeys.Front(); e != nil; e = next {
+		next = e.Next()
+
+		key, ok := e.Value.(tpmkey.TPMKey)
+		if !ok {
+			log.Errorf("Wrong key type in pending keys list")
+
+			continue
+		}
+
+		if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
 			currentKey = key
-			module.pendingKeys = append(module.pendingKeys[:i], module.pendingKeys[i+1:]...)
+			module.pendingKeys.Remove(e)
 
 			break
 		}

@@ -18,6 +18,7 @@
 package swmodule
 
 import (
+	"container/list"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -59,7 +60,7 @@ type SWModule struct {
 	certType string
 	config   moduleConfig
 
-	pendingKeys []crypto.PrivateKey
+	pendingKeys *list.List
 }
 
 type moduleConfig struct {
@@ -81,7 +82,7 @@ var ecsdaCurveID = elliptic.P384()
 func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create SW module")
 
-	swModule := &SWModule{certType: certType}
+	swModule := &SWModule{certType: certType, pendingKeys: list.New()}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &swModule.config); err != nil {
@@ -248,12 +249,12 @@ func (module *SWModule) CreateKey(password, algorithm string) (key crypto.Privat
 		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
-	if len(module.pendingKeys) < maxPendingKeys {
-		module.pendingKeys = append(module.pendingKeys, key)
-	} else {
+	module.pendingKeys.PushBack(key)
+
+	if module.pendingKeys.Len() > maxPendingKeys {
 		log.WithFields(log.Fields{"certType": module.certType}).Warn("Max pending keys reached. Remove old one")
 
-		module.pendingKeys[0] = key
+		module.pendingKeys.Remove(module.pendingKeys.Front())
 	}
 
 	return key, nil
@@ -269,11 +270,21 @@ func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.Cert
 	}
 
 	var currentKey crypto.PrivateKey
+	var next *list.Element
 
-	for i, key := range module.pendingKeys {
-		if err = cryptutils.CheckCertificate(x509Certs[0], key); err == nil {
+	for e := module.pendingKeys.Front(); e != nil; e = next {
+		next = e.Next()
+
+		key, ok := e.Value.(crypto.PrivateKey)
+		if !ok {
+			log.Errorf("Wrong key type in pending keys list")
+
+			continue
+		}
+
+		if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
 			currentKey = key
-			module.pendingKeys = append(module.pendingKeys[:i], module.pendingKeys[i+1:]...)
+			module.pendingKeys.Remove(e)
 
 			break
 		}
