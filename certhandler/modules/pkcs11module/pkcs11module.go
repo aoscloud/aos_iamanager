@@ -21,9 +21,11 @@ import (
 	"container/list"
 	"crypto"
 	"crypto/elliptic"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -85,6 +87,7 @@ type moduleConfig struct {
 	TEELoginType     string   `json:"teeLoginType"`
 	UID              uint32   `json:"uid"`
 	GID              uint32   `json:"gid"`
+	ModulePathInURL  bool     `json:"ModulePathInURL"`
 	ClearHookCmdArgs []string `json:"clearHookCmdArgs"`
 }
 
@@ -284,12 +287,60 @@ func (module *PKCS11Module) ApplyCertificate(cert []byte) (certInfo certhandler.
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
+	x509Certs, err := cryptutils.PEMToX509Cert(cert)
+	if err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
+
+	var currentKey privateKey
+	var next *list.Element
+
+	for e := module.pendingKeys.Front(); e != nil; e = next {
+		next = e.Next()
+
+		key, ok := e.Value.(privateKey)
+		if !ok {
+			log.Errorf("Wrong key type in pending keys list")
+
+			continue
+		}
+
+		if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
+			currentKey = key
+			module.pendingKeys.Remove(e)
+
+			break
+		}
+	}
+
+	if currentKey == nil {
+		return certhandler.CertInfo{}, "", errors.New("no corresponding key found")
+	}
+
+	if err = currentKey.moveToToken(); err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
+
+	if _, err = createCertificateChain(module.ctx, module.session, currentKey.getID(), module.certType, x509Certs); err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
+
+	certInfo.CertURL = module.createURL(module.certType, currentKey.getID())
+	certInfo.KeyURL = module.createURL(module.certType, currentKey.getID())
+	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Certs[0].RawIssuer)
+	certInfo.Serial = fmt.Sprintf("%X", x509Certs[0].SerialNumber)
+	certInfo.NotAfter = x509Certs[0].NotAfter
+
 	log.WithFields(log.Fields{
 		"certType": module.certType,
 		"certURL":  certInfo.CertURL,
 		"keyURL":   certInfo.KeyURL,
 		"notAfter": certInfo.NotAfter,
 	}).Debug("Certificate applied")
+
+	if err = module.tokenMemInfo(); err != nil {
+		return certhandler.CertInfo{}, "", err
+	}
 
 	return certInfo, "", nil
 }
@@ -366,6 +417,30 @@ func setTeeEnvVars(loginType string, gid uint32) (err error) {
 	}
 
 	return nil
+}
+
+func (module *PKCS11Module) createURL(label, id string) (uri string) {
+	opaque := fmt.Sprintf("token=%s", module.tokenLabel)
+
+	if label != "" {
+		opaque += fmt.Sprintf(";object=%s", label)
+	}
+
+	if id != "" {
+		opaque += fmt.Sprintf(";id=%s", id)
+	}
+
+	query := url.Values{}
+
+	if module.config.ModulePathInURL {
+		query.Set("module-path", module.config.Library)
+	}
+
+	query.Set("pin-value", module.userPIN)
+
+	pkcs11URL := &url.URL{Scheme: cryptutils.SchemePKCS11, Opaque: opaque, RawQuery: query.Encode()}
+
+	return pkcs11URL.String()
 }
 
 func (module *PKCS11Module) initContext() (err error) {

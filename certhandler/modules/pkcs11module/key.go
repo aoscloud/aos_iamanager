@@ -58,6 +58,8 @@ type ecdsaSignature struct {
 }
 
 type privateKey interface {
+	getID() (id string)
+	moveToToken() (err error)
 	delete() (err error)
 }
 
@@ -240,16 +242,6 @@ func unmarshalECDSASignature(data []byte) (signature ecdsaSignature, err error) 
 	return signature, nil
 }
 
-func (object *pkcs11Object) delete() (err error) {
-	log.WithFields(log.Fields{"session": object.session, "handle": object.handle}).Debug("Delete object")
-
-	if err = object.ctx.DestroyObject(object.session, object.handle); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (key *pkcs11PrivateKey) delete() (err error) {
 	publicObject := pkcs11Object{
 		ctx:     key.ctx,
@@ -265,6 +257,38 @@ func (key *pkcs11PrivateKey) delete() (err error) {
 	if err = key.pkcs11Object.delete(); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (key *pkcs11PrivateKey) moveToToken() (err error) {
+	template := []*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true)}
+
+	newPublicHandle, err := key.ctx.CopyObject(key.session, key.publicKeyHandle, template)
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"session":   key.session,
+		"handle":    key.publicKeyHandle,
+		"newHandle": newPublicHandle}).Debug("Copy public key to token")
+
+	newPrivateHandle, err := key.ctx.CopyObject(key.session, key.handle, template)
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"session":   key.session,
+		"handle":    key.handle,
+		"newHandle": newPrivateHandle}).Debug("Copy private key to token")
+
+	if err = key.delete(); err != nil {
+		return err
+	}
+
+	key.publicKeyHandle, key.handle = newPublicHandle, newPrivateHandle
 
 	return nil
 }
