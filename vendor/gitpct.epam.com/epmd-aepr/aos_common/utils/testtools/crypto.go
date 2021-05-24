@@ -181,5 +181,10 @@ IP.1 = 127.0.0.1`
 		return nil, err
 	}
 
-	return certData, nil
+	caData, err := ioutil.ReadFile(caCertFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(certData, caData...), nil
 }

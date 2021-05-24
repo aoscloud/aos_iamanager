@@ -35,7 +35,7 @@ github.com/miekg/pkcs11
 # github.com/sirupsen/logrus v1.7.0
 ## explicit
 github.com/sirupsen/logrus
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210329120743-7acb8a870628
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524132411-918d2305a9a0
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
 gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils

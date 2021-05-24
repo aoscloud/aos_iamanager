@@ -414,6 +414,10 @@ gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210318140034-0415736a7207 h1:C0ySL
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210318140034-0415736a7207/go.mod h1:IdDLDJkHeoWMhhi/Z6/XHcwhJEFbErLIXuof48yoUVE=
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210329120743-7acb8a870628 h1:YdM0MVX5NVrxFjV5OzOaIBn4lyOzS1rq4mn88HjOLdE=
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210329120743-7acb8a870628/go.mod h1:IdDLDJkHeoWMhhi/Z6/XHcwhJEFbErLIXuof48yoUVE=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524130500-2df0a49d8c76 h1:M3bCNyZKeKwBIbaUlLuI4idHV4jb34kWhohINhQUBMI=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524130500-2df0a49d8c76/go.mod h1:xPgj+JR/yxq+qOnr9MJv82XzLQvrMXsmnyZ1bHtGAlE=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524132411-918d2305a9a0 h1:ZFbbqds3u9gFIiBZmsWtq+Tgo0KUntBt7HOeZ3dd0r4=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524132411-918d2305a9a0/go.mod h1:xPgj+JR/yxq+qOnr9MJv82XzLQvrMXsmnyZ1bHtGAlE=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.mongodb.org/mongo-driver v1.1.0/go.mod h1:u7ryQJ+DOzQmeO7zB6MHyr8jkEQvC8vH7qLUO4lqsUM=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=

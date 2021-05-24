@@ -13,7 +13,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.2
 	github.com/miekg/pkcs11 v1.0.3
 	github.com/sirupsen/logrus v1.7.0
-	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210329120743-7acb8a870628
+	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524132411-918d2305a9a0
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	google.golang.org/grpc v1.33.1
 	google.golang.org/protobuf v1.25.0 // indirect
