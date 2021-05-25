@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ThalesIgnite/crypto11"
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -46,8 +47,18 @@ import (
 	"golang.org/x/crypto/cryptobyte/asn1"
 
 	"aos_iamanager/certhandler"
+	"aos_iamanager/certhandler/modules/pkcs11module"
 	"aos_iamanager/certhandler/modules/swmodule"
 	"aos_iamanager/certhandler/modules/tpmmodule"
+)
+
+/*******************************************************************************
+ * Consts
+ ******************************************************************************/
+
+const (
+	pkcs11LibPath = "/usr/lib/softhsm/libsofthsm2.so"
+	pkcs11DBPath  = "/var/lib/softhsm/tokens/"
 )
 
 /*******************************************************************************
@@ -116,27 +127,15 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestUpdateCertificate(t *testing.T) {
-	numKeys := 16
+	numKeys := 30
+	maxPendingKeys := 16
+	maxApplyKeys := 7
 
-	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
+	for _, createModule := range []createModuleType{createSwModule, createTpmModule, createPKCS11Module} {
 		for _, algorithm := range []string{cryptutils.AlgRSA, cryptutils.AlgECC} {
 			module, err := createModule(true)
 			if err != nil {
 				t.Fatalf("Can't create module: %s", err)
-			}
-			defer module.Close()
-
-			var maxPendingKeys = 0
-			var maxApplyKeys = 0
-
-			switch module.(type) {
-			case *swmodule.SWModule:
-				maxPendingKeys = 16
-				maxApplyKeys = 16
-
-			case *tpmmodule.TPMModule:
-				maxPendingKeys = 16
-				maxApplyKeys = 7
 			}
 
 			// Set owner
@@ -160,9 +159,13 @@ func TestUpdateCertificate(t *testing.T) {
 				keys = append(keys, key)
 			}
 
-			if numKeys >= maxPendingKeys {
+			if numKeys > maxPendingKeys {
 				keys = keys[numKeys-maxPendingKeys : numKeys-maxPendingKeys+maxApplyKeys]
+			} else {
+				keys = keys[:maxApplyKeys]
 			}
+
+			var certInfos []certhandler.CertInfo
 
 			for _, key := range keys {
 				// Create CSR
@@ -197,8 +200,19 @@ func TestUpdateCertificate(t *testing.T) {
 					t.Fatalf("Can't apply certificate: %s", err)
 				}
 
-				// Check encrypt/decrypt with private key
+				certInfos = append(certInfos, certInfo)
 
+			}
+
+			if err = module.Close(); err != nil {
+				t.Errorf("Can't close module: %s", err)
+			}
+
+			// Check encrypt/decrypt with private key
+
+			var pkcs11Ctx *crypto11.Context
+
+			for _, certInfo := range certInfos {
 				keyVal, err := url.Parse(certInfo.KeyURL)
 				if err != nil {
 					t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
@@ -222,8 +236,39 @@ func TestUpdateCertificate(t *testing.T) {
 						t.Fatalf("Can't create key: %s", err)
 					}
 
+				case cryptutils.SchemePKCS11:
+					opaqueValues, err := url.ParseQuery(keyVal.Opaque)
+					if err != nil {
+						t.Fatalf("Can't parse opaque: %s", err)
+					}
+
+					if pkcs11Ctx == nil {
+						if pkcs11Ctx, err = crypto11.Configure(&crypto11.Config{
+							Path:       pkcs11LibPath,
+							TokenLabel: opaqueValues["token"][0],
+							Pin:        keyVal.Query()["pin-value"][0],
+						}); err != nil {
+							t.Fatalf("Can't init pkcs11 context: %s", err)
+						}
+					}
+
+					if currentKey, err = pkcs11Ctx.FindKeyPair([]byte(opaqueValues["id"][0]), nil); err != nil {
+						t.Fatalf("Can't find key: %s", err)
+					}
+
+					if currentKey == nil {
+						t.Fatal("Key not found")
+					}
+
 				default:
 					t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
+				}
+
+				switch currentKey.(type) {
+				case crypto.Decrypter:
+				case crypto.Signer:
+				default:
+					t.Fatalf("Key %s doesn't support required interface", certInfo.KeyURL)
 				}
 
 				// Check descryption
@@ -280,6 +325,14 @@ func TestUpdateCertificate(t *testing.T) {
 					default:
 						t.Fatal("Unsupported key type")
 					}
+				}
+			}
+
+			// Close PKCS11 context
+
+			if pkcs11Ctx != nil {
+				if err = pkcs11Ctx.Close(); err != nil {
+					t.Fatalf("Can't close pkcs11 context: %s", err)
 				}
 			}
 		}
@@ -685,6 +738,22 @@ func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
 		"recoveryTime": %d, "lockoutRecoveryTime": %d}`, certStorage, lockoutMaxRetries, recoveryTime, lockoutRecoveryTime))
 
 	return tpmmodule.New("test", config, tpmSimulator)
+}
+
+func createPKCS11Module(doReset bool) (module certhandler.CertModule, err error) {
+	if doReset {
+		if err = os.RemoveAll(pkcs11DBPath); err != nil {
+			return nil, err
+		}
+
+		if err = os.MkdirAll(pkcs11DBPath, 0755); err != nil {
+			return nil, err
+		}
+	}
+
+	config := json.RawMessage(fmt.Sprintf(`{"library":"%s","userPin":"1234"}`, pkcs11LibPath))
+
+	return pkcs11module.New("test", config)
 }
 
 func checkFileURL(strURL string, file string) (err error) {
