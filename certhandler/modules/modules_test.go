@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -31,13 +32,17 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"testing"
+	"unsafe"
 
 	"github.com/ThalesIgnite/crypto11"
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
+	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
@@ -353,7 +358,6 @@ func TestValidateCertificates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
-		defer module.Close()
 
 		// Set owner
 
@@ -490,6 +494,10 @@ func TestValidateCertificates(t *testing.T) {
 			}
 		}
 
+		if err = module.Close(); err != nil {
+			t.Fatalf("Can't close module: %s", err)
+		}
+
 		// Check cert files
 
 		certURLs := make([]string, 0, len(certInfos))
@@ -498,39 +506,26 @@ func TestValidateCertificates(t *testing.T) {
 			certURLs = append(certURLs, info.CertURL)
 		}
 
-		checkCertURLs(t, certStorage, certURLs)
+		checkLocationURLs(t, certURLs[0], "cert", certURLs)
 
 		// Check key files
 
-		switch module.(type) {
-		case *swmodule.SWModule:
-			keyURLs := make([]string, 0, len(certInfos))
+		keyURLs := make([]string, 0, len(certInfos))
 
-			for _, info := range certInfos {
-				keyURLs = append(keyURLs, info.KeyURL)
-			}
-
-			checkKeyURLs(t, certStorage, keyURLs)
-
-		case *tpmmodule.TPMModule:
-			keyURLs := make([]string, 0, len(certInfos))
-
-			for _, info := range certInfos {
-				keyURLs = append(keyURLs, info.KeyURL)
-			}
-
-			checkHandleURLs(t, certStorage, keyURLs)
+		for _, info := range certInfos {
+			keyURLs = append(keyURLs, info.KeyURL)
 		}
+
+		checkLocationURLs(t, keyURLs[0], "key", keyURLs)
 	}
 }
 
 func TestSetOwnerClear(t *testing.T) {
-	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
+	for _, createModule := range []createModuleType{createSwModule, createTpmModule, createPKCS11Module} {
 		module, err := createModule(true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
 		}
-		defer module.Close()
 
 		// Set owner
 
@@ -542,7 +537,7 @@ func TestSetOwnerClear(t *testing.T) {
 
 		// Check if we can set owner twice
 		if err = module.SetOwner(password); err != nil {
-			t.Errorf("Can't set owner: %s", err)
+			t.Fatalf("Can't set owner: %s", err)
 		}
 
 		// Create key
@@ -571,48 +566,31 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
+		if err = module.Close(); err != nil {
+			t.Fatalf("Can't close module: %s", err)
+		}
+
 		// Check key files
 
-		keyVal, err := url.Parse(certInfo.KeyURL)
-		if err != nil {
-			t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
-		}
-
-		checkCertURLs(t, certStorage, []string{certInfo.CertURL})
-
-		switch keyVal.Scheme {
-		case cryptutils.SchemeFile:
-			checkKeyURLs(t, certStorage, []string{certInfo.KeyURL})
-
-		case cryptutils.SchemeTPM:
-			checkHandleURLs(t, certStorage, []string{certInfo.KeyURL})
-
-		default:
-			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
-
-			continue
-		}
+		checkLocationURLs(t, certInfo.CertURL, "cert", []string{certInfo.CertURL})
+		checkLocationURLs(t, certInfo.KeyURL, "key", []string{certInfo.KeyURL})
 
 		// Clear
+
+		if module, err = createModule(false); err != nil {
+			t.Fatalf("Can't create module: %s", err)
+		}
 
 		if err = module.Clear(); err != nil {
 			t.Fatalf("Can't clear: %s", err)
 		}
 
-		checkCertURLs(t, certStorage, nil)
-
-		switch keyVal.Scheme {
-		case cryptutils.SchemeFile:
-			checkKeyURLs(t, certStorage, nil)
-
-		case cryptutils.SchemeTPM:
-			checkHandleURLs(t, certStorage, nil)
-
-		default:
-			t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
-
-			continue
+		if err = module.Close(); err != nil {
+			t.Fatalf("Can't close module: %s", err)
 		}
+
+		checkLocationURLs(t, certInfo.CertURL, "cert", nil)
+		checkLocationURLs(t, certInfo.KeyURL, "key", nil)
 	}
 }
 
@@ -756,37 +734,6 @@ func createPKCS11Module(doReset bool) (module certhandler.CertModule, err error)
 	return pkcs11module.New("test", config)
 }
 
-func checkFileURL(strURL string, file string) (err error) {
-	valURL, err := url.Parse(strURL)
-	if err != nil {
-		return err
-	}
-
-	if file != valURL.Path {
-		return fmt.Errorf("cert file mismatch: %s !=%s", strURL, file)
-	}
-
-	return nil
-}
-
-func checkHandleURL(keyURL string, handle tpmutil.Handle) (err error) {
-	urlVal, err := url.Parse(keyURL)
-	if err != nil {
-		return err
-	}
-
-	handleVal, err := strconv.ParseUint(urlVal.Hostname(), 0, 32)
-	if err != nil {
-		return err
-	}
-
-	if handle != tpmutil.Handle(handleVal) {
-		return fmt.Errorf("handle mismatch: %s != 0x%X", keyURL, handle)
-	}
-
-	return nil
-}
-
 func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
 	t.Helper()
 
@@ -812,38 +759,11 @@ func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
 	}
 }
 
-func checkHandleURLs(t *testing.T, storagePath string, expectedURLs []string) {
-	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
-		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
-	if err != nil {
-		t.Fatalf("Can't read persistent storage: %s", err)
-	}
-
-	existingURLs := make([]string, 0)
-
-	for _, value := range values {
-		handle, ok := value.(tpmutil.Handle)
-		if !ok {
-			t.Fatal("Wrong TPM data format")
-		}
-
-		keyURL := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
-
-		existingURLs = append(existingURLs, keyURL.String())
-	}
-
-	checkUrls(t, expectedURLs, existingURLs)
-}
-
-func checkKeyURLs(t *testing.T, storagePath string, expectedURLs []string) {
-	t.Helper()
-
+func getExistingFileItems(itemType, storagePath string) (existingURLs []string, err error) {
 	content, err := ioutil.ReadDir(storagePath)
 	if err != nil {
-		t.Fatalf("Can't read storage dir: %s", err)
+		return nil, err
 	}
-
-	existingURLs := make([]string, 0)
 
 	for _, item := range content {
 		if item.IsDir() {
@@ -852,8 +772,19 @@ func checkKeyURLs(t *testing.T, storagePath string, expectedURLs []string) {
 
 		absItemPath := path.Join(storagePath, item.Name())
 
-		if _, err = cryptutils.LoadKey(absItemPath); err != nil {
-			continue
+		switch itemType {
+		case "cert":
+			if _, err = cryptutils.LoadCertificate(absItemPath); err != nil {
+				continue
+			}
+
+		case "key":
+			if _, err = cryptutils.LoadKey(absItemPath); err != nil {
+				continue
+			}
+
+		default:
+			return nil, fmt.Errorf("unsupported item type: %s", itemType)
 		}
 
 		keyURL := url.URL{Scheme: cryptutils.SchemeFile, Path: absItemPath}
@@ -861,33 +792,163 @@ func checkKeyURLs(t *testing.T, storagePath string, expectedURLs []string) {
 		existingURLs = append(existingURLs, keyURL.String())
 	}
 
-	checkUrls(t, expectedURLs, existingURLs)
+	return existingURLs, nil
 }
 
-func checkCertURLs(t *testing.T, storagePath string, expectedURLs []string) {
-	t.Helper()
+func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
+	switch itemType {
+	case "key":
 
-	content, err := ioutil.ReadDir(storagePath)
-	if err != nil {
-		t.Fatalf("Can't read storage dir: %s", err)
+	default:
+		return nil, fmt.Errorf("unsupported item type: %s", itemType)
 	}
+
+	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
+		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, value := range values {
+		handle, ok := value.(tpmutil.Handle)
+		if !ok {
+			return nil, errors.New("wrong TPM data format")
+		}
+
+		keyURL := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
+
+		existingURLs = append(existingURLs, keyURL.String())
+	}
+
+	return existingURLs, nil
+}
+
+func createPkcs11URL(token, userPin, label, id string) (urlStr string) {
+	opaque := fmt.Sprintf("token=%s", token)
+
+	if label != "" {
+		opaque += fmt.Sprintf(";object=%s", label)
+	}
+
+	if id != "" {
+		opaque += fmt.Sprintf(";id=%s", id)
+	}
+
+	query := url.Values{}
+
+	query.Set("pin-value", userPin)
+
+	pkcs11URL := &url.URL{Scheme: cryptutils.SchemePKCS11, Opaque: opaque, RawQuery: query.Encode()}
+
+	return pkcs11URL.String()
+}
+
+func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURLs []string, err error) {
+	pkcs11Ctx, err := crypto11.Configure(&crypto11.Config{
+		Path:       pkcs11LibPath,
+		TokenLabel: token,
+		Pin:        userPin})
+	if err != nil {
+		return nil, err
+	}
+	defer pkcs11Ctx.Close()
+
+	switch itemType {
+	case "cert":
+		ctx := (*pkcs11.Ctx)(unsafe.Pointer(reflect.ValueOf(pkcs11Ctx).Elem().FieldByName("ctx").Pointer()))
+		session := pkcs11.SessionHandle(reflect.ValueOf(pkcs11Ctx).Elem().FieldByName("persistentSession").Uint())
+
+		template := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
+		}
+
+		if err = ctx.FindObjectsInit(session, template); err != nil {
+			return nil, err
+		}
+		defer ctx.FindObjectsFinal(session)
+
+		for {
+			handles, _, err := ctx.FindObjects(session, 32)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, handle := range handles {
+
+				attributes, err := ctx.GetAttributeValue(session, handle, []*pkcs11.Attribute{
+					pkcs11.NewAttribute(pkcs11.CKA_ID, nil)})
+				if err != nil {
+					return nil, err
+				}
+
+				existingURLs = append(existingURLs, createPkcs11URL(token, userPin, label, string(attributes[0].Value)))
+			}
+
+			if len(handles) == 0 {
+				break
+			}
+		}
+
+	case "key":
+		keys, err := pkcs11Ctx.FindKeyPairs(nil, []byte(label))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, key := range keys {
+			attr, err := pkcs11Ctx.GetAttribute(key, crypto11.CkaId)
+			if err != nil {
+				return nil, err
+			}
+
+			existingURLs = append(existingURLs, createPkcs11URL(token, userPin, label, string(attr.Value)))
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported item type: %s", itemType)
+	}
+
+	return existingURLs, nil
+}
+
+func checkLocationURLs(t *testing.T, location, itemType string, expectedURLs []string) {
+	t.Helper()
 
 	existingURLs := make([]string, 0)
 
-	for _, item := range content {
-		if item.IsDir() {
-			continue
+	locationURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("Can't parse key location: %s", err)
+	}
+
+	switch locationURL.Scheme {
+	case cryptutils.SchemeFile:
+		if existingURLs, err = getExistingFileItems(itemType, filepath.Dir(locationURL.Path)); err != nil {
+			t.Fatalf("Can't get existing file items: %s", err)
 		}
 
-		absItemPath := path.Join(storagePath, item.Name())
-
-		if _, err = cryptutils.LoadCertificate(absItemPath); err != nil {
-			continue
+	case cryptutils.SchemeTPM:
+		if existingURLs, err = getExistingTPMItems(itemType); err != nil {
+			t.Fatalf("Can't get existing file items: %s", err)
 		}
 
-		certURL := url.URL{Scheme: cryptutils.SchemeFile, Path: absItemPath}
+	case cryptutils.SchemePKCS11:
+		opaqueValues, err := url.ParseQuery(locationURL.Opaque)
+		if err != nil {
+			t.Fatalf("Can't parse opaque: %s", err)
+		}
 
-		existingURLs = append(existingURLs, certURL.String())
+		if existingURLs, err = getExistingPKCS11Items(
+			opaqueValues["token"][0],
+			locationURL.Query()["pin-value"][0],
+			opaqueValues["object"][0], itemType); err != nil {
+			t.Fatalf("Can't get existing file items: %s", err)
+		}
+
+	default:
+		t.Fatalf("Unsupported key scheme: %s", locationURL.Scheme)
 	}
 
 	checkUrls(t, expectedURLs, existingURLs)

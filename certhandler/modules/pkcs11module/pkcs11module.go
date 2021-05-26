@@ -223,9 +223,31 @@ func (module *PKCS11Module) Clear() (err error) {
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
+	session, err := module.getSession(true)
+	if err != nil {
+		return err
+	}
+
 	module.pendingKeys = list.New()
 
-	return nil
+	objects, err := findObjects(module.ctx, session, []*pkcs11.Attribute{})
+	if err != nil {
+		return err
+	}
+
+	for _, object := range objects {
+		if objectErr := object.delete(); objectErr != nil {
+			if objectErr != nil {
+				log.Errorf("Can't delete object, handle: %d", object.handle)
+
+				if err == nil {
+					err = objectErr
+				}
+			}
+		}
+	}
+
+	return err
 }
 
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
