@@ -23,6 +23,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,6 +43,7 @@ import (
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
+	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
@@ -648,6 +650,106 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	if caps[0].(tpm2.TaggedProperty).Value != 1 {
 		t.Errorf("Got %d, expected 1", caps[0].(tpm2.TaggedProperty).Value)
 	}
+}
+
+func TestPKCS11ValidateCertChain(t *testing.T) {
+	module, err := createPKCS11Module(true)
+	if err != nil {
+		t.Fatalf("Can't create module: %s", err)
+	}
+
+	// Set owner
+
+	password := "password"
+
+	if err = module.SetOwner(password); err != nil {
+		t.Fatalf("Can't set owner: %s", err)
+	}
+
+	// Generate valid certificates
+
+	numValidCerts := 5
+
+	for i := 0; i < numValidCerts; i++ {
+		key, err := module.CreateKey(password, cryptutils.AlgRSA)
+		if err != nil {
+			t.Fatalf("Can't create key: %s", err)
+		}
+
+		// Create CSR
+
+		csr, err := testtools.CreateCSR(key)
+		if err != nil {
+			t.Fatalf("Can't create CSR: %s", err)
+		}
+
+		// Apply certificate
+
+		cert, err := testtools.CreateCertificate(tmpDir, csr)
+		if err != nil {
+			t.Fatalf("Can't generate certificate: %s", err)
+		}
+
+		if _, _, err = module.ApplyCertificate(cert); err != nil {
+			t.Fatalf("Can't apply certificate: %s", err)
+		}
+	}
+
+	if err = module.Close(); err != nil {
+		t.Fatalf("Can't close module: %s", err)
+	}
+
+	pkcs11Ctx, err := crypto11.Configure(&crypto11.Config{
+		Path: pkcs11LibPath, TokenLabel: "aos", Pin: "1234"})
+	if err != nil {
+		t.Fatalf("Can't create PKCS11 context: %s", err)
+	}
+
+	// Generate invalid certificates
+
+	numInvalidCerts := 10
+
+	var expectedInvalidCerts []string
+
+	for i := 0; i < numInvalidCerts; i++ {
+		serial, err := rand.Int(rand.Reader, big.NewInt(1024))
+		if err != nil {
+			t.Fatalf("Can't generate random: %s", err)
+		}
+
+		cert := &x509.Certificate{
+			SerialNumber: serial,
+			RawSubject:   []byte(uuid.New().String()),
+			RawIssuer:    []byte(uuid.New().String()),
+		}
+
+		id := uuid.New().String()
+
+		if err = pkcs11Ctx.ImportCertificate([]byte(id), cert); err != nil {
+			t.Fatalf("Can't import certificate: %s", err)
+		}
+
+		expectedInvalidCerts = append(expectedInvalidCerts, createPkcs11URL("aos", "1234", "", id))
+	}
+
+	if err = pkcs11Ctx.Close(); err != nil {
+		t.Fatalf("Can't close PKCS11 context: %s", err)
+	}
+
+	if module, err = createPKCS11Module(false); err != nil {
+		t.Fatalf("Can't create module: %s", err)
+	}
+
+	_, invalidCerts, _, err := module.ValidateCertificates()
+	if err != nil {
+		t.Fatalf("Can't validate certificates: %s", err)
+	}
+
+	if err = module.Close(); err != nil {
+		t.Fatalf("Can't close module: %s", err)
+	}
+
+	checkUrls(t, expectedInvalidCerts, invalidCerts)
 }
 
 /*******************************************************************************

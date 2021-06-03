@@ -360,6 +360,19 @@ func (module *PKCS11Module) ValidateCertificates() (
 		invalidCerts = append(invalidCerts, module.createURL(module.certType, certObj.id))
 	}
 
+	// Check certificate chains
+
+	invalidChainCerts, err := checkCertificateChain(module.ctx, session)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	for _, cert := range invalidChainCerts {
+		log.WithFields(log.Fields{"id": cert.id}).Warn("Invalid chain certificate")
+
+		invalidCerts = append(invalidCerts, module.createURL("", cert.id))
+	}
+
 	return validInfos, invalidCerts, invalidKeys, nil
 }
 
