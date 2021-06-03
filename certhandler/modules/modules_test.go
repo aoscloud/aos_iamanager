@@ -351,9 +351,9 @@ func TestValidateCertificates(t *testing.T) {
 	// * onlyKey     - key without cert
 	// * invalidFile - invalid file
 
-	testData := []string{"valid", "onlyCert", "valid", "onlyKey", "invalidFile"}
+	testData := []string{"valid", "onlyCert", "valid", "onlyKey", "valid"}
 
-	for _, createModule := range []createModuleType{createSwModule, createTpmModule} {
+	for _, createModule := range []createModuleType{createSwModule, createTpmModule, createPKCS11Module} {
 		module, err := createModule(true)
 		if err != nil {
 			t.Fatalf("Can't create module: %s", err)
@@ -396,47 +396,15 @@ func TestValidateCertificates(t *testing.T) {
 				t.Fatalf("Can't apply certificate: %s", err)
 			}
 
-			certVal, err := url.Parse(certInfo.CertURL)
-			if err != nil {
-				t.Fatalf("Can't parse cert URL: %s", err)
-			}
-
-			keyVal, err := url.Parse(certInfo.KeyURL)
-			if err != nil {
-				t.Fatalf("Can't parse key URL: %s", err)
-			}
-
 			switch item {
 			case "onlyKey":
-				if err = os.Remove(certVal.Path); err != nil {
-					t.Errorf("Can't remove cert file: %s", err)
+				if err = module.RemoveCertificate(certInfo.CertURL, password); err != nil {
+					t.Fatalf("Can't remove certificate: %s", err)
 				}
 
 			case "onlyCert":
-				switch keyVal.Scheme {
-				case cryptutils.SchemeFile:
-					if err = os.Remove(keyVal.Path); err != nil {
-						t.Errorf("Can't remove key file: %s", err)
-					}
-
-				case cryptutils.SchemeTPM:
-					handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
-					if err != nil {
-						t.Errorf("Can't parse key handle: %s", err)
-					}
-
-					if err = tpm2.EvictControl(tpmSimulator, password, tpm2.HandleOwner, tpmutil.Handle(handle),
-						tpmutil.Handle(handle)); err != nil {
-						t.Errorf("Can't remove key handle: %s", err)
-					}
-
-				default:
-					t.Errorf("Unsupported key scheme: %s", keyVal.Scheme)
-				}
-
-			case "invalidFile":
-				if err = ioutil.WriteFile(certVal.Path, []byte{}, 0644); err != nil {
-					t.Errorf("Can't write file: %s", err)
+				if err = module.RemoveKey(certInfo.KeyURL, password); err != nil {
+					t.Fatalf("Can't remove certificate: %s", err)
 				}
 
 			default:

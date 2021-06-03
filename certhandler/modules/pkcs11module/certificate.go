@@ -48,6 +48,16 @@ var errCertNotFound = errors.New("certificate not found")
  * Private
  ******************************************************************************/
 
+func (cert *pkcs11Certificate) getX509Certificate() (x509Cert *x509.Certificate, err error) {
+	attributes, err := cert.ctx.GetAttributeValue(cert.session, cert.handle,
+		[]*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_VALUE, nil)})
+	if err != nil {
+		return nil, err
+	}
+
+	return x509.ParseCertificate(attributes[0].Value)
+}
+
 func createCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	id, label string, x509Certs []*x509.Certificate) (cert *pkcs11Certificate, err error) {
 	log.WithFields(log.Fields{

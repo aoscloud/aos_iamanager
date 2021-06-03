@@ -258,6 +258,108 @@ func (module *PKCS11Module) ValidateCertificates() (
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
+	session, err := module.getSession(true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// find all certificate objects
+
+	certObjs, err := findObjects(module.ctx, session, []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, module.certType),
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// find all public key objects
+
+	pubKeyObjs, err := findObjects(module.ctx, session, []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, module.certType),
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// find all private key objects
+
+	privKeyObjs, err := findObjects(module.ctx, session, []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, module.certType),
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// find valid private key + public key + certificate with same ID
+
+	k := 0
+
+	for i, privKeyObj := range privKeyObjs {
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Private key found")
+
+		pubKeyIndex, err := findObjectIndexByID(privKeyObj.id, pubKeyObjs)
+		if err != nil {
+			continue
+		}
+
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Public key found")
+
+		certIndex, err := findObjectIndexByID(privKeyObj.id, certObjs)
+		if err != nil {
+			continue
+		}
+
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Certificate found")
+
+		cert := &pkcs11Certificate{pkcs11Object: *certObjs[certIndex]}
+
+		x509Cert, err := cert.getX509Certificate()
+		if err != nil {
+			log.WithFields(log.Fields{"id": cert.id}).Errorf("Can't get x509 certificate: %s", err)
+
+			continue
+		}
+
+		validInfos = append(validInfos, certhandler.CertInfo{
+			Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
+			Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
+			NotAfter: x509Cert.NotAfter,
+			CertURL:  module.createURL(module.certType, certObjs[certIndex].id),
+			KeyURL:   module.createURL(module.certType, privKeyObj.id),
+		})
+
+		privKeyObjs[i], privKeyObjs[k] = privKeyObjs[k], privKeyObj
+		k++
+
+		certObjs = append(certObjs[:certIndex], certObjs[certIndex+1:]...)
+		pubKeyObjs = append(pubKeyObjs[:pubKeyIndex], pubKeyObjs[pubKeyIndex+1:]...)
+	}
+
+	privKeyObjs = privKeyObjs[k:]
+
+	// Fill remaining objects as invalid
+
+	for _, privKeyObj := range privKeyObjs {
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Warn("Invalid private key")
+
+		invalidKeys = append(invalidKeys, module.createURL(module.certType, privKeyObj.id))
+	}
+
+	for _, pubKeyObj := range pubKeyObjs {
+		log.WithFields(log.Fields{"id": pubKeyObj.id}).Warn("Invalid public key")
+
+		invalidKeys = append(invalidKeys, module.createURL(module.certType, pubKeyObj.id))
+	}
+
+	for _, certObj := range certObjs {
+		log.WithFields(log.Fields{"id": certObj.id}).Warn("Invalid certificate")
+
+		invalidCerts = append(invalidCerts, module.createURL(module.certType, certObj.id))
+	}
+
 	return validInfos, invalidCerts, invalidKeys, nil
 }
 
@@ -376,7 +478,34 @@ func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err err
 		"certType": module.certType,
 		"certURL":  certURL}).Debug("Remove certificate")
 
-	return nil
+	urlTemplate, err := parseURL(certURL)
+	if err != nil {
+		return err
+	}
+
+	session, err := module.getSession(true)
+	if err != nil {
+		return err
+	}
+
+	template := []*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE)}
+
+	certObjs, err := findObjects(module.ctx, session, append(template, urlTemplate...))
+	if err != nil {
+		return err
+	}
+
+	for _, certObj := range certObjs {
+		if delErr := certObj.delete(); delErr != nil {
+			log.Errorf("Can't delete object, handle: %d", certObj.handle)
+
+			if err == nil {
+				err = delErr
+			}
+		}
+	}
+
+	return err
 }
 
 // RemoveKey removes key
@@ -388,12 +517,54 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 		"certType": module.certType,
 		"keyURL":   keyURL}).Debug("Remove key")
 
+	urlTemplate, err := parseURL(keyURL)
+	if err != nil {
+		return err
+	}
+
+	session, err := module.getSession(true)
+	if err != nil {
+		return err
+	}
+
+	privObjs, err := findObjects(module.ctx, session, append([]*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY)}, urlTemplate...))
+	if err != nil {
+		return err
+	}
+
+	pubObjs, err := findObjects(module.ctx, session, append([]*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY)}, urlTemplate...))
+	if err != nil {
+		return err
+	}
+
+	for _, obj := range append(privObjs, pubObjs...) {
+		if delErr := obj.delete(); delErr != nil {
+			log.Errorf("Can't delete object, handle: %d", obj.handle)
+
+			if err == nil {
+				err = delErr
+			}
+		}
+	}
+
 	return nil
 }
 
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func findObjectIndexByID(id string, objs []*pkcs11Object) (index int, err error) {
+	for i, obj := range objs {
+		if obj.id == id {
+			return i, nil
+		}
+	}
+
+	return 0, errors.New("object not found")
+}
 
 func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error) {
 	switch loginType {
@@ -439,6 +610,30 @@ func setTeeEnvVars(loginType string, gid uint32) (err error) {
 	}
 
 	return nil
+}
+
+func parseURL(urlStr string) (template []*pkcs11.Attribute, err error) {
+	urlVal, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	opaqueValues, err := url.ParseQuery(urlVal.Opaque)
+	if err != nil {
+		return nil, err
+	}
+
+	for key, value := range opaqueValues {
+		switch key {
+		case "id":
+			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, value[0]))
+
+		case "object":
+			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, value[0]))
+		}
+	}
+
+	return template, nil
 }
 
 func (module *PKCS11Module) createURL(label, id string) (uri string) {
