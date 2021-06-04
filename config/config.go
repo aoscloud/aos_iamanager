@@ -36,6 +36,7 @@ type Config struct {
 	WorkingDir                string         `json:"workingDir"`
 	CertModules               []ModuleConfig `json:"certModules"`
 	FinishProvisioningCmdArgs []string       `json:"finishProvisioningCmdArgs"`
+	DiskEncryptionCmdArgs     []string       `json:"diskEncryptionCmdArgs"`
 	Identifier                struct {
 		Plugin string          `json:"plugin"`
 		Params json.RawMessage `json:"params"`

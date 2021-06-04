@@ -168,6 +168,12 @@ func TestFinishProvisioningCmdArgs(t *testing.T) {
 	}
 }
 
+func DiskEncryptionCmdArgs(t *testing.T) {
+	if !reflect.DeepEqual(cfg.DiskEncryptionCmdArgs, []string{"/bin/sh", "/var/aos/encrypt.sh"}) {
+		t.Errorf("Wrong disk encryption cmd args: %v", cfg.DiskEncryptionCmdArgs)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -193,6 +199,10 @@ func setup() (err error) {
 		"WorkingDir": "/var/aos/iamanager",
 		"FinishProvisioningCmdArgs": [
 			"/var/aos/finish.sh"
+		],
+		"DiskEncryptionCmdArgs": [
+			"/bin/sh",
+			"/var/aos/encrypt.sh"
 		],
 		"CertModules":[{
 			"ID": "id1",
