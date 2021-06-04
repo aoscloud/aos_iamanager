@@ -567,6 +567,96 @@ func TestSetOwnerClear(t *testing.T) {
 	}
 }
 
+// Test for TPM only
+func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
+	password := "password"
+	certStorage := path.Join(tmpDir, "certStorage")
+
+	module, err := createTpmModule(certStorage, true)
+	if err != nil {
+		t.Fatalf("Can't create module: %s", err)
+	}
+	defer module.Close()
+
+	if err = module.SetOwner(password); err != nil {
+		t.Fatalf("Can't set owner: %s", err)
+	}
+
+	caps, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityTPMProperties, 3, uint32(tpm2.MaxAuthFail))
+	if err != nil {
+		t.Fatalf("Failed to get TPM capabilities: %v", err)
+	}
+	maxRetries, recoveryTime, lockoutRecovery := caps[0].(tpm2.TaggedProperty).Value,
+		caps[1].(tpm2.TaggedProperty).Value, caps[2].(tpm2.TaggedProperty).Value
+
+	if maxRetries == 0 {
+		t.Error("maxTries is 0")
+	}
+	if recoveryTime == 0 {
+		t.Error("recoveryTime is 0")
+	}
+	if lockoutRecovery == 0 {
+		t.Error("lockoutRecovery is 0")
+	}
+}
+
+// Test for TPM only
+func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
+	password := "password"
+	pcrSelection7 := tpm2.PCRSelection{Hash: tpm2.AlgSHA1, PCRs: []int{7}}
+
+	certStorage := path.Join(tmpDir, "certStorage")
+	module, err := createTpmModule(certStorage, true)
+	if err != nil {
+		t.Fatalf("Can't create module: %s", err)
+	}
+	defer module.Close()
+
+	if err = module.SetOwner(password); err != nil {
+		t.Fatalf("Can't set owner: %s", err)
+	}
+
+	handle, _, err := tpm2.CreatePrimary(tpmSimulator, tpm2.HandleOwner, pcrSelection7, password, "", tpm2.Public{
+		Type:       tpm2.AlgRSA,
+		NameAlg:    tpm2.AlgSHA256,
+		Attributes: tpm2.FlagDecrypt | tpm2.FlagUserWithAuth | tpm2.FlagFixedParent | tpm2.FlagFixedTPM | tpm2.FlagSensitiveDataOrigin,
+		RSAParameters: &tpm2.RSAParams{
+			Sign: &tpm2.SigScheme{
+				Alg:  tpm2.AlgNull,
+				Hash: tpm2.AlgNull,
+			},
+			KeyBits: 2048,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Creating primary key failed: %v", err)
+	}
+	defer tpm2.FlushContext(tpmSimulator, handle)
+
+	scheme := &tpm2.AsymScheme{Alg: tpm2.AlgOAEP, Hash: tpm2.AlgSHA256}
+	label := "label"
+
+	encrypted, err := tpm2.RSAEncrypt(tpmSimulator, handle, bytes.Repeat([]byte("a"), 190), scheme, label)
+	if err != nil {
+		t.Fatalf("RSA encryption failed: %v", err)
+	}
+
+	// Try RSADecrypt with bad password
+	if _, err = tpm2.RSADecrypt(tpmSimulator, handle, "bad password", encrypted, scheme, label); err != nil {
+		if sessionErr, ok := err.(tpm2.SessionError); !ok || sessionErr.Code != tpm2.RCAuthFail {
+			t.Fatalf("RSA decryption failed with unexpected error: %v", err)
+		}
+	}
+
+	caps, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.LockoutCounter))
+	if err != nil {
+		t.Fatalf("Failed to get capabilities: %v", err)
+	}
+	if caps[0].(tpm2.TaggedProperty).Value != 1 {
+		t.Errorf("Got %d, expected 1", caps[0].(tpm2.TaggedProperty).Value)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -584,6 +674,8 @@ func createSwModule(storagePath string, doReset bool) (module certhandler.CertMo
 }
 
 func createTpmModule(storagePath string, doReset bool) (module certhandler.CertModule, err error) {
+	// Dictionary attack paramters
+	lockoutMaxRetries, recoveryTime, lockoutRecoveryTime := 3, 1000, 1000
 	if doReset {
 		if err := os.RemoveAll(storagePath); err != nil {
 			return nil, err
@@ -594,7 +686,8 @@ func createTpmModule(storagePath string, doReset bool) (module certhandler.CertM
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, storagePath))
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s", "lockoutMaxTry": %d,
+		"recoveryTime": %d, "lockoutRecoveryTime": %d}`, storagePath, lockoutMaxRetries, recoveryTime, lockoutRecoveryTime))
 
 	return tpmmodule.New("test", config, tpmSimulator)
 }

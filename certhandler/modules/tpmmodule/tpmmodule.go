@@ -68,8 +68,11 @@ type TPMModule struct {
 }
 
 type moduleConfig struct {
-	Device      string `json:"device"`
-	StoragePath string `json:"storagePath"`
+	Device              string `json:"device"`
+	StoragePath         string `json:"storagePath"`
+	LockoutMaxTry       uint32 `json:"lockoutMaxTry"`
+	RecoveryTime        uint32 `json:"recoveryTime"`
+	LockoutRecoveryTime uint32 `json:"lockoutRecoveryTime"`
 }
 
 /*******************************************************************************
@@ -249,6 +252,15 @@ func (module *TPMModule) SetOwner(password string) (err error) {
 
 	if err = tpm2.HierarchyChangeAuth(module.device, tpm2.HandleOwner, auth, password); err != nil {
 		return err
+	}
+
+	if !ownerSet {
+		// If all parameters are zeros, left them default (3, 1000, 1000)
+		if module.config.LockoutMaxTry != 0 || module.config.RecoveryTime != 0 || module.config.LockoutRecoveryTime != 0 {
+			if err = tpm2.DictionaryAttackParameters(module.device, auth, module.config.LockoutMaxTry, module.config.RecoveryTime, module.config.LockoutRecoveryTime); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
