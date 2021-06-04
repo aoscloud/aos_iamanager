@@ -43,7 +43,7 @@ github.com/pkg/errors
 github.com/sirupsen/logrus
 # github.com/thales-e-security/pool v0.0.2
 github.com/thales-e-security/pool
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210524132411-918d2305a9a0
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210607084252-7f17eb2507d9
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
 gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils
