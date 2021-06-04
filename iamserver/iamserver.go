@@ -38,6 +38,7 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
+const discEncryptyonType = "diskencryption"
 
 /*******************************************************************************
  * Vars
@@ -62,6 +63,7 @@ type Server struct {
 	closeChannel              chan struct{}
 	streamsWg                 sync.WaitGroup
 	finishProvisioningCmdArgs []string
+	diskEncryptCmdArgs        []string
 }
 
 // CertHandler interface
@@ -72,6 +74,7 @@ type CertHandler interface {
 	CreateKey(certType, password string) (csr []byte, err error)
 	ApplyCertificate(certType string, cert []byte) (certURL string, err error)
 	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
+	CreateSelfSignedCert(certType, password string) (err error)
 }
 
 // IdentHandler interface
@@ -101,7 +104,8 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		certHandler:               certHandler,
 		permissionHandler:         permissionHandler,
 		closeChannel:              make(chan struct{}, 1),
-		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs}
+		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs,
+		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs}
 
 	defer func() {
 		if err != nil {
@@ -378,6 +382,25 @@ func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissions
 
 	rsp.ServiceId = serviceID
 	rsp.Permissions = &pb.Permissions{Permissions: perm}
+
+	return rsp, nil
+}
+
+// EncryptDisk perform disk encryption
+func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReq) (rsp *empty.Empty, err error) {
+	rsp = &empty.Empty{}
+
+	if err := server.certHandler.CreateSelfSignedCert(discEncryptyonType, req.Password); err != nil {
+		log.Error("Can't generate self signed certificate: ", err)
+		return rsp, err
+	}
+
+	if len(server.diskEncryptCmdArgs) > 0 {
+		output, err := exec.Command(server.diskEncryptCmdArgs[0], server.diskEncryptCmdArgs[1:]...).CombinedOutput()
+		if err != nil {
+			return rsp, fmt.Errorf("Can't encrypt disk: %s, err: %s", string(output), err)
+		}
+	}
 
 	return rsp, nil
 }
