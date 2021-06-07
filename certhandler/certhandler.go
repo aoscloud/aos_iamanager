@@ -29,6 +29,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,8 @@ const (
 	clientAuth = "clientauth"
 	serverAuth = "serverauth"
 )
+
+const selfSignedCertValidPeriod = time.Hour * 24 * 365 * 100
 
 /*******************************************************************************
  * Vars
@@ -201,34 +204,14 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 	handler.Lock()
 	defer handler.Unlock()
 
+	key, err := handler.createPrivateKey(certType, password)
+	if err != nil {
+		return nil, err
+	}
+
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return nil, fmt.Errorf("module %s not found", certType)
-	}
-
-	for _, certURL := range descriptor.invalidCerts {
-		log.WithFields(log.Fields{"certType": certType, "URL": certURL}).Warn("Remove invalid certificate")
-
-		if err = descriptor.module.RemoveCertificate(certURL, password); err != nil {
-			return nil, err
-		}
-	}
-
-	descriptor.invalidCerts = nil
-
-	for _, keyURL := range descriptor.invalidKeys {
-		log.WithFields(log.Fields{"certType": certType, "URL": keyURL}).Warn("Remove invalid key")
-
-		if err = descriptor.module.RemoveKey(keyURL, password); err != nil {
-			return nil, err
-		}
-	}
-
-	descriptor.invalidKeys = nil
-
-	key, err := descriptor.module.CreateKey(password, descriptor.config.Algorithm)
-	if err != nil {
-		return nil, err
 	}
 
 	csrData, err := createCSR(handler.systemID, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
@@ -341,6 +324,50 @@ func (handler *Handler) GetCertificate(certType string, issuer []byte, serial st
 	}
 
 	return certInfo.CertURL, certInfo.KeyURL, nil
+}
+
+func (handler *Handler) CreateSelfSignedCert(certType, password string) (err error) {
+	handler.Lock()
+	defer handler.Unlock()
+
+	key, err := handler.createPrivateKey(certType, password)
+	if err != nil {
+		return err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().UnixNano()),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(selfSignedCertValidPeriod),
+		Subject:      pkix.Name{CommonName: "Aos Core"},
+		Issuer:       pkix.Name{CommonName: "Aos Core"},
+	}
+
+	privKey, ok := key.(crypto.Signer)
+	if !ok {
+		return errors.New("x509: certificate private key does not implement crypto.Signer")
+	}
+
+	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, privKey.Public(), key)
+	if err != nil {
+		return err
+	}
+
+	descriptor, ok := handler.moduleDescriptors[certType]
+	if !ok {
+		return fmt.Errorf("module %s not found", certType)
+	}
+
+	x509Certs, err := cryptutils.PEMToX509Cert(pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert}))
+	if err != nil {
+		return err
+	}
+
+	if _, _, err = descriptor.module.ApplyCertificate(x509Certs); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Close closes certificate handler
@@ -521,4 +548,38 @@ func (handler *Handler) syncStorage() (err error) {
 	}
 
 	return nil
+}
+
+func (handler *Handler) createPrivateKey(certType, password string) (key crypto.PrivateKey, err error) {
+	descriptor, ok := handler.moduleDescriptors[certType]
+	if !ok {
+		return nil, fmt.Errorf("module %s not found", certType)
+	}
+
+	for _, certURL := range descriptor.invalidCerts {
+		log.WithFields(log.Fields{"certType": certType, "URL": certURL}).Warn("Remove invalid certificate")
+
+		if err = descriptor.module.RemoveCertificate(certURL, password); err != nil {
+			return nil, err
+		}
+	}
+
+	descriptor.invalidCerts = nil
+
+	for _, keyURL := range descriptor.invalidKeys {
+		log.WithFields(log.Fields{"certType": certType, "URL": keyURL}).Warn("Remove invalid key")
+
+		if err = descriptor.module.RemoveKey(keyURL, password); err != nil {
+			return nil, err
+		}
+	}
+
+	descriptor.invalidKeys = nil
+
+	key, err = descriptor.module.CreateKey(password, descriptor.config.Algorithm)
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }

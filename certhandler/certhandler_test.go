@@ -407,6 +407,34 @@ func TestSyncStorage(t *testing.T) {
 	}
 }
 
+func TestCreateSelfSignedCert(t *testing.T) {
+	cfg := config.Config{CertModules: []config.ModuleConfig{
+		{ID: "cert1", Plugin: "testmodule"}}}
+
+	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	if err != nil {
+		t.Fatalf("Can't create cert handler: %s", err)
+	}
+	defer handler.Close()
+
+	err = handler.CreateSelfSignedCert("cert1", "password")
+	if err != nil {
+		t.Fatalf("Can't create create selfsigned cert: %s", err)
+	}
+
+	// Get key public part
+
+	signer, ok := modules["cert1"].data.key.(crypto.Signer)
+	if !ok {
+		t.Fatalf("Wrong key type")
+	}
+
+	_, err = x509.MarshalPKIXPublicKey(signer.Public())
+	if err != nil {
+		t.Fatalf("Can't marshal public key: %s", err)
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/

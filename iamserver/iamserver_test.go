@@ -731,6 +731,10 @@ func (handler *testCertHandler) GetCertificate(certType string, issuer []byte, s
 	return handler.certURL, handler.keyURL, handler.err
 }
 
+func (handler *testCertHandler) CreateSelfSignedCert(certType, password string) (err error) {
+	return nil
+}
+
 func (handler *testIdentHandler) GetSystemID() (systemID string, err error) {
 	return handler.systemID, nil
 }
