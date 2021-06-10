@@ -223,6 +223,15 @@ func (module *PKCS11Module) Clear() (err error) {
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
+	owned, err := module.isOwned()
+	if err != nil {
+		return err
+	}
+
+	if !owned {
+		return nil
+	}
+
 	session, err := module.getSession(true)
 	if err != nil {
 		return err
@@ -257,6 +266,15 @@ func (module *PKCS11Module) ValidateCertificates() (
 	defer ctxMutex.Unlock()
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
+
+	owned, err := module.isOwned()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if !owned {
+		return nil, nil, nil, nil
+	}
 
 	session, err := module.getSession(true)
 	if err != nil {
@@ -568,6 +586,15 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (module *PKCS11Module) isOwned() (owner bool, err error) {
+	tokenInfo, err := module.ctx.GetTokenInfo(module.slotID)
+	if err != nil {
+		return false, err
+	}
+
+	return tokenInfo.Flags&pkcs11.CKF_TOKEN_INITIALIZED != 0, nil
+}
 
 func findObjectIndexByID(id string, objs []*pkcs11Object) (index int, err error) {
 	for i, obj := range objs {
@@ -940,6 +967,7 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 		"description":  slotInfo.SlotDescription,
 		"hwVersion":    fmt.Sprintf("%d.%d", slotInfo.HardwareVersion.Major, slotInfo.HardwareVersion.Major),
 		"fwVersion":    fmt.Sprintf("%d.%d", slotInfo.FirmwareVersion.Major, slotInfo.FirmwareVersion.Major),
+		"flags":        slotInfo.Flags,
 	}).Debug("Slot info")
 
 	tokenInfo, err := module.ctx.GetTokenInfo(slotID)
@@ -957,6 +985,7 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 		"fwVersion":     fmt.Sprintf("%d.%d", tokenInfo.FirmwareVersion.Major, tokenInfo.FirmwareVersion.Major),
 		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
 		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
+		"flags":         tokenInfo.Flags,
 	}).Debug("Token info")
 
 	return nil
