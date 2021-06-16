@@ -169,6 +169,8 @@ func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerReq) (rs
 	log.WithField("type", req.Type).Debug("Process set owner request")
 
 	if err = server.certHandler.SetOwner(req.Type, req.Password); err != nil {
+		log.Errorf("Set owner error: %s", err)
+
 		return rsp, err
 	}
 
@@ -182,6 +184,8 @@ func (server *Server) Clear(context context.Context, req *pb.ClearReq) (rsp *emp
 	log.WithField("type", req.Type).Debug("Process clear request")
 
 	if err = server.certHandler.Clear(req.Type); err != nil {
+		log.Errorf("Clear error: %s", err)
+
 		return rsp, err
 	}
 
@@ -196,6 +200,8 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReq) (
 
 	csr, err := server.certHandler.CreateKey(req.Type, req.Password)
 	if err != nil {
+		log.Errorf("Create key error: %s", err)
+
 		return rsp, err
 	}
 
@@ -211,6 +217,8 @@ func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertReq) (
 	log.WithField("type", req.Type).Debug("Process apply cert request")
 
 	if rsp.CertUrl, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert)); err != nil {
+		log.Errorf("Apply certificate error: %s", err)
+
 		return rsp, err
 	}
 
@@ -227,6 +235,8 @@ func (server *Server) GetCert(context context.Context, req *pb.GetCertReq) (rsp 
 		"issuer": base64.StdEncoding.EncodeToString(req.Issuer)}).Debug("Process get cert request")
 
 	if rsp.CertUrl, rsp.KeyUrl, err = server.certHandler.GetCertificate(req.Type, req.Issuer, req.Serial); err != nil {
+		log.Errorf("Get certificate error: %s", err)
+
 		return rsp, err
 	}
 
@@ -240,10 +250,14 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 	log.Debug("Process get system ID")
 
 	if rsp.SystemId, err = server.identHandler.GetSystemID(); err != nil {
+		log.Errorf("Get system ID error: %s", err)
+
 		return rsp, err
 	}
 
 	if rsp.BoardModel, err = server.identHandler.GetBoardModel(); err != nil {
+		log.Errorf("Get board model error: %s", err)
+
 		return rsp, err
 	}
 
@@ -257,6 +271,8 @@ func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *
 	log.Debug("Process get users")
 
 	if rsp.Users, err = server.identHandler.GetUsers(); err != nil {
+		log.Errorf("Get users error: %s", err)
+
 		return rsp, err
 	}
 
@@ -270,6 +286,8 @@ func (server *Server) SetUsers(context context.Context, req *pb.SetUsersReq) (rs
 	log.WithField("users", req.Users).Debug("Process set users")
 
 	if err = server.identHandler.SetUsers(req.Users); err != nil {
+		log.Errorf("Set users error: %s", err)
+
 		return rsp, err
 	}
 
@@ -324,6 +342,8 @@ func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServi
 
 	secret, err := server.permissionHandler.RegisterService(req.ServiceId, permissions)
 	if err != nil {
+		log.Errorf("Register service error: %s", err)
+
 		return rsp, err
 	}
 
@@ -351,6 +371,8 @@ func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissions
 
 	serviceID, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
 	if err != nil {
+		log.Errorf("Ger permissions error: %s", err)
+
 		return rsp, err
 	}
 
