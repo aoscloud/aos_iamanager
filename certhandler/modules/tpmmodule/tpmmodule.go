@@ -20,6 +20,7 @@ package tpmmodule
 import (
 	"container/list"
 	"crypto"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -309,13 +310,9 @@ func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.Priva
 }
 
 // ApplyCertificate applies certificate
-func (module *TPMModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
+	certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
-
-	x509Certs, err := cryptutils.PEMToX509Cert(cert)
-	if err != nil {
-		return certhandler.CertInfo{}, "", nil
-	}
 
 	var currentKey tpmkey.TPMKey
 	var next *list.Element

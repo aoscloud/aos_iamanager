@@ -38,6 +38,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 
 	"aos_iamanager/certhandler"
 	"aos_iamanager/config"
@@ -270,7 +271,7 @@ func TestApplyCertificate(t *testing.T) {
 		KeyURL:  "keyURL",
 	}
 
-	certURL, err := handler.ApplyCertificate("cert1", []byte("this is certificate"))
+	certURL, err := handler.ApplyCertificate("cert1", testtools.GetCACertificate())
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %s", err)
 	}
@@ -344,7 +345,7 @@ func TestMaxItems(t *testing.T) {
 			NotAfter: time.Now(),
 		}
 
-		if _, err = handler.ApplyCertificate("cert1", []byte("this is certificate")); err != nil {
+		if _, err = handler.ApplyCertificate("cert1", testtools.GetCACertificate()); err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
@@ -435,7 +436,7 @@ func (module *testModule) CreateKey(password, algorithm string) (key crypto.Priv
 	return module.data.key, nil
 }
 
-func (module *testModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *testModule) ApplyCertificate(certs []*x509.Certificate) (certInfo certhandler.CertInfo, password string, err error) {
 	return module.data.certInfo, "", nil
 }
 

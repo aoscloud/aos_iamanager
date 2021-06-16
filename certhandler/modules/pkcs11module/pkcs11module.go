@@ -21,6 +21,7 @@ import (
 	"container/list"
 	"crypto"
 	"crypto/elliptic"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -436,16 +437,12 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 }
 
 // ApplyCertificate applies certificate
-func (module *PKCS11Module) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
+	certInfo certhandler.CertInfo, password string, err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
-
-	x509Certs, err := cryptutils.PEMToX509Cert(cert)
-	if err != nil {
-		return certhandler.CertInfo{}, "", err
-	}
 
 	var currentKey privateKey
 	var next *list.Element

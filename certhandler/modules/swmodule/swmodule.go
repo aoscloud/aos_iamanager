@@ -24,6 +24,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -261,13 +262,9 @@ func (module *SWModule) CreateKey(password, algorithm string) (key crypto.Privat
 }
 
 // ApplyCertificate applies certificate
-func (module *SWModule) ApplyCertificate(cert []byte) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
+	certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
-
-	x509Certs, err := cryptutils.PEMToX509Cert(cert)
-	if err != nil {
-		return certhandler.CertInfo{}, "", err
-	}
 
 	var currentKey crypto.PrivateKey
 	var next *list.Element

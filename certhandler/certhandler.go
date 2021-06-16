@@ -18,6 +18,7 @@
 package certhandler
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/x509"
@@ -96,7 +97,7 @@ type CertModule interface {
 	SetOwner(password string) (err error)
 	Clear() (err error)
 	CreateKey(password, algorithm string) (key crypto.PrivateKey, err error)
-	ApplyCertificate(cert []byte) (certInfo CertInfo, password string, err error)
+	ApplyCertificate(certs []*x509.Certificate) (certInfo CertInfo, password string, err error)
 	RemoveCertificate(certURL, password string) (err error)
 	RemoveKey(certURL, password string) (err error)
 	Close() (err error)
@@ -243,12 +244,21 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 	handler.Lock()
 	defer handler.Unlock()
 
+	x509Certs, err := cryptutils.PEMToX509Cert(cert)
+	if err != nil {
+		return "", err
+	}
+
+	if err = checkX509CertificateChan(x509Certs); err != nil {
+		return "", err
+	}
+
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return "", fmt.Errorf("module %s not found", certType)
 	}
 
-	certInfo, password, err := descriptor.module.ApplyCertificate(cert)
+	certInfo, password, err := descriptor.module.ApplyCertificate(x509Certs)
 	if err != nil {
 		return "", err
 	}
@@ -347,6 +357,43 @@ func (handler *Handler) Close() {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
+	if len(certs) < 0 {
+		return errors.New("invalid certificate count")
+	}
+
+	for _, cert := range certs {
+		log.WithFields(log.Fields{"issuer": cert.Issuer, "subject": cert.Subject}).Debug("Check certificate chain")
+	}
+
+	checkCerts := make([]*x509.Certificate, len(certs))
+	copy(checkCerts, certs)
+
+	currentIndex := 0
+
+	for {
+		currentCert := checkCerts[currentIndex]
+		checkCerts = append(checkCerts[:currentIndex], checkCerts[currentIndex+1:]...)
+		issuerFound := false
+
+		if len(currentCert.RawIssuer) == 0 || bytes.Equal(currentCert.RawIssuer, currentCert.RawSubject) {
+			return nil
+		}
+
+		for i, cert := range checkCerts {
+			if bytes.Equal(currentCert.RawIssuer, cert.RawSubject) ||
+				bytes.Equal(currentCert.AuthorityKeyId, cert.SubjectKeyId) {
+				issuerFound = true
+				currentIndex = i
+			}
+		}
+
+		if !issuerFound {
+			return fmt.Errorf("issuer %s not found", currentCert.Issuer)
+		}
+	}
+}
 
 func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (csr []byte, err error) {
 	template := &x509.CertificateRequest{

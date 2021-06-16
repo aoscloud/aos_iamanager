@@ -202,7 +202,12 @@ func TestUpdateCertificate(t *testing.T) {
 					t.Fatalf("Can't generate certificate: %s", err)
 				}
 
-				certInfo, _, err := module.ApplyCertificate(cert)
+				x509Certs, err := cryptutils.PEMToX509Cert(cert)
+				if err != nil {
+					t.Fatalf("Can't convert certificate: %s", err)
+				}
+
+				certInfo, _, err := module.ApplyCertificate(x509Certs)
 				if err != nil {
 					t.Fatalf("Can't apply certificate: %s", err)
 				}
@@ -393,7 +398,12 @@ func TestValidateCertificates(t *testing.T) {
 				t.Fatalf("Can't generate certificate: %s", err)
 			}
 
-			certInfo, _, err := module.ApplyCertificate(cert)
+			x509Certs, err := cryptutils.PEMToX509Cert(cert)
+			if err != nil {
+				t.Fatalf("Can't convert certificate: %s", err)
+			}
+
+			certInfo, _, err := module.ApplyCertificate(x509Certs)
 			if err != nil {
 				t.Fatalf("Can't apply certificate: %s", err)
 			}
@@ -531,7 +541,12 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't generate certificate: %s", err)
 		}
 
-		certInfo, _, err := module.ApplyCertificate(cert)
+		x509Certs, err := cryptutils.PEMToX509Cert(cert)
+		if err != nil {
+			t.Fatalf("Can't convert certificate: %s", err)
+		}
+
+		certInfo, _, err := module.ApplyCertificate(x509Certs)
 		if err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
@@ -690,7 +705,12 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 			t.Fatalf("Can't generate certificate: %s", err)
 		}
 
-		if _, _, err = module.ApplyCertificate(cert); err != nil {
+		x509Certs, err := cryptutils.PEMToX509Cert(cert)
+		if err != nil {
+			t.Fatalf("Can't convert certificate: %s", err)
+		}
+
+		if _, _, err = module.ApplyCertificate(x509Certs); err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 	}
