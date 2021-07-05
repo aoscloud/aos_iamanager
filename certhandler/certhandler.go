@@ -461,6 +461,12 @@ func (handler *Handler) syncStorage() (err error) {
 	log.Debug("Sync certificate DB")
 
 	for _, descriptor := range handler.moduleDescriptors {
+		if descriptor.config.SkipValidation {
+			log.WithFields(log.Fields{"certType": descriptor.config.ID}).Warn("Skip validation")
+
+			continue
+		}
+
 		validItems, invalidCerts, invalidKeys, err := descriptor.module.ValidateCertificates()
 		if err != nil {
 			return err

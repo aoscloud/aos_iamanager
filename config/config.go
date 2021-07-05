@@ -51,6 +51,7 @@ type ModuleConfig struct {
 	ExtendedKeyUsage []string        `json:"extendedKeyUsage"`
 	AlternativeNames []string        `json:"alternativeNames"`
 	Disabled         bool            `json:"disabled"`
+	SkipValidation   bool            `json:"skipValidation"`
 	Params           json.RawMessage `json:"params"`
 }
 

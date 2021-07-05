@@ -107,6 +107,10 @@ func TestModules(t *testing.T) {
 		t.Error("Wrong disabled value")
 	}
 
+	if cfg.CertModules[0].SkipValidation != true || cfg.CertModules[1].SkipValidation != false || cfg.CertModules[2].SkipValidation != false {
+		t.Error("Wrong skip validation value")
+	}
+
 	if !reflect.DeepEqual(cfg.CertModules[0].ExtendedKeyUsage, []string{"clientAuth"}) ||
 		!reflect.DeepEqual(cfg.CertModules[1].ExtendedKeyUsage, []string{"serverAuth"}) ||
 		!reflect.DeepEqual(cfg.CertModules[2].ExtendedKeyUsage, []string{"clientAuth", "serverAuth"}) {
@@ -197,6 +201,7 @@ func setup() (err error) {
 			"MaxItems": 1,
 			"ExtendedKeyUsage": ["clientAuth"],
 			"AlternativeNames": ["host1"],
+			"SkipValidation": true,
 			"Params": {
 				"Param1" :"value1",
 				"Param2" : 2
@@ -208,6 +213,7 @@ func setup() (err error) {
 			"MaxItems": 2,
 			"ExtendedKeyUsage": ["serverAuth"],
 			"AlternativeNames": ["host2"],
+			"SkipValidation": false,
 			"Params": {
 				"Param1" :"value1",
 				"Param2" : 2
