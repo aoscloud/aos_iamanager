@@ -26,12 +26,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/dchest/uniuri"
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
@@ -84,7 +86,7 @@ type moduleConfig struct {
 	SlotID           *uint    `json:"slotId"`
 	SlotIndex        *int     `json:"slotIndex"`
 	TokenLabel       string   `json:"tokenLabel"`
-	UserPIN          string   `json:"userPin"`
+	UserPINPath      string   `json:"userPinPath"`
 	TEELoginType     string   `json:"teeLoginType"`
 	UID              uint32   `json:"uid"`
 	GID              uint32   `json:"gid"`
@@ -127,8 +129,8 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		}
 	}
 
-	if (pkcs11Module.config.UserPIN == "") == (pkcs11Module.config.TEELoginType == "") {
-		return nil, errors.New("either userPin or teeLoginType should be used")
+	if (pkcs11Module.config.UserPINPath == "") == (pkcs11Module.config.TEELoginType == "") {
+		return nil, errors.New("either userPinPath or teeLoginType should be used")
 	}
 
 	if err = pkcs11Module.initContext(); err != nil {
@@ -175,14 +177,21 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 
 	module.pendingKeys = list.New()
 
-	soPIN := password
-	userPIN := module.userPIN
+	soPIN := ""
+	userPIN := ""
 
 	if module.config.TEELoginType != "" {
-		soPIN = ""
-
 		if userPIN, err = getTeeUserPIN(module.config.TEELoginType, module.config.UID, module.config.GID); err != nil {
 			return err
+		}
+	} else {
+		soPIN = password
+		if userPIN, err = module.getUserPIN(); err != nil {
+			userPIN = uniuri.New()
+
+			if err = ioutil.WriteFile(module.config.UserPINPath, []byte(userPIN), 0600); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -729,7 +738,6 @@ func (module *PKCS11Module) initContext() (err error) {
 	ctxCount[module.config.Library] = count + 1
 
 	module.tokenLabel = module.getTokenLabel()
-	module.userPIN = module.getUserPIN()
 
 	if module.slotID, err = module.getSlotID(); err != nil {
 		return err
@@ -806,6 +814,10 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 	if userLogin && !isUserLoggedIn {
 		log.WithFields(log.Fields{"session": session, "slotID": module.slotID, "userPin": module.userPIN}).Debug("User login")
 
+		if module.userPIN, err = module.getUserPIN(); err != nil {
+			return 0, err
+		}
+
 		if err = module.ctx.Login(session, pkcs11.CKU_USER, module.userPIN); err != nil {
 			pkcs11Err, ok := err.(pkcs11.Error)
 
@@ -848,12 +860,17 @@ func (module *PKCS11Module) releaseSession() (err error) {
 	return nil
 }
 
-func (module *PKCS11Module) getUserPIN() (pin string) {
+func (module *PKCS11Module) getUserPIN() (pin string, err error) {
 	if module.config.TEELoginType != "" {
-		return ""
+		return "", nil
 	}
 
-	return module.config.UserPIN
+	data, err := ioutil.ReadFile(module.config.UserPINPath)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
 }
 
 func (module *PKCS11Module) getTokenLabel() (label string) {

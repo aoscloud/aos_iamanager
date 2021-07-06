@@ -719,8 +719,15 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 		t.Fatalf("Can't close module: %s", err)
 	}
 
+	data, err := ioutil.ReadFile(path.Join(tmpDir, "userPin.txt"))
+	if err != nil {
+		t.Fatalf("Can't read user pin: %s", err)
+	}
+
+	userPin := string(data)
+
 	pkcs11Ctx, err := crypto11.Configure(&crypto11.Config{
-		Path: pkcs11LibPath, TokenLabel: "aos", Pin: "1234"})
+		Path: pkcs11LibPath, TokenLabel: "aos", Pin: userPin})
 	if err != nil {
 		t.Fatalf("Can't create PKCS11 context: %s", err)
 	}
@@ -749,7 +756,7 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 			t.Fatalf("Can't import certificate: %s", err)
 		}
 
-		expectedInvalidCerts = append(expectedInvalidCerts, createPkcs11URL("aos", "1234", "", id))
+		expectedInvalidCerts = append(expectedInvalidCerts, createPkcs11URL("aos", userPin, "", id))
 	}
 
 	if err = pkcs11Ctx.Close(); err != nil {
@@ -819,7 +826,7 @@ func createPKCS11Module(doReset bool) (module certhandler.CertModule, err error)
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"library":"%s","userPin":"1234"}`, pkcs11LibPath))
+	config := json.RawMessage(fmt.Sprintf(`{"library":"%s","userPinPath":"%s"}`, pkcs11LibPath, path.Join(tmpDir, "userPin.txt")))
 
 	return pkcs11module.New("test", config)
 }
