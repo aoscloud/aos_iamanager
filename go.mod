@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/ThalesIgnite/crypto11 v1.2.4
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/dchest/uniuri v0.0.0-20200228104902-7aecb25e1fe5
 	github.com/golang/protobuf v1.4.3
 	github.com/google/go-tpm v0.3.2
 	github.com/google/go-tpm-tools v0.2.0
