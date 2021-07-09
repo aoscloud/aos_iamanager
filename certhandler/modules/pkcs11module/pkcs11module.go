@@ -141,6 +141,17 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		return nil, err
 	}
 
+	owned, err := pkcs11Module.isOwned()
+	if err != nil {
+		return nil, err
+	}
+
+	if owned {
+		if pkcs11Module.userPIN, err = pkcs11Module.getUserPIN(); err != nil {
+			return nil, err
+		}
+	}
+
 	return pkcs11Module, nil
 }
 
@@ -184,6 +195,8 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		if userPIN, err = getTeeUserPIN(module.config.TEELoginType, module.config.UID, module.config.GID); err != nil {
 			return err
 		}
+
+		module.userPIN = ""
 	} else {
 		soPIN = password
 		if userPIN, err = module.getUserPIN(); err != nil {
@@ -193,6 +206,8 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 				return err
 			}
 		}
+
+		module.userPIN = userPIN
 	}
 
 	log.WithFields(log.Fields{"slotID": module.slotID, "label": module.tokenLabel}).Debug("Init token")
@@ -813,10 +828,6 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 
 	if userLogin && !isUserLoggedIn {
 		log.WithFields(log.Fields{"session": session, "slotID": module.slotID, "userPin": module.userPIN}).Debug("User login")
-
-		if module.userPIN, err = module.getUserPIN(); err != nil {
-			return 0, err
-		}
 
 		if err = module.ctx.Login(session, pkcs11.CKU_USER, module.userPIN); err != nil {
 			pkcs11Err, ok := err.(pkcs11.Error)
