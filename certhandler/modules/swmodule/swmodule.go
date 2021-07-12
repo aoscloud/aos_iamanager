@@ -27,7 +27,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
@@ -37,6 +36,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 
 	"aos_iamanager/certhandler"
@@ -87,12 +87,12 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &swModule.config); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	if err = os.MkdirAll(swModule.config.StoragePath, 0755); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return swModule, nil
@@ -102,7 +102,7 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 func (module *SWModule) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close SW module")
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // SetOwner owns security storage
@@ -117,11 +117,11 @@ func (module *SWModule) Clear() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
 	if err = os.RemoveAll(module.config.StoragePath); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -136,7 +136,7 @@ func (module *SWModule) ValidateCertificates() (
 
 	content, err := ioutil.ReadDir(module.config.StoragePath)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	// Collect keys
@@ -165,7 +165,7 @@ func (module *SWModule) ValidateCertificates() (
 				"dir":      absItemPath}).Warn("Unexpected dir found in storage, remove it")
 
 			if err = os.RemoveAll(absItemPath); err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, aoserrors.Wrap(err)
 			}
 
 			continue
@@ -212,7 +212,7 @@ func (module *SWModule) ValidateCertificates() (
 	for _, info := range validInfos {
 		key, err := url.Parse(info.KeyURL)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, aoserrors.Wrap(err)
 		}
 
 		if _, ok := keyMap[key.Path]; ok {
@@ -238,16 +238,16 @@ func (module *SWModule) CreateKey(password, algorithm string) (key crypto.Privat
 	switch strings.ToLower(algorithm) {
 	case cryptutils.AlgRSA:
 		if key, err = rsa.GenerateKey(rand.Reader, rsaKeyLength); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 	case cryptutils.AlgECC:
 		if key, err = ecdsa.GenerateKey(ecsdaCurveID, rand.Reader); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
+		return nil, aoserrors.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
 	module.pendingKeys.PushBack(key)
@@ -288,32 +288,32 @@ func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	}
 
 	if currentKey == nil {
-		return certhandler.CertInfo{}, "", errors.New("no key found")
+		return certhandler.CertInfo{}, "", aoserrors.New("no key found")
 	}
 
 	certFileName, err := createPEMFile(module.config.StoragePath)
 	if err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	if err = cryptutils.SaveCertificate(certFileName, x509Certs); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	keyFileName, err := createPEMFile(module.config.StoragePath)
 	if err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	if err = cryptutils.SaveKey(keyFileName, currentKey); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	if len(module.config.ApplyCertHookCmdArgs) > 0 {
 		output, err := exec.Command(module.config.ApplyCertHookCmdArgs[0],
 			module.config.ApplyCertHookCmdArgs[1:]...).CombinedOutput()
 		if err != nil {
-			return certInfo, "", fmt.Errorf("message: %s, err: %s", string(output), err)
+			return certInfo, "", aoserrors.Errorf("message: %s, err: %s", string(output), err)
 		}
 	}
 
@@ -341,11 +341,11 @@ func (module *SWModule) RemoveCertificate(certURL, password string) (err error) 
 
 	cert, err := url.Parse(certURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = os.Remove(cert.Path); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -359,11 +359,11 @@ func (module *SWModule) RemoveKey(keyURL, password string) (err error) {
 
 	key, err := url.Parse(keyURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = os.Remove(key.Path); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -382,9 +382,9 @@ func fileToURL(file string) (urlStr string) {
 func createPEMFile(storageDir string) (fileName string, err error) {
 	file, err := ioutil.TempFile(storageDir, "*."+cryptutils.PEMExt)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
-	return file.Name(), err
+	return file.Name(), aoserrors.Wrap(err)
 }

@@ -19,10 +19,10 @@ package identhandler
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_iamanager/config"
 )
@@ -80,11 +80,11 @@ func New(cfg *config.Config) (handler *Handler, err error) {
 
 	newModule, ok := plugins[cfg.Identifier.Plugin]
 	if !ok {
-		return nil, fmt.Errorf("plugin %s not found", cfg.Identifier.Plugin)
+		return nil, aoserrors.Errorf("plugin %s not found", cfg.Identifier.Plugin)
 	}
 
 	if handler.module, err = newModule(cfg.Identifier.Params); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return handler, nil
@@ -99,22 +99,34 @@ func (handler *Handler) Close() {
 
 // GetSystemID return system ID
 func (handler *Handler) GetSystemID() (systemdID string, err error) {
-	return handler.module.GetSystemID()
+	if systemdID, err = handler.module.GetSystemID(); err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	return systemdID, nil
 }
 
 // GetBoardModel return board model
 func (handler *Handler) GetBoardModel() (boardModel string, err error) {
-	return handler.module.GetBoardModel()
+	if boardModel, err = handler.module.GetBoardModel(); err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	return boardModel, nil
 }
 
 // GetUsers returns current users
 func (handler *Handler) GetUsers() (users []string, err error) {
-	return handler.module.GetUsers()
+	if users, err = handler.module.GetUsers(); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return users, nil
 }
 
 // SetUsers set current users
 func (handler *Handler) SetUsers(users []string) (err error) {
-	return handler.module.SetUsers(users)
+	return aoserrors.Wrap(handler.module.SetUsers(users))
 }
 
 // UsersChangedChannel returns users changed channel

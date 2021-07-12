@@ -20,11 +20,10 @@ package permhandler
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
-	"fmt"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -83,7 +82,7 @@ func (handler *Handler) RegisterService(serviceID string, funcServerPermissions 
 
 	newSecret, err := handler.tryGenerateSecret()
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	handler.secrets[newSecret] = servicePermissions{serviceID: serviceID, permissions: funcServerPermissions}
@@ -116,12 +115,12 @@ func (handler *Handler) GetPermissions(secret, funcServerId string) (serviceID s
 
 	funcServersPermissions, ok := handler.secrets[secretKey(secret)]
 	if !ok {
-		return "", nil, fmt.Errorf("secret not found")
+		return "", nil, aoserrors.New("secret not found")
 	}
 
 	permissions, ok = funcServersPermissions.permissions[funcServerId]
 	if !ok {
-		return "", nil, fmt.Errorf("permissions for functional server %s not found", funcServerId)
+		return "", nil, aoserrors.Errorf("permissions for functional server %s not found", funcServerId)
 	}
 
 	return funcServersPermissions.serviceID, permissions, nil
@@ -135,7 +134,7 @@ func (handler *Handler) tryGenerateSecret() (secret secretKey, err error) {
 	for i := 0; i < attemptsCreateSecret; i++ {
 		secret, err := generateSecret()
 		if err != nil {
-			return "", err
+			return "", aoserrors.Wrap(err)
 		}
 
 		if _, ok := handler.secrets[secret]; !ok {
@@ -143,14 +142,14 @@ func (handler *Handler) tryGenerateSecret() (secret secretKey, err error) {
 		}
 	}
 
-	return "", errors.New("max secrete generation attempts reached")
+	return "", aoserrors.New("max secrete generation attempts reached")
 }
 
 func generateSecret() (secret secretKey, err error) {
 	b := make([]byte, secretLength)
 
 	if _, err = rand.Read(b); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	return secretKey(base64.StdEncoding.EncodeToString(b)), nil
@@ -163,5 +162,5 @@ func (handler *Handler) findServiceID(serviceID string) (secret string, err erro
 		}
 	}
 
-	return "", fmt.Errorf("service ID %s not found", serviceID)
+	return "", aoserrors.Errorf("service ID %s not found", serviceID)
 }

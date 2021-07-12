@@ -18,7 +18,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_iamanager/certhandler"
 	_ "aos_iamanager/certhandler/modules"
@@ -101,17 +101,17 @@ func newJournalHook() (hook *journalHook) {
 
 func (hook *journalHook) Fire(entry *log.Entry) (err error) {
 	if entry == nil {
-		return errors.New("log entry is nil")
+		return aoserrors.New("log entry is nil")
 	}
 
 	logMessage, err := entry.String()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	err = journal.Print(hook.severityMap[entry.Level], logMessage)
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (hook *journalHook) Levels() []log.Level {

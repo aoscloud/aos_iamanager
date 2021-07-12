@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -52,10 +53,14 @@ func (cert *pkcs11Certificate) getX509Certificate() (x509Cert *x509.Certificate,
 	attributes, err := cert.ctx.GetAttributeValue(cert.session, cert.handle,
 		[]*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_VALUE, nil)})
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
-	return x509.ParseCertificate(attributes[0].Value)
+	if x509Cert, err = x509.ParseCertificate(attributes[0].Value); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return x509Cert, nil
 }
 
 func createCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
@@ -66,14 +71,18 @@ func createCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 		"label":   label}).Debug("Create certificate chain")
 
 	if len(x509Certs) == 0 {
-		return nil, errors.New("empty certificate chain")
+		return nil, aoserrors.New("empty certificate chain")
 	}
 
 	if err = updateIssuerCertificates(ctx, session, x509Certs[1:]); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
-	return createCertificate(ctx, session, id, label, x509Certs[0])
+	if cert, err = createCertificate(ctx, session, id, label, x509Certs[0]); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return cert, nil
 }
 
 func createCertificate(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
@@ -81,7 +90,7 @@ func createCertificate(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	serial, err := asn1.Marshal(x509Cert.SerialNumber)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	template := []*pkcs11.Attribute{
@@ -102,7 +111,7 @@ func createCertificate(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	handle, err := ctx.CreateObject(session, template)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -121,12 +130,12 @@ func updateIssuerCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	x509Certs []*x509.Certificate) (err error) {
 	for _, x509Cert := range x509Certs {
 		if len(x509Cert.RawSubject) == 0 {
-			return errors.New("subject is nil")
+			return aoserrors.New("subject is nil")
 		}
 
 		if _, err = findCertificateBySubject(ctx, session, x509Cert.RawSubject); err != nil {
 			if err != errCertNotFound {
-				return err
+				return aoserrors.Wrap(err)
 			}
 
 			log.WithFields(log.Fields{
@@ -135,7 +144,7 @@ func updateIssuerCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 			}).Debug("Certificate not found")
 
 			if _, err = createCertificate(ctx, session, uuid.New().String(), "", x509Cert); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 	}
@@ -149,14 +158,14 @@ func findCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	objects, err := findObjects(ctx, session, template)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	for _, object := range objects {
 		attributes, err := ctx.GetAttributeValue(session, object.handle, []*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, nil), pkcs11.NewAttribute(pkcs11.CKA_ISSUER, nil)})
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		certs = append(certs, &pkcs11Certificate{
@@ -176,7 +185,7 @@ func findCertificateBySubject(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	certs, err := findCertificates(ctx, session, template)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if len(certs) == 0 {
@@ -211,13 +220,13 @@ func findCertificateChain(cert *pkcs11Certificate,
 
 		x509Cert, err := cert.getX509Certificate()
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		for i, chainCert := range chainCerts {
 			x509ChainCert, err := chainCert.getX509Certificate()
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			if bytes.Equal(x509Cert.AuthorityKeyId, x509ChainCert.SubjectKeyId) {
@@ -230,7 +239,7 @@ func findCertificateChain(cert *pkcs11Certificate,
 	}
 
 	if !found {
-		return nil, errCertNotFound
+		return nil, aoserrors.Wrap(errCertNotFound)
 	}
 
 	cert = chainCerts[index]
@@ -245,7 +254,7 @@ func findCertificateChain(cert *pkcs11Certificate,
 
 	restCerts, err := findCertificateChain(cert, chainCerts)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if len(restCerts) > 0 {
@@ -275,7 +284,7 @@ func checkCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle) (inval
 
 	certs, err := findCertificates(ctx, session, template)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	var chainCerts, mainCerts []*pkcs11Certificate

@@ -19,11 +19,12 @@ package visidentifier
 
 import (
 	"encoding/json"
-	"errors"
+
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/visprotocol"
 	"gitpct.epam.com/epmd-aepr/aos_common/wsclient"
 
@@ -88,11 +89,11 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 	instance := &Instance{}
 
 	if err = json.Unmarshal(configJSON, &instance.config); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if instance.wsClient, err = wsclient.New("VIS", instance.messageHandler); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	instance.usersChangedChannel = make(chan []string, usersChangedChannelSize)
@@ -126,7 +127,7 @@ func (instance *Instance) Close() (err error) {
 		retErr = err
 	}
 
-	return retErr
+	return aoserrors.Wrap(retErr)
 }
 
 // GetSystemID returns the system ID
@@ -142,22 +143,22 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 		Path: vinVISPath}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	value, err := getValueByPath(vinVISPath, rsp.Value)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	ok := false
 	if instance.vin, ok = value.(string); !ok {
-		return "", errors.New("wrong VIN type")
+		return "", aoserrors.New("wrong VIN type")
 	}
 
 	log.WithField("VIN", instance.vin).Debug("Get VIN")
 
-	return instance.vin, err
+	return instance.vin, aoserrors.Wrap(err)
 }
 
 // GetBoardModel returns the board model
@@ -173,22 +174,22 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 		Path: boardModelPath}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	value, err := getValueByPath(boardModelPath, rsp.Value)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	ok := false
 	if instance.boardModel, ok = value.(string); !ok {
-		return "", errors.New("wrong boardModel type")
+		return "", aoserrors.New("wrong boardModel type")
 	}
 
 	log.WithField("boardModel ", instance.boardModel).Debug("Get boardModel")
 
-	return instance.boardModel, err
+	return instance.boardModel, aoserrors.Wrap(err)
 }
 
 // GetUsers returns the user claims
@@ -205,17 +206,17 @@ func (instance *Instance) GetUsers() (users []string, err error) {
 			Path: usersVISPath}
 
 		if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if err = instance.updateUsers(rsp.Value); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	log.WithField("users", instance.users).Debug("Get users")
 
-	return instance.users, err
+	return instance.users, aoserrors.Wrap(err)
 }
 
 // SetUsers sets the user claims
@@ -233,7 +234,7 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -303,13 +304,13 @@ func (instance *Instance) messageHandler(message []byte) {
 func getValueByPath(path string, value interface{}) (result interface{}, err error) {
 	if valueMap, ok := value.(map[string]interface{}); ok {
 		if value, ok = valueMap[path]; !ok {
-			return nil, errors.New("path not found")
+			return nil, aoserrors.New("path not found")
 		}
 		return value, nil
 	}
 
 	if value == nil {
-		return result, errors.New("no value found")
+		return result, aoserrors.New("no value found")
 	}
 
 	return value, nil
@@ -319,7 +320,7 @@ func (instance *Instance) processSubscriptions(message []byte) (err error) {
 	var notification visprotocol.SubscriptionNotification
 
 	if err = json.Unmarshal(message, &notification); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	// serve subscriptions
@@ -346,12 +347,12 @@ func (instance *Instance) updateUsers(value interface{}) (err error) {
 
 	value, err = getValueByPath(usersVISPath, value)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	itfs, ok := value.([]interface{})
 	if !ok {
-		return errors.New("wrong users type")
+		return aoserrors.New("wrong users type")
 	}
 
 	instance.users = make([]string, len(itfs))
@@ -359,7 +360,7 @@ func (instance *Instance) updateUsers(value interface{}) (err error) {
 	for i, itf := range itfs {
 		item, ok := itf.(string)
 		if !ok {
-			return errors.New("wrong users type")
+			return aoserrors.New("wrong users type")
 		}
 		instance.users[i] = item
 	}
@@ -392,15 +393,15 @@ func (instance *Instance) subscribe(path string, callback func(value interface{}
 		Path: path}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if rsp.Error != nil {
-		return errors.New(rsp.Error.Message)
+		return aoserrors.New(rsp.Error.Message)
 	}
 
 	if rsp.SubscriptionID == "" {
-		return errors.New("no subscriptionID in response")
+		return aoserrors.New("no subscriptionID in response")
 	}
 
 	instance.subscribeMap.Store(rsp.SubscriptionID, callback)

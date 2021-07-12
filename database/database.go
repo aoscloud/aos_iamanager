@@ -26,6 +26,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_iamanager/certhandler"
 )
@@ -71,10 +72,10 @@ func New(name string) (db *Database, err error) {
 	// Check and create db path
 	if _, err = os.Stat(filepath.Dir(name)); err != nil {
 		if !os.IsNotExist(err) {
-			return db, err
+			return db, aoserrors.Wrap(err)
 		}
 		if err = os.MkdirAll(filepath.Dir(name), 0755); err != nil {
-			return db, err
+			return db, aoserrors.Wrap(err)
 		}
 	}
 
@@ -82,7 +83,7 @@ func New(name string) (db *Database, err error) {
 
 	if sqlite, err = sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
 		name, busyTimeout, journalMode, syncMode)); err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	defer func() {
@@ -94,16 +95,16 @@ func New(name string) (db *Database, err error) {
 	db = &Database{sqlite}
 
 	if err = db.createConfigTable(); err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	if err := db.createCertTable(); err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	version, err := db.getVersion()
 	if err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	if version != dbVersion {
@@ -117,7 +118,7 @@ func New(name string) (db *Database, err error) {
 func (db *Database) AddCertificate(certType string, cert certhandler.CertInfo) (err error) {
 	if _, err = db.sql.Exec("INSERT INTO certificates values(?, ?, ?, ?, ?, ?)",
 		certType, cert.Issuer, cert.Serial, cert.CertURL, cert.KeyURL, cert.NotAfter); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -128,26 +129,26 @@ func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.Cert
 	rows, err := db.sql.Query("SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE issuer = ? AND serial = ?",
 		issuer, serial)
 	if err != nil {
-		return cert, err
+		return cert, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		if err = rows.Scan(&cert.Issuer, &cert.Serial, &cert.CertURL, &cert.KeyURL, &cert.NotAfter); err != nil {
-			return cert, err
+			return cert, aoserrors.Wrap(err)
 		}
 
 		return cert, nil
 	}
 
-	return cert, ErrNotExist
+	return cert, aoserrors.Wrap(ErrNotExist)
 }
 
 // GetCertificates returns certificates of selected type
 func (db *Database) GetCertificates(certType string) (certs []certhandler.CertInfo, err error) {
 	rows, err := db.sql.Query("SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE type = ?", certType)
 	if err != nil {
-		return certs, err
+		return certs, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
@@ -155,7 +156,7 @@ func (db *Database) GetCertificates(certType string) (certs []certhandler.CertIn
 		var cert certhandler.CertInfo
 
 		if err = rows.Scan(&cert.Issuer, &cert.Serial, &cert.CertURL, &cert.KeyURL, &cert.NotAfter); err != nil {
-			return certs, err
+			return certs, aoserrors.Wrap(err)
 		}
 
 		certs = append(certs, cert)
@@ -167,7 +168,7 @@ func (db *Database) GetCertificates(certType string) (certs []certhandler.CertIn
 // RemoveCertificate removes certificate from database
 func (db *Database) RemoveCertificate(certType, certURL string) (err error) {
 	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ? AND certURL = ?", certType, certURL); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -176,7 +177,7 @@ func (db *Database) RemoveCertificate(certType, certURL string) (err error) {
 // RemoveAllCertificates removes all certificate from database
 func (db *Database) RemoveAllCertificates(certType string) (err error) {
 	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ?", certType); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -201,10 +202,10 @@ func (db *Database) getVersion() (version uint64, err error) {
 	err = stmt.QueryRow().Scan(&version)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return version, ErrNotExist
+			return version, aoserrors.Wrap(ErrNotExist)
 		}
 
-		return version, err
+		return version, aoserrors.Wrap(err)
 	}
 
 	return version, nil
@@ -213,16 +214,16 @@ func (db *Database) getVersion() (version uint64, err error) {
 func (db *Database) setVersion(version uint64) (err error) {
 	result, err := db.sql.Exec("UPDATE config SET version = ?", version)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	count, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if count == 0 {
-		return ErrNotExist
+		return aoserrors.Wrap(ErrNotExist)
 	}
 
 	return nil
@@ -231,7 +232,7 @@ func (db *Database) setVersion(version uint64) (err error) {
 func (db *Database) isTableExist(name string) (result bool, err error) {
 	rows, err := db.sql.Query("SELECT * FROM sqlite_master WHERE name = ? and type='table'", name)
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
@@ -245,7 +246,7 @@ func (db *Database) createConfigTable() (err error) {
 
 	exist, err := db.isTableExist("config")
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if exist {
@@ -255,13 +256,13 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE config (
 			version INTEGER)`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = db.sql.Exec(
 		`INSERT INTO config (
 			version) values(?)`, dbVersion); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -278,7 +279,7 @@ func (db *Database) createCertTable() (err error) {
 		keyURL TEXT,
 		notAfter TIMESTAMP,
 		PRIMARY KEY (issuer, serial))`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

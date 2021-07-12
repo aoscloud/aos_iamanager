@@ -21,6 +21,8 @@ package config
 import (
 	"encoding/json"
 	"os"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -64,14 +66,14 @@ type ModuleConfig struct {
 func New(fileName string) (config *Config, err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return config, err
+		return config, aoserrors.Wrap(err)
 	}
 
 	config = &Config{}
 
 	decoder := json.NewDecoder(file)
 	if err = decoder.Decode(config); err != nil {
-		return config, err
+		return config, aoserrors.Wrap(err)
 	}
 
 	return config, nil

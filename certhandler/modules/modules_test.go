@@ -25,7 +25,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -46,6 +45,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/tpmkey"
@@ -881,7 +881,7 @@ func getExistingFileItems(itemType, storagePath string) (existingURLs []string, 
 			}
 
 		default:
-			return nil, fmt.Errorf("unsupported item type: %s", itemType)
+			return nil, aoserrors.Errorf("unsupported item type: %s", itemType)
 		}
 
 		keyURL := url.URL{Scheme: cryptutils.SchemeFile, Path: absItemPath}
@@ -897,7 +897,7 @@ func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
 	case "key":
 
 	default:
-		return nil, fmt.Errorf("unsupported item type: %s", itemType)
+		return nil, aoserrors.Errorf("unsupported item type: %s", itemType)
 	}
 
 	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
@@ -909,7 +909,7 @@ func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
 	for _, value := range values {
 		handle, ok := value.(tpmutil.Handle)
 		if !ok {
-			return nil, errors.New("wrong TPM data format")
+			return nil, aoserrors.New("wrong TPM data format")
 		}
 
 		keyURL := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
@@ -1004,7 +1004,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported item type: %s", itemType)
+		return nil, aoserrors.Errorf("unsupported item type: %s", itemType)
 	}
 
 	return existingURLs, nil

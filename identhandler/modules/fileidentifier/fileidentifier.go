@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_iamanager/identhandler"
 )
@@ -75,17 +76,17 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 	instance := &Instance{}
 
 	if err = json.Unmarshal(configJSON, &instance.config); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	instance.usersChangedChannel = make(chan []string, usersChangedChannelSize)
 
 	if instance.systemID, err = instance.readDataFromFile(instance.config.SystemIDPath); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if instance.boardModel, err = instance.readDataFromFile(instance.config.BoardModelPath); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = instance.readUsers(); err != nil {
@@ -109,7 +110,7 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 
 	log.WithField("systemID", instance.systemID).Debug("Get system ID")
 
-	return instance.systemID, err
+	return instance.systemID, aoserrors.Wrap(err)
 }
 
 // GetBoardModel returns the board model
@@ -119,7 +120,7 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 
 	log.WithField("boardModel", instance.boardModel).Debug("Get board model")
 
-	return instance.boardModel, err
+	return instance.boardModel, aoserrors.Wrap(err)
 }
 
 // GetUsers returns the user claims
@@ -129,7 +130,7 @@ func (instance *Instance) GetUsers() (users []string, err error) {
 
 	log.WithField("users", instance.users).Debug("Get users")
 
-	return instance.users, err
+	return instance.users, aoserrors.Wrap(err)
 }
 
 // SetUsers sets the user claims
@@ -150,7 +151,7 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	}
 
 	if err = instance.writeUsers(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -168,7 +169,7 @@ func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
 func (instance *Instance) readDataFromFile(path string) (data string, err error) {
 	rawData, err := ioutil.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	data = strings.TrimSpace(string(rawData))
@@ -181,7 +182,7 @@ func (instance *Instance) readUsers() (err error) {
 
 	file, err := os.Open(instance.config.UsersPath)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
@@ -197,7 +198,7 @@ func (instance *Instance) readUsers() (err error) {
 func (instance *Instance) writeUsers() (err error) {
 	file, err := os.Create(instance.config.UsersPath)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
@@ -207,5 +208,5 @@ func (instance *Instance) writeUsers() (err error) {
 		fmt.Fprintln(writer, claim)
 	}
 
-	return writer.Flush()
+	return aoserrors.Wrap(writer.Flush())
 }

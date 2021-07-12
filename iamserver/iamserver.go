@@ -20,13 +20,13 @@ package iamserver
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"net"
 	"os/exec"
 	"sync"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"google.golang.org/grpc"
@@ -114,11 +114,11 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 	}()
 
 	if err := server.createServerProtected(cfg, insecure); err != nil {
-		return server, err
+		return server, aoserrors.Wrap(err)
 	}
 
 	if err := server.createServerPublic(cfg, insecure); err != nil {
-		return server, err
+		return server, aoserrors.Wrap(err)
 	}
 
 	go server.handleUsersChanged()
@@ -140,7 +140,7 @@ func (server *Server) Close() (err error) {
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // GetCertTypes return all IAM cert types
@@ -159,7 +159,7 @@ func (server *Server) FinishProvisioning(context context.Context, req *empty.Emp
 	if len(server.finishProvisioningCmdArgs) > 0 {
 		output, err := exec.Command(server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
 		if err != nil {
-			return rsp, fmt.Errorf("message: %s, err: %s", string(output), err)
+			return rsp, aoserrors.Errorf("message: %s, err: %s", string(output), err)
 		}
 	}
 
@@ -175,7 +175,7 @@ func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerReq) (rs
 	if err = server.certHandler.SetOwner(req.Type, req.Password); err != nil {
 		log.Errorf("Set owner error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -190,7 +190,7 @@ func (server *Server) Clear(context context.Context, req *pb.ClearReq) (rsp *emp
 	if err = server.certHandler.Clear(req.Type); err != nil {
 		log.Errorf("Clear error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -206,7 +206,7 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReq) (
 	if err != nil {
 		log.Errorf("Create key error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	rsp.Csr = string(csr)
@@ -223,7 +223,7 @@ func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertReq) (
 	if rsp.CertUrl, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert)); err != nil {
 		log.Errorf("Apply certificate error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -241,7 +241,7 @@ func (server *Server) GetCert(context context.Context, req *pb.GetCertReq) (rsp 
 	if rsp.CertUrl, rsp.KeyUrl, err = server.certHandler.GetCertificate(req.Type, req.Issuer, req.Serial); err != nil {
 		log.Errorf("Get certificate error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -256,13 +256,13 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 	if rsp.SystemId, err = server.identHandler.GetSystemID(); err != nil {
 		log.Errorf("Get system ID error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	if rsp.BoardModel, err = server.identHandler.GetBoardModel(); err != nil {
 		log.Errorf("Get board model error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -277,7 +277,7 @@ func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *
 	if rsp.Users, err = server.identHandler.GetUsers(); err != nil {
 		log.Errorf("Get users error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -292,7 +292,7 @@ func (server *Server) SetUsers(context context.Context, req *pb.SetUsersReq) (rs
 	if err = server.identHandler.SetUsers(req.Users); err != nil {
 		log.Errorf("Set users error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	return rsp, nil
@@ -348,7 +348,7 @@ func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServi
 	if err != nil {
 		log.Errorf("Register service error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	rsp.Secret = secret
@@ -377,7 +377,7 @@ func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissions
 	if err != nil {
 		log.Errorf("Ger permissions error: %s", err)
 
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	rsp.ServiceId = serviceID
@@ -392,13 +392,13 @@ func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReq) (
 
 	if err := server.certHandler.CreateSelfSignedCert(discEncryptyonType, req.Password); err != nil {
 		log.Error("Can't generate self signed certificate: ", err)
-		return rsp, err
+		return rsp, aoserrors.Wrap(err)
 	}
 
 	if len(server.diskEncryptCmdArgs) > 0 {
 		output, err := exec.Command(server.diskEncryptCmdArgs[0], server.diskEncryptCmdArgs[1:]...).CombinedOutput()
 		if err != nil {
-			return rsp, fmt.Errorf("Can't encrypt disk: %s, err: %s", string(output), err)
+			return rsp, aoserrors.Errorf("Can't encrypt disk: %s, err: %s", string(output), err)
 		}
 	}
 
@@ -413,7 +413,7 @@ func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (
 	log.WithField("url", cfg.ServerURL).Debug("Create IAM protected server")
 
 	if server.listener, err = net.Listen("tcp", cfg.ServerURL); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	var opts []grpc.ServerOption
@@ -443,7 +443,7 @@ func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err
 	log.WithField("url", cfg.ServerPublicURL).Debug("Create IAM public server")
 
 	if server.listenerPublic, err = net.Listen("tcp", cfg.ServerPublicURL); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	var opts []grpc.ServerOption
@@ -487,7 +487,7 @@ func (server *Server) closeServerProtected() (err error) {
 
 	server.streamsWg.Wait()
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (server *Server) closeServerPublic() (err error) {
@@ -505,7 +505,7 @@ func (server *Server) closeServerPublic() (err error) {
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (server *Server) handleUsersChanged() {

@@ -24,7 +24,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
@@ -37,6 +36,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 
 	"aos_iamanager/certhandler"
@@ -125,30 +125,30 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &pkcs11Module.config); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	if (pkcs11Module.config.UserPINPath == "") == (pkcs11Module.config.TEELoginType == "") {
-		return nil, errors.New("either userPinPath or teeLoginType should be used")
+		return nil, aoserrors.New("either userPinPath or teeLoginType should be used")
 	}
 
 	if err = pkcs11Module.initContext(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = pkcs11Module.displayInfo(pkcs11Module.slotID); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	owned, err := pkcs11Module.isOwned()
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if owned {
 		if pkcs11Module.userPIN, err = pkcs11Module.getUserPIN(); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -171,7 +171,7 @@ func (module *PKCS11Module) Close() (err error) {
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // SetOwner owns slot
@@ -183,7 +183,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	log.WithFields(log.Fields{"slotID": module.slotID}).Debug("Close all sessions")
 
 	if err = module.ctx.CloseAllSessions(module.slotID); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	module.pendingKeys = list.New()
@@ -193,7 +193,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 
 	if module.config.TEELoginType != "" {
 		if userPIN, err = getTeeUserPIN(module.config.TEELoginType, module.config.UID, module.config.GID); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		module.userPIN = ""
@@ -203,7 +203,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 			userPIN = uniuri.New()
 
 			if err = ioutil.WriteFile(module.config.UserPINPath, []byte(userPIN), 0600); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 
@@ -213,19 +213,19 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	log.WithFields(log.Fields{"slotID": module.slotID, "label": module.tokenLabel}).Debug("Init token")
 
 	if err = module.ctx.InitToken(module.slotID, soPIN, module.tokenLabel); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	session, err := module.getSession(false)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = module.ctx.Login(session, pkcs11.CKU_SO, soPIN); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer func() {
-		err = module.ctx.Logout(session)
+		err = aoserrors.Wrap(module.ctx.Logout(session))
 	}()
 
 	if module.config.TEELoginType != "" {
@@ -235,7 +235,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	}
 
 	if err = module.ctx.InitPIN(session, userPIN); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -250,7 +250,7 @@ func (module *PKCS11Module) Clear() (err error) {
 
 	owned, err := module.isOwned()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !owned {
@@ -259,14 +259,14 @@ func (module *PKCS11Module) Clear() (err error) {
 
 	session, err := module.getSession(true)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	module.pendingKeys = list.New()
 
 	objects, err := findObjects(module.ctx, session, []*pkcs11.Attribute{})
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	for _, object := range objects {
@@ -281,7 +281,7 @@ func (module *PKCS11Module) Clear() (err error) {
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
@@ -294,7 +294,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 
 	owned, err := module.isOwned()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	if !owned {
@@ -303,7 +303,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 
 	session, err := module.getSession(true)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	// find all certificate objects
@@ -313,7 +313,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, module.certType),
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	// find all public key objects
@@ -323,7 +323,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, module.certType),
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	// find all private key objects
@@ -333,7 +333,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, module.certType),
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	// find valid private key + public key + certificate with same ID
@@ -407,7 +407,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 
 	invalidChainCerts, err := checkCertificateChain(module.ctx, session)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	for _, cert := range invalidChainCerts {
@@ -428,7 +428,7 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 	session, err := module.getSession(true)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	var privateKey privateKey
@@ -443,11 +443,11 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 		privateKey, err = createECCKey(module.ctx, session, id, module.certType, ecsdaCurveID)
 
 	default:
-		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
+		return nil, aoserrors.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
 	if err = module.tokenMemInfo(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	module.pendingKeys.PushBack(privateKey)
@@ -457,7 +457,7 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 		module.pendingKeys.Remove(module.pendingKeys.Front())
 	}
-	return privateKey, err
+	return privateKey, aoserrors.Wrap(err)
 }
 
 // ApplyCertificate applies certificate
@@ -490,15 +490,15 @@ func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 	}
 
 	if currentKey == nil {
-		return certhandler.CertInfo{}, "", errors.New("no corresponding key found")
+		return certhandler.CertInfo{}, "", aoserrors.New("no corresponding key found")
 	}
 
 	if err = currentKey.moveToToken(); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	if _, err = createCertificateChain(module.ctx, module.session, currentKey.getID(), module.certType, x509Certs); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	certInfo.CertURL = module.createURL(module.certType, currentKey.getID())
@@ -515,7 +515,7 @@ func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 	}).Debug("Certificate applied")
 
 	if err = module.tokenMemInfo(); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	return certInfo, "", nil
@@ -532,19 +532,19 @@ func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err err
 
 	urlTemplate, err := parseURL(certURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	session, err := module.getSession(true)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	template := []*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE)}
 
 	certObjs, err := findObjects(module.ctx, session, append(template, urlTemplate...))
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	for _, certObj := range certObjs {
@@ -557,7 +557,7 @@ func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err err
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // RemoveKey removes key
@@ -571,24 +571,24 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 
 	urlTemplate, err := parseURL(keyURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	session, err := module.getSession(true)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	privObjs, err := findObjects(module.ctx, session, append([]*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY)}, urlTemplate...))
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	pubObjs, err := findObjects(module.ctx, session, append([]*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY)}, urlTemplate...))
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	for _, obj := range append(privObjs, pubObjs...) {
@@ -601,7 +601,7 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 		}
 	}
 
-	return nil
+	return aoserrors.Wrap(err)
 }
 
 /*******************************************************************************
@@ -611,7 +611,7 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 func (module *PKCS11Module) isOwned() (owner bool, err error) {
 	tokenInfo, err := module.ctx.GetTokenInfo(module.slotID)
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return tokenInfo.Flags&pkcs11.CKF_TOKEN_INITIALIZED != 0, nil
@@ -624,7 +624,7 @@ func findObjectIndexByID(id string, objs []*pkcs11Object) (index int, err error)
 		}
 	}
 
-	return 0, errors.New("object not found")
+	return 0, aoserrors.New("object not found")
 }
 
 func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error) {
@@ -639,7 +639,7 @@ func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error
 		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("gid=%d", gid)))), nil
 
 	default:
-		return "", fmt.Errorf("wrong TEE login type: %s", loginType)
+		return "", aoserrors.Errorf("wrong TEE login type: %s", loginType)
 	}
 }
 
@@ -650,7 +650,7 @@ func setTeeEnvVars(loginType string, gid uint32) (err error) {
 			log.WithFields(log.Fields{"name": envLoginType, "value": loginType}).Debug("Set environment variable")
 
 			if err = os.Setenv(envLoginType, loginType); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 
@@ -661,13 +661,13 @@ func setTeeEnvVars(loginType string, gid uint32) (err error) {
 
 			if os.Getenv(envLoginGID) != gidStr {
 				if err = os.Setenv(envLoginGID, gidStr); err != nil {
-					return err
+					return aoserrors.Wrap(err)
 				}
 			}
 		}
 
 	default:
-		return fmt.Errorf("wrong TEE identity: %s", loginType)
+		return aoserrors.Errorf("wrong TEE identity: %s", loginType)
 	}
 
 	return nil
@@ -676,12 +676,12 @@ func setTeeEnvVars(loginType string, gid uint32) (err error) {
 func parseURL(urlStr string) (template []*pkcs11.Attribute, err error) {
 	urlVal, err := url.Parse(urlStr)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	opaqueValues, err := url.ParseQuery(urlVal.Opaque)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	for key, value := range opaqueValues {
@@ -725,7 +725,7 @@ func (module *PKCS11Module) initContext() (err error) {
 	module.ctx = pkcs11.New(module.config.Library)
 
 	if module.ctx == nil {
-		return fmt.Errorf("can't open PKCS11 library: %s", module.config.Library)
+		return aoserrors.Errorf("can't open PKCS11 library: %s", module.config.Library)
 	}
 
 	// PKCS11 lib can be initialized only once per application handle multiple instances
@@ -741,12 +741,12 @@ func (module *PKCS11Module) initContext() (err error) {
 
 		if module.config.TEELoginType != "" {
 			if err = setTeeEnvVars(module.config.TEELoginType, module.config.GID); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 
 		if err = module.ctx.Initialize(); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -755,7 +755,7 @@ func (module *PKCS11Module) initContext() (err error) {
 	module.tokenLabel = module.getTokenLabel()
 
 	if module.slotID, err = module.getSlotID(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -785,13 +785,13 @@ func (module *PKCS11Module) releaseContext() (err error) {
 		ctxCount[module.config.Library] = count
 	} else {
 		if err == nil {
-			err = errors.New("wrong PKCS11 context count")
+			err = aoserrors.New("wrong PKCS11 context count")
 		}
 	}
 
 	module.ctx.Destroy()
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHandle, err error) {
@@ -802,18 +802,18 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 		pkcs11Err, ok := err.(pkcs11.Error)
 
 		if !ok || uint(pkcs11Err) != pkcs11.CKR_SESSION_HANDLE_INVALID {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 
 		if session, err = module.ctx.OpenSession(module.slotID,
 			pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION); err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 
 		log.WithFields(log.Fields{"session": session, "slotID": module.slotID}).Debug("Open session")
 
 		if info, err = module.ctx.GetSessionInfo(session); err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 	}
 
@@ -822,7 +822,7 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 
 	if isSOLoggedIn {
 		if err = module.ctx.Logout(session); err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 	}
 
@@ -833,7 +833,7 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 			pkcs11Err, ok := err.(pkcs11.Error)
 
 			if !ok || pkcs11Err != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
-				return 0, err
+				return 0, aoserrors.Wrap(err)
 			}
 		}
 	}
@@ -845,7 +845,7 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 			pkcs11Err, ok := err.(pkcs11.Error)
 
 			if !ok || pkcs11Err != pkcs11.CKR_USER_NOT_LOGGED_IN {
-				return 0, err
+				return 0, aoserrors.Wrap(err)
 			}
 		}
 	}
@@ -863,7 +863,7 @@ func (module *PKCS11Module) releaseSession() (err error) {
 			pkcs11Err, ok := err.(pkcs11.Error)
 
 			if !ok || uint(pkcs11Err) != pkcs11.CKR_SESSION_HANDLE_INVALID {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 	}
@@ -878,7 +878,7 @@ func (module *PKCS11Module) getUserPIN() (pin string, err error) {
 
 	data, err := ioutil.ReadFile(module.config.UserPINPath)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	return string(data), nil
@@ -912,7 +912,7 @@ func (module *PKCS11Module) getSlotID() (id uint, err error) {
 	}
 
 	if paramCount >= 2 {
-		return 0, errors.New("only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
+		return 0, aoserrors.New("only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
 	}
 
 	if module.config.SlotID != nil {
@@ -921,12 +921,12 @@ func (module *PKCS11Module) getSlotID() (id uint, err error) {
 
 	slotIDs, err := module.ctx.GetSlotList(false)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	if module.config.SlotIndex != nil {
 		if *module.config.SlotIndex >= len(slotIDs) || *module.config.SlotIndex < 0 {
-			return 0, errors.New("invalid slot index")
+			return 0, aoserrors.New("invalid slot index")
 		}
 
 		return slotIDs[*module.config.SlotIndex], nil
@@ -940,13 +940,13 @@ func (module *PKCS11Module) getSlotID() (id uint, err error) {
 	for _, id := range slotIDs {
 		slotInfo, err := module.ctx.GetSlotInfo(id)
 		if err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 
 		if slotInfo.Flags&pkcs11.CKF_TOKEN_PRESENT != 0 {
 			tokenInfo, err := module.ctx.GetTokenInfo(id)
 			if err != nil {
-				return 0, err
+				return 0, aoserrors.Wrap(err)
 			}
 
 			if tokenInfo.Label == module.tokenLabel {
@@ -964,13 +964,13 @@ func (module *PKCS11Module) getSlotID() (id uint, err error) {
 		return freeID, nil
 	}
 
-	return 0, errors.New("no suitable slot found")
+	return 0, aoserrors.New("no suitable slot found")
 }
 
 func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 	libInfo, err := module.ctx.GetInfo()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -983,7 +983,7 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 
 	slotInfo, err := module.ctx.GetSlotInfo(slotID)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -997,7 +997,7 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 
 	tokenInfo, err := module.ctx.GetTokenInfo(slotID)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -1019,7 +1019,7 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 func (module *PKCS11Module) tokenMemInfo() (err error) {
 	tokenInfo, err := module.ctx.GetTokenInfo(module.slotID)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	log.WithFields(log.Fields{
 		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),

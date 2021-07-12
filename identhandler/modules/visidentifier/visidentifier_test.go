@@ -19,7 +19,6 @@ package visidentifier_test
 
 import (
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -31,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/visprotocol"
 	"gitpct.epam.com/epmd-aepr/aos_common/wsserver"
 
@@ -427,7 +427,7 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 		}
 
 	default:
-		return nil, errors.New("unknown action")
+		return nil, aoserrors.New("unknown action")
 	}
 
 	if response, err = json.Marshal(rsp); err != nil {

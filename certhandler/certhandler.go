@@ -27,14 +27,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
-	"fmt"
 	"math/big"
 	"strings"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 
 	"aos_iamanager/config"
@@ -142,14 +141,14 @@ func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Han
 
 		descriptor, err := handler.createModule(moduleCfg)
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		handler.moduleDescriptors[moduleCfg.ID] = descriptor
 	}
 
 	if err = handler.syncStorage(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return handler, nil
@@ -176,10 +175,10 @@ func (handler *Handler) SetOwner(certType, password string) (err error) {
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return fmt.Errorf("module %s not found", certType)
+		return aoserrors.Errorf("module %s not found", certType)
 	}
 
-	return descriptor.module.SetOwner(password)
+	return aoserrors.Wrap(descriptor.module.SetOwner(password))
 }
 
 // Clear clears security storage
@@ -189,14 +188,14 @@ func (handler *Handler) Clear(certType string) (err error) {
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return fmt.Errorf("module %s not found", certType)
+		return aoserrors.Errorf("module %s not found", certType)
 	}
 
 	if err = descriptor.module.Clear(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
-	return handler.storage.RemoveAllCertificates(certType)
+	return aoserrors.Wrap(handler.storage.RemoveAllCertificates(certType))
 }
 
 // CreateKey creates key pair
@@ -206,17 +205,17 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 
 	key, err := handler.createPrivateKey(certType, password)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return nil, fmt.Errorf("module %s not found", certType)
+		return nil, aoserrors.Errorf("module %s not found", certType)
 	}
 
 	csrData, err := createCSR(handler.systemID, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return csrData, nil
@@ -229,27 +228,27 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 
 	x509Certs, err := cryptutils.PEMToX509Cert(cert)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	if err = checkX509CertificateChan(x509Certs); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return "", fmt.Errorf("module %s not found", certType)
+		return "", aoserrors.Errorf("module %s not found", certType)
 	}
 
 	certInfo, password, err := descriptor.module.ApplyCertificate(x509Certs)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	certURL = certInfo.CertURL
 
 	if err = handler.storage.AddCertificate(certType, certInfo); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	certs, err := handler.storage.GetCertificates(certType)
@@ -272,15 +271,15 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 		}
 
 		if err = descriptor.module.RemoveCertificate(certs[minIndex].CertURL, password); err != nil {
-			return "", err
+			return "", aoserrors.Wrap(err)
 		}
 
 		if err = descriptor.module.RemoveKey(certs[minIndex].KeyURL, password); err != nil {
-			return "", err
+			return "", aoserrors.Wrap(err)
 		}
 
 		if err = handler.storage.RemoveCertificate(certType, certs[minIndex].CertURL); err != nil {
-			return "", err
+			return "", aoserrors.Wrap(err)
 		}
 
 		certs = append(certs[:minIndex], certs[minIndex+1:]...)
@@ -297,11 +296,11 @@ func (handler *Handler) GetCertificate(certType string, issuer []byte, serial st
 	if serial == "" {
 		certInfos, err := handler.storage.GetCertificates(certType)
 		if err != nil {
-			return "", "", err
+			return "", "", aoserrors.Wrap(err)
 		}
 
 		if len(certInfos) == 0 {
-			return "", "", errors.New("certificate not found")
+			return "", "", aoserrors.New("certificate not found")
 		}
 
 		var minTime time.Time
@@ -320,7 +319,7 @@ func (handler *Handler) GetCertificate(certType string, issuer []byte, serial st
 
 	certInfo, err := handler.storage.GetCertificate(base64.StdEncoding.EncodeToString(issuer), serial)
 	if err != nil {
-		return "", "", err
+		return "", "", aoserrors.Wrap(err)
 	}
 
 	return certInfo.CertURL, certInfo.KeyURL, nil
@@ -332,7 +331,7 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 
 	key, err := handler.createPrivateKey(certType, password)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	template := x509.Certificate{
@@ -345,26 +344,26 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 
 	privKey, ok := key.(crypto.Signer)
 	if !ok {
-		return errors.New("x509: certificate private key does not implement crypto.Signer")
+		return aoserrors.New("x509: certificate private key does not implement crypto.Signer")
 	}
 
 	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, privKey.Public(), key)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return fmt.Errorf("module %s not found", certType)
+		return aoserrors.Errorf("module %s not found", certType)
 	}
 
 	x509Certs, err := cryptutils.PEMToX509Cert(pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert}))
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, _, err = descriptor.module.ApplyCertificate(x509Certs); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -387,7 +386,7 @@ func (handler *Handler) Close() {
 
 func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
 	if len(certs) < 0 {
-		return errors.New("invalid certificate count")
+		return aoserrors.New("invalid certificate count")
 	}
 
 	for _, cert := range certs {
@@ -417,7 +416,7 @@ func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
 		}
 
 		if !issuerFound {
-			return fmt.Errorf("issuer %s not found", currentCert.Issuer)
+			return aoserrors.Errorf("issuer %s not found", currentCert.Issuer)
 		}
 	}
 }
@@ -446,7 +445,7 @@ func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key
 	if len(oids) > 0 {
 		oidsValue, err := asn1.Marshal(oids)
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{
@@ -456,7 +455,7 @@ func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key
 
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificateRequest, Bytes: csrDER}), nil
@@ -465,11 +464,11 @@ func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key
 func (handler *Handler) createModule(cfg config.ModuleConfig) (descriptor moduleDescriptor, err error) {
 	newFunc, ok := plugins[cfg.Plugin]
 	if !ok {
-		return moduleDescriptor{}, fmt.Errorf("plugin %s not found", cfg.Plugin)
+		return moduleDescriptor{}, aoserrors.Errorf("plugin %s not found", cfg.Plugin)
 	}
 
 	if descriptor.module, err = newFunc(cfg.ID, cfg.Params); err != nil {
-		return moduleDescriptor{}, err
+		return moduleDescriptor{}, aoserrors.Wrap(err)
 	}
 
 	descriptor.config = cfg
@@ -496,7 +495,7 @@ func (handler *Handler) syncStorage() (err error) {
 
 		validItems, invalidCerts, invalidKeys, err := descriptor.module.ValidateCertificates()
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		descriptor.invalidCerts = invalidCerts
@@ -504,7 +503,7 @@ func (handler *Handler) syncStorage() (err error) {
 
 		existingItems, err := handler.storage.GetCertificates(descriptor.config.ID)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		for _, validItem := range validItems {
@@ -528,7 +527,7 @@ func (handler *Handler) syncStorage() (err error) {
 				}).Warn("Add missing cert to DB")
 
 				if err = handler.storage.AddCertificate(descriptor.config.ID, validItem); err != nil {
-					return err
+					return aoserrors.Wrap(err)
 				}
 			}
 		}
@@ -542,7 +541,7 @@ func (handler *Handler) syncStorage() (err error) {
 			}).Warn("Remove invalid cert from DB")
 
 			if err = handler.storage.RemoveCertificate(descriptor.config.ID, existingItem.CertURL); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 	}
@@ -553,14 +552,14 @@ func (handler *Handler) syncStorage() (err error) {
 func (handler *Handler) createPrivateKey(certType, password string) (key crypto.PrivateKey, err error) {
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return nil, fmt.Errorf("module %s not found", certType)
+		return nil, aoserrors.Errorf("module %s not found", certType)
 	}
 
 	for _, certURL := range descriptor.invalidCerts {
 		log.WithFields(log.Fields{"certType": certType, "URL": certURL}).Warn("Remove invalid certificate")
 
 		if err = descriptor.module.RemoveCertificate(certURL, password); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -570,7 +569,7 @@ func (handler *Handler) createPrivateKey(certType, password string) (key crypto.
 		log.WithFields(log.Fields{"certType": certType, "URL": keyURL}).Warn("Remove invalid key")
 
 		if err = descriptor.module.RemoveKey(keyURL, password); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -578,7 +577,7 @@ func (handler *Handler) createPrivateKey(certType, password string) (key crypto.
 
 	key, err = descriptor.module.CreateKey(password, descriptor.config.Algorithm)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return key, nil

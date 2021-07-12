@@ -28,7 +28,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -38,6 +37,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 
 	"aos_iamanager/certhandler"
@@ -487,7 +487,7 @@ func (module *testModule) Close() (err error) {
 func (storage *testStorage) AddCertificate(certType string, cert certhandler.CertInfo) (err error) {
 	for _, item := range storage.certs {
 		if item.certInfo.Issuer == cert.Issuer && item.certInfo.Serial == cert.Serial {
-			return errors.New("certificate already exists")
+			return aoserrors.New("certificate already exists")
 		}
 	}
 
@@ -503,7 +503,7 @@ func (storage *testStorage) GetCertificate(issuer, serial string) (cert certhand
 		}
 	}
 
-	return cert, errors.New("certificate not found")
+	return cert, aoserrors.New("certificate not found")
 }
 
 func (storage *testStorage) GetCertificates(certType string) (certs []certhandler.CertInfo, err error) {
@@ -525,7 +525,7 @@ func (storage *testStorage) RemoveCertificate(certType, certURL string) (err err
 		}
 	}
 
-	return errors.New("certificate not found")
+	return aoserrors.New("certificate not found")
 }
 
 func (storage *testStorage) RemoveAllCertificates(certType string) (err error) {

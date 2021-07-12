@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -36,6 +35,7 @@ import (
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/tpmkey"
 
@@ -90,28 +90,28 @@ func New(certType string, configJSON json.RawMessage,
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &tpmModule.config); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	if device == nil {
 		if tpmModule.config.Device == "" {
-			return nil, errors.New("TPM device should be set")
+			return nil, aoserrors.New("TPM device should be set")
 		}
 
 		if tpmModule.device, err = tpm2.OpenTPM(tpmModule.config.Device); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	} else {
 		tpmModule.device = device
 	}
 
 	if err = os.MkdirAll(tpmModule.config.StoragePath, 0755); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = tpmModule.flushTransientHandles(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return tpmModule, nil
@@ -137,7 +137,7 @@ func (module *TPMModule) Close() (err error) {
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
@@ -147,7 +147,7 @@ func (module *TPMModule) ValidateCertificates() (
 
 	handles, err := module.getPersistentHandles()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	keyMap := make(map[string]tpmkey.TPMKey)
@@ -155,7 +155,7 @@ func (module *TPMModule) ValidateCertificates() (
 	for _, handle := range handles {
 		key, err := tpmkey.CreateFromPersistent(module.device, handle)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, aoserrors.Wrap(err)
 		}
 
 		keyMap[handleToURL(handle)] = key
@@ -163,7 +163,7 @@ func (module *TPMModule) ValidateCertificates() (
 
 	content, err := ioutil.ReadDir(module.config.StoragePath)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, aoserrors.Wrap(err)
 	}
 
 	for _, item := range content {
@@ -175,7 +175,7 @@ func (module *TPMModule) ValidateCertificates() (
 				"dir":      absItemPath}).Warn("Unexpected dir found in storage, remove it")
 
 			if err = os.RemoveAll(absItemPath); err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, aoserrors.Wrap(err)
 			}
 
 			continue
@@ -240,7 +240,7 @@ func (module *TPMModule) SetOwner(password string) (err error) {
 
 	ownerSet, err := module.isOwnerSet()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	auth := tpm2.AuthCommand{
@@ -253,14 +253,14 @@ func (module *TPMModule) SetOwner(password string) (err error) {
 	}
 
 	if err = tpm2.HierarchyChangeAuth(module.device, tpm2.HandleOwner, auth, password); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !ownerSet {
 		// If all parameters are zeros, left them default (3, 1000, 1000)
 		if module.config.LockoutMaxTry != 0 || module.config.RecoveryTime != 0 || module.config.LockoutRecoveryTime != 0 {
 			if err = tpm2.DictionaryAttackParameters(module.device, auth, module.config.LockoutMaxTry, module.config.RecoveryTime, module.config.LockoutRecoveryTime); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 	}
@@ -275,15 +275,15 @@ func (module *TPMModule) Clear() (err error) {
 	if err = tpm2.Clear(module.device, tpm2.HandleLockout, tpm2.AuthCommand{
 		Session:    tpm2.HandlePasswordSession,
 		Attributes: tpm2.AttrContinueSession}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = os.RemoveAll(module.config.StoragePath); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -295,7 +295,7 @@ func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.Priva
 
 	newKey, err := module.newKey(password, algorithm)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	module.pendingKeys.PushBack(newKey)
@@ -336,25 +336,25 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	}
 
 	if currentKey == nil {
-		return certhandler.CertInfo{}, "", errors.New("no key found")
+		return certhandler.CertInfo{}, "", aoserrors.New("no key found")
 	}
 
 	certFileName, err := createPEMFile(module.config.StoragePath)
 	if err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	if err = cryptutils.SaveCertificate(certFileName, x509Certs); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	persistentHandle, err := module.findEmptyPersistentHandle()
 	if err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	if err = currentKey.MakePersistent(persistentHandle); err != nil {
-		return certhandler.CertInfo{}, "", err
+		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
 	certInfo.CertURL = fileToURL(certFileName)
@@ -381,11 +381,11 @@ func (module *TPMModule) RemoveCertificate(certURL, password string) (err error)
 
 	cert, err := url.Parse(certURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = os.Remove(cert.Path); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -399,16 +399,16 @@ func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
 
 	key, err := url.Parse(keyURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	handle, err := strconv.ParseUint(key.Hostname(), 0, 32)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = tpm2.EvictControl(module.device, password, tpm2.HandleOwner, tpmutil.Handle(handle), tpmutil.Handle(handle)); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -421,16 +421,16 @@ func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
 func (module *TPMModule) isOwnerSet() (result bool, err error) {
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.TPMAPermanent))
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if len(values) == 0 {
-		return false, errors.New("wrong prop value")
+		return false, aoserrors.New("wrong prop value")
 	}
 
 	prop, ok := values[0].(tpm2.TaggedProperty)
 	if !ok {
-		return false, errors.New("invalid prop type")
+		return false, aoserrors.New("invalid prop type")
 	}
 
 	if prop.Value&tpmPermanentOwnerAuthSet != 0 {
@@ -458,7 +458,7 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 
 	if handle, _, err = tpm2.CreatePrimary(device, tpm2.HandleOwner, tpm2.PCRSelection{},
 		password, password, primaryKeyTemplate); err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	return handle, nil
@@ -467,7 +467,7 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 func (module *TPMModule) newKey(password, algorithm string) (key tpmkey.TPMKey, err error) {
 	if module.primaryHandle == 0 {
 		if module.primaryHandle, err = createPrimaryKey(module.device, password); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -497,23 +497,25 @@ func (module *TPMModule) newKey(password, algorithm string) (key tpmkey.TPMKey, 
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
+		return nil, aoserrors.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
 	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKey(module.device, module.primaryHandle,
 		tpm2.PCRSelection{}, password, "", keyTemplate)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
-	return tpmkey.CreateFromBlobs(module.device, module.primaryHandle, password, privateBlob, publicBlob)
+	key, err = tpmkey.CreateFromBlobs(module.device, module.primaryHandle, password, privateBlob, publicBlob)
+
+	return key, aoserrors.Wrap(err)
 }
 
 func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err error) {
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst)+1, uint32(tpm2.PersistentFirst))
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	if len(values) == 0 {
@@ -526,7 +528,7 @@ func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err
 		for _, value := range values {
 			handle, ok := value.(tpmutil.Handle)
 			if !ok {
-				return 0, errors.New("wrong data format")
+				return 0, aoserrors.New("wrong data format")
 			}
 
 			if i == handle {
@@ -539,14 +541,14 @@ func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err
 		}
 	}
 
-	return 0, errors.New("no empty persistent slot found")
+	return 0, aoserrors.New("no empty persistent slot found")
 }
 
 func (module *TPMModule) flushTransientHandles() (err error) {
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentFirst)-uint32(tpm2.TransientFirst), uint32(tpm2.TransientFirst))
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	for _, value := range values {
 		handle, ok := value.(tpmutil.Handle)
@@ -555,7 +557,7 @@ func (module *TPMModule) flushTransientHandles() (err error) {
 		}
 
 		if err = tpm2.FlushContext(module.device, handle); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -578,13 +580,13 @@ func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err e
 	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	for _, value := range values {
 		handle, ok := value.(tpmutil.Handle)
 		if !ok {
-			return nil, errors.New("wrong TPM data format")
+			return nil, aoserrors.New("wrong TPM data format")
 		}
 
 		handles = append(handles, handle)
@@ -596,9 +598,9 @@ func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err e
 func createPEMFile(storageDir string) (fileName string, err error) {
 	file, err := ioutil.TempFile(storageDir, "*."+cryptutils.PEMExt)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
-	return file.Name(), err
+	return file.Name(), aoserrors.Wrap(err)
 }

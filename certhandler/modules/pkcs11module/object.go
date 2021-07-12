@@ -20,6 +20,7 @@ package pkcs11module
 import (
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -55,7 +56,7 @@ func (object *pkcs11Object) delete() (err error) {
 		"id":      object.id}).Debug("Delete object")
 
 	if err = object.ctx.DestroyObject(object.session, object.handle); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -66,7 +67,7 @@ func findObjects(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	template = append(template, pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true))
 
 	if err = ctx.FindObjectsInit(session, template); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	defer func() {
@@ -78,7 +79,7 @@ func findObjects(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	for {
 		handles, _, err := ctx.FindObjects(session, maxFindObjects)
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if len(handles) == 0 {
@@ -89,7 +90,7 @@ func findObjects(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 			attributes, err := ctx.GetAttributeValue(session, handle, []*pkcs11.Attribute{
 				pkcs11.NewAttribute(pkcs11.CKA_ID, nil), pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil)})
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			objects = append(objects, &pkcs11Object{

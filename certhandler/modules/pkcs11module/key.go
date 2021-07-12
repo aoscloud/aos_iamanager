@@ -25,14 +25,13 @@ import (
 	"crypto/rsa"
 	"encoding/asn1"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
 	"math/big"
 	"unsafe"
 
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -97,14 +96,14 @@ func (key *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.
 	case *rsa.PSSOptions:
 		hashAlg, mgfAlg, hashLen, err := hashToPKCS11(opts.Hash)
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		saltLen := uint32(opts.SaltLength)
 
 		switch opts.SaltLength {
 		case rsa.PSSSaltLengthAuto:
-			return nil, fmt.Errorf("unsupported salt length: %v", opts.SaltLength)
+			return nil, aoserrors.Errorf("unsupported salt length: %v", opts.SaltLength)
 
 		case rsa.PSSSaltLengthEqualsHash:
 			saltLen = hashLen
@@ -121,7 +120,7 @@ func (key *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.
 	default:
 		oid, ok := pkcs1Prefix[opts.HashFunc()]
 		if !ok {
-			return nil, fmt.Errorf("unsupported hash function: %v", opts.HashFunc())
+			return nil, aoserrors.Errorf("unsupported hash function: %v", opts.HashFunc())
 		}
 
 		digest = append(oid, digest...)
@@ -129,29 +128,37 @@ func (key *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.
 	}
 
 	if err = key.ctx.SignInit(key.session, mechanisms, key.handle); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
-	return key.ctx.Sign(key.session, digest)
+	if signature, err = key.ctx.Sign(key.session, digest); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return signature, nil
 }
 
 func (key *pkcs11PrivateKeyECC) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	mechanisms := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)}
 
 	if err = key.ctx.SignInit(key.session, mechanisms, key.handle); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if signature, err = key.ctx.Sign(key.session, digest); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	ecdsaSignature, err := unmarshalECDSASignature(signature)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
-	return asn1.Marshal(ecdsaSignature)
+	if signature, err = asn1.Marshal(ecdsaSignature); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return signature, nil
 }
 
 /*******************************************************************************
@@ -179,7 +186,7 @@ func hashToPKCS11(hashFunction crypto.Hash) (hashAlg uint32, mgfAlg uint32, hash
 	case crypto.SHA512:
 		return pkcs11.CKM_SHA512, uint32(pkcs11.CKG_MGF1_SHA512), 64, nil
 	default:
-		return 0, 0, 0, fmt.Errorf("unsupported hash function: %v", hashFunction)
+		return 0, 0, 0, aoserrors.Errorf("unsupported hash function: %v", hashFunction)
 	}
 }
 
@@ -197,10 +204,10 @@ func marshalCurve(curve elliptic.Curve) (oid []byte, err error) {
 	var ok bool
 
 	if oid, ok = curvesMap[curve]; !ok {
-		return nil, fmt.Errorf("unsupported curve: %s", curve.Params().Name)
+		return nil, aoserrors.Errorf("unsupported curve: %s", curve.Params().Name)
 	}
 
-	return oid, err
+	return oid, aoserrors.Wrap(err)
 }
 
 func unmarshalCurve(oid []byte) (curve elliptic.Curve, err error) {
@@ -210,18 +217,18 @@ func unmarshalCurve(oid []byte) (curve elliptic.Curve, err error) {
 		}
 	}
 
-	return nil, errors.New("unsupported curve")
+	return nil, aoserrors.New("unsupported curve")
 }
 
 func unmarshalECPoint(point []byte, curve elliptic.Curve) (x *big.Int, y *big.Int, err error) {
 	var pointBytes []byte
 
 	if _, err = asn1.Unmarshal(point, &pointBytes); err != nil {
-		return nil, nil, errors.New("can't unmarshal EC point")
+		return nil, nil, aoserrors.New("can't unmarshal EC point")
 	}
 
 	if x, y = elliptic.Unmarshal(curve, pointBytes); x == nil || y == nil {
-		return nil, nil, errors.New("can't unmarshal EC point")
+		return nil, nil, aoserrors.New("can't unmarshal EC point")
 	}
 
 	return x, y, nil
@@ -229,7 +236,7 @@ func unmarshalECPoint(point []byte, curve elliptic.Curve) (x *big.Int, y *big.In
 
 func unmarshalECDSASignature(data []byte) (signature ecdsaSignature, err error) {
 	if len(data) == 0 || len(data)%2 != 0 {
-		return ecdsaSignature{}, errors.New("ECDSA signature length is invalid from")
+		return ecdsaSignature{}, aoserrors.New("ECDSA signature length is invalid from")
 	}
 
 	n := len(data) / 2
@@ -251,11 +258,11 @@ func (key *pkcs11PrivateKey) delete() (err error) {
 	}
 
 	if err = publicObject.delete(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = key.pkcs11Object.delete(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -266,7 +273,7 @@ func (key *pkcs11PrivateKey) moveToToken() (err error) {
 
 	newPublicHandle, err := key.ctx.CopyObject(key.session, key.publicKeyHandle, template)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -276,7 +283,7 @@ func (key *pkcs11PrivateKey) moveToToken() (err error) {
 
 	newPrivateHandle, err := key.ctx.CopyObject(key.session, key.handle, template)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -285,7 +292,7 @@ func (key *pkcs11PrivateKey) moveToToken() (err error) {
 		"newHandle": newPrivateHandle}).Debug("Copy private key to token")
 
 	if err = key.delete(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	key.publicKeyHandle, key.handle = newPublicHandle, newPrivateHandle
@@ -301,14 +308,14 @@ func (key *pkcs11PrivateKeyRSA) loadPublicKey() (err error) {
 
 	attributes, err := key.ctx.GetAttributeValue(key.session, key.publicKeyHandle, template)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	var modulus = new(big.Int).SetBytes(attributes[0].Value)
 	var exponent = new(big.Int).SetBytes(attributes[1].Value)
 
 	if exponent.BitLen() > 32 || exponent.Sign() < 1 || int(exponent.Uint64()) < 2 {
-		return errors.New("invalid RSA public key")
+		return aoserrors.New("invalid RSA public key")
 	}
 
 	key.publicKey = &rsa.PublicKey{N: modulus, E: int(exponent.Int64())}
@@ -324,17 +331,17 @@ func (key *pkcs11PrivateKeyECC) loadPublicKey() (err error) {
 
 	attributes, err := key.ctx.GetAttributeValue(key.session, key.publicKeyHandle, template)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	var publicKey ecdsa.PublicKey
 
 	if publicKey.Curve, err = unmarshalCurve(attributes[0].Value); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if publicKey.X, publicKey.Y, err = unmarshalECPoint(attributes[1].Value, publicKey.Curve); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	key.publicKey = &publicKey
@@ -370,7 +377,7 @@ func createRSAKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	publicHandle, privateHandle, err := ctx.GenerateKeyPair(session, mechanisms, publicTemplate, privateTemplate)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -394,7 +401,7 @@ func createRSAKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	}
 
 	if err = rsaKey.loadPublicKey(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return rsaKey, nil
@@ -404,7 +411,7 @@ func createECCKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	id, label string, curve elliptic.Curve) (key privateKey, err error) {
 	parameters, err := marshalCurve(curve)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	publicTemplate := []*pkcs11.Attribute{
@@ -430,7 +437,7 @@ func createECCKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	publicHandle, privateHandle, err := ctx.GenerateKeyPair(session, mechanisms, publicTemplate, privateTemplate)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -454,7 +461,7 @@ func createECCKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	}
 
 	if err = eccKey.loadPublicKey(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return eccKey, nil
