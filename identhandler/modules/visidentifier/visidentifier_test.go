@@ -215,7 +215,7 @@ func setup() (err error) {
 
 	time.Sleep(1 * time.Second)
 
-	if vis, err = visidentifier.New([]byte(`{"VisServer": "wss://localhost:443"}`)); err != nil {
+	if vis, err = visidentifier.New([]byte(`{"VisServer": "wss://localhost:443", "CaCertFile": "` + crtFile + `"}`)); err != nil {
 		return err
 	}
 

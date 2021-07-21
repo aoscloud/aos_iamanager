@@ -71,7 +71,9 @@ type Instance struct {
 }
 
 type instanceConfig struct {
-	VISServer string `json:"visServer"`
+	VISServer        string `json:"visServer"`
+	CaCertFile       string `json:"caCertFile,omitempty"`
+	WebSocketTimeout int    `json:"webSocketTimeout,omitempty"`
 }
 
 /*******************************************************************************
@@ -92,7 +94,10 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if instance.wsClient, err = wsclient.New("VIS", instance.messageHandler); err != nil {
+	if instance.wsClient, err = wsclient.New(
+		"VIS",
+		wsclient.ClientParam{CaCertFile: instance.config.CaCertFile, WebSocketTimeout: time.Duration(instance.config.WebSocketTimeout)},
+		instance.messageHandler); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
