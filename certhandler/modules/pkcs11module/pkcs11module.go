@@ -90,7 +90,7 @@ type moduleConfig struct {
 	TEELoginType     string   `json:"teeLoginType"`
 	UID              uint32   `json:"uid"`
 	GID              uint32   `json:"gid"`
-	ModulePathInURL  bool     `json:"ModulePathInURL"`
+	ModulePathInURL  bool     `json:"modulePathInURL"`
 	ClearHookCmdArgs []string `json:"clearHookCmdArgs"`
 }
 
