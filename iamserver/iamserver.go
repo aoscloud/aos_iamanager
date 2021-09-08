@@ -27,7 +27,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
+	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager/v1"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -59,11 +59,13 @@ type Server struct {
 	listenerPublic            net.Listener
 	grpcServer                *grpc.Server
 	grpcServerPublic          *grpc.Server
-	usersChangedStreams       []pb.IAManager_SubscribeUsersChangedServer
+	usersChangedStreams       []pb.IAMPublicService_SubscribeUsersChangedServer
 	closeChannel              chan struct{}
 	streamsWg                 sync.WaitGroup
 	finishProvisioningCmdArgs []string
 	diskEncryptCmdArgs        []string
+	pb.UnimplementedIAMProtectedServiceServer
+	pb.UnimplementedIAMPublicServiceServer
 }
 
 // CertHandler interface
@@ -144,8 +146,8 @@ func (server *Server) Close() (err error) {
 }
 
 // GetCertTypes return all IAM cert types
-func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (rsp *pb.GetCertTypesRsp, err error) {
-	rsp = &pb.GetCertTypesRsp{Types: server.certHandler.GetCertTypes()}
+func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (rsp *pb.CertTypes, err error) {
+	rsp = &pb.CertTypes{Types: server.certHandler.GetCertTypes()}
 
 	log.WithField("types", rsp.Types).Debug("Process get cert types")
 
@@ -167,7 +169,7 @@ func (server *Server) FinishProvisioning(context context.Context, req *empty.Emp
 }
 
 // SetOwner makes IAM owner of secure storage
-func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerReq) (rsp *empty.Empty, err error) {
+func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
 	log.WithField("type", req.Type).Debug("Process set owner request")
@@ -182,7 +184,7 @@ func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerReq) (rs
 }
 
 // Clear clears certificates and keys storages
-func (server *Server) Clear(context context.Context, req *pb.ClearReq) (rsp *empty.Empty, err error) {
+func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
 	log.WithField("type", req.Type).Debug("Process clear request")
@@ -197,8 +199,8 @@ func (server *Server) Clear(context context.Context, req *pb.ClearReq) (rsp *emp
 }
 
 // CreateKey creates private key
-func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReq) (rsp *pb.CreateKeyRsp, err error) {
-	rsp = &pb.CreateKeyRsp{Type: req.Type}
+func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (rsp *pb.CreateKeyResponse, err error) {
+	rsp = &pb.CreateKeyResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process create key request")
 
@@ -215,8 +217,8 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReq) (
 }
 
 // ApplyCert applies certificate
-func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertReq) (rsp *pb.ApplyCertRsp, err error) {
-	rsp = &pb.ApplyCertRsp{Type: req.Type}
+func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertRequest) (rsp *pb.ApplyCertResponse, err error) {
+	rsp = &pb.ApplyCertResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process apply cert request")
 
@@ -230,8 +232,8 @@ func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertReq) (
 }
 
 // GetCert returns certificate URI by issuer
-func (server *Server) GetCert(context context.Context, req *pb.GetCertReq) (rsp *pb.GetCertRsp, err error) {
-	rsp = &pb.GetCertRsp{Type: req.Type}
+func (server *Server) GetCert(context context.Context, req *pb.GetCertRequest) (rsp *pb.GetCertResponse, err error) {
+	rsp = &pb.GetCertResponse{Type: req.Type}
 
 	log.WithFields(log.Fields{
 		"type":   req.Type,
@@ -248,8 +250,8 @@ func (server *Server) GetCert(context context.Context, req *pb.GetCertReq) (rsp 
 }
 
 // GetSystemInfo returns system information
-func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (rsp *pb.GetSystemInfoRsp, err error) {
-	rsp = &pb.GetSystemInfoRsp{}
+func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (rsp *pb.SystemInfo, err error) {
+	rsp = &pb.SystemInfo{}
 
 	log.Debug("Process get system ID")
 
@@ -269,8 +271,8 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 }
 
 // GetUsers returns users
-func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *pb.GetUsersRsp, err error) {
-	rsp = &pb.GetUsersRsp{}
+func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *pb.Users, err error) {
+	rsp = &pb.Users{}
 
 	log.Debug("Process get users")
 
@@ -284,7 +286,7 @@ func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *
 }
 
 // SetUsers sets users
-func (server *Server) SetUsers(context context.Context, req *pb.SetUsersReq) (rsp *empty.Empty, err error) {
+func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
 	log.WithField("users", req.Users).Debug("Process set users")
@@ -299,7 +301,8 @@ func (server *Server) SetUsers(context context.Context, req *pb.SetUsersReq) (rs
 }
 
 // SubscribeUsersChanged creates stream for users changed notifications
-func (server *Server) SubscribeUsersChanged(message *empty.Empty, stream pb.IAManager_SubscribeUsersChangedServer) (err error) {
+func (server *Server) SubscribeUsersChanged(message *empty.Empty,
+	stream pb.IAMPublicService_SubscribeUsersChangedServer) (err error) {
 	server.streamsWg.Add(1)
 
 	server.Lock()
@@ -334,8 +337,8 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty, stream pb.IAMa
 }
 
 // RegisterService registers new service and creates secret
-func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServiceReq) (rsp *pb.RegisterServiceRsp, err error) {
-	rsp = &pb.RegisterServiceRsp{}
+func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
+	rsp = &pb.RegisterServiceResponse{}
 
 	log.WithField("serviceID", req.ServiceId).Debug("Process register service")
 
@@ -357,7 +360,7 @@ func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServi
 }
 
 // UnregisterService unregisters service
-func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterServiceReq) (rsp *empty.Empty, err error) {
+func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterServiceRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
 	log.WithField("serviceID", req.ServiceId).Debug("Process unregister service")
@@ -368,8 +371,8 @@ func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterS
 }
 
 // GetPermissions returns permissions by secret and functional server ID
-func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissionsReq) (rsp *pb.GetPermissionsRsp, err error) {
-	rsp = &pb.GetPermissionsRsp{}
+func (server *Server) GetPermissions(ctx context.Context, req *pb.PermissionsRequest) (rsp *pb.PermissionsResponse, err error) {
+	rsp = &pb.PermissionsResponse{}
 
 	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")
 
@@ -387,7 +390,7 @@ func (server *Server) GetPermissions(ctx context.Context, req *pb.GetPermissions
 }
 
 // EncryptDisk perform disk encryption
-func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReq) (rsp *empty.Empty, err error) {
+func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
 	if err := server.certHandler.CreateSelfSignedCert(discEncryptyonType, req.Password); err != nil {
@@ -431,8 +434,8 @@ func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (
 
 	server.grpcServer = grpc.NewServer(opts...)
 
-	pb.RegisterIAManagerServer(server.grpcServer, server)
-	pb.RegisterIAManagerPublicServer(server.grpcServer, server)
+	pb.RegisterIAMProtectedServiceServer(server.grpcServer, server)
+	pb.RegisterIAMPublicServiceServer(server.grpcServer, server)
 
 	go server.grpcServer.Serve(server.listener)
 
@@ -461,7 +464,7 @@ func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err
 
 	server.grpcServerPublic = grpc.NewServer(opts...)
 
-	pb.RegisterIAManagerPublicServer(server.grpcServerPublic, server)
+	pb.RegisterIAMPublicServiceServer(server.grpcServerPublic, server)
 
 	go server.grpcServerPublic.Serve(server.listenerPublic)
 
@@ -520,7 +523,7 @@ func (server *Server) handleUsersChanged() {
 			log.WithField("users", users).Debug("Handle users changed")
 
 			for _, stream := range server.usersChangedStreams {
-				if err := stream.Send(&pb.UsersChangedNtf{Users: users}); err != nil {
+				if err := stream.Send(&pb.Users{Users: users}); err != nil {
 					log.Errorf("Can't send users: %s", err)
 				}
 			}

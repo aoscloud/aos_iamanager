@@ -28,7 +28,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager"
+	pb "gitpct.epam.com/epmd-aepr/aos_common/api/iamanager/v1"
 	"google.golang.org/grpc"
 
 	"aos_iamanager/config"
@@ -52,8 +52,8 @@ const (
 type testClient struct {
 	connection       *grpc.ClientConn
 	connectionPublic *grpc.ClientConn
-	pbclient         pb.IAManagerClient
-	pbclientPublic   pb.IAManagerPublicClient
+	pbProtected      pb.IAMProtectedServiceClient
+	pbPublic         pb.IAMPublicServiceClient
 }
 
 type testCertHandler struct {
@@ -117,7 +117,7 @@ func TestGetCertTypes(t *testing.T) {
 
 	certHandler.certTypes = []string{"test1", "test2", "test3"}
 
-	response, err := client.pbclient.GetCertTypes(ctx, &empty.Empty{})
+	response, err := client.pbProtected.GetCertTypes(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -154,7 +154,7 @@ func TestFinishProvisioning(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	if _, err = client.pbclient.FinishProvisioning(ctx, &empty.Empty{}); err != nil {
+	if _, err = client.pbProtected.FinishProvisioning(ctx, &empty.Empty{}); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
@@ -183,9 +183,9 @@ func TestSetOwner(t *testing.T) {
 
 	password := "password"
 
-	setOwnerReq := &pb.SetOwnerReq{Type: "online", Password: password}
+	setOwnerReq := &pb.SetOwnerRequest{Type: "online", Password: password}
 
-	if _, err = client.pbclient.SetOwner(ctx, setOwnerReq); err != nil {
+	if _, err = client.pbProtected.SetOwner(ctx, setOwnerReq); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
@@ -193,9 +193,9 @@ func TestSetOwner(t *testing.T) {
 		t.Errorf("Wrong password: %s", certHandler.password)
 	}
 
-	clearReq := &pb.ClearReq{Type: "online"}
+	clearReq := &pb.ClearRequest{Type: "online"}
 
-	if _, err = client.pbclient.Clear(ctx, clearReq); err != nil {
+	if _, err = client.pbProtected.Clear(ctx, clearReq); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
@@ -224,9 +224,9 @@ func TestCreateKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	request := &pb.CreateKeyReq{Type: "online"}
+	request := &pb.CreateKeyRequest{Type: "online"}
 
-	response, err := client.pbclient.CreateKey(ctx, request)
+	response, err := client.pbProtected.CreateKey(ctx, request)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -260,9 +260,9 @@ func TestApplyCert(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	request := &pb.ApplyCertReq{Type: "online"}
+	request := &pb.ApplyCertRequest{Type: "online"}
 
-	response, err := client.pbclient.ApplyCert(ctx, request)
+	response, err := client.pbProtected.ApplyCert(ctx, request)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -297,9 +297,9 @@ func TestGetCert(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	request := &pb.GetCertReq{Type: "online", Issuer: []byte("issuer"), Serial: "serial"}
+	request := &pb.GetCertRequest{Type: "online", Issuer: []byte("issuer"), Serial: "serial"}
 
-	response, err := client.pbclient.GetCert(ctx, request)
+	response, err := client.pbProtected.GetCert(ctx, request)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -338,7 +338,7 @@ func TestGetSystemInfo(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	response, err := client.pbclient.GetSystemInfo(ctx, &empty.Empty{})
+	response, err := client.pbPublic.GetSystemInfo(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -372,7 +372,7 @@ func TestGetUsers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	response, err := client.pbclient.GetUsers(ctx, &empty.Empty{})
+	response, err := client.pbPublic.GetUsers(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -402,9 +402,9 @@ func TestSetUsers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	request := &pb.SetUsersReq{Users: []string{"newUser1", "newUser2", "newUser3"}}
+	request := &pb.Users{Users: []string{"newUser1", "newUser2", "newUser3"}}
 
-	if _, err := client.pbclient.SetUsers(ctx, request); err != nil {
+	if _, err := client.pbProtected.SetUsers(ctx, request); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
@@ -435,8 +435,8 @@ func TestRegisterService(t *testing.T) {
 	defer cancel()
 
 	permission := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	req := &pb.RegisterServiceReq{ServiceId: "serviceID1", Permissions: map[string]*pb.Permissions{"vis": permission}}
-	resp, err := client.pbclient.RegisterService(ctx, req)
+	req := &pb.RegisterServiceRequest{ServiceId: "serviceID1", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -445,8 +445,8 @@ func TestRegisterService(t *testing.T) {
 		t.Fatal("Incorrect secret")
 	}
 
-	req = &pb.RegisterServiceReq{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
-	resp, err = client.pbclient.RegisterService(ctx, req)
+	req = &pb.RegisterServiceRequest{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err = client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -457,8 +457,8 @@ func TestRegisterService(t *testing.T) {
 
 	secretServiceID2 := resp.Secret
 
-	req = &pb.RegisterServiceReq{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
-	resp, err = client.pbclient.RegisterService(ctx, req)
+	req = &pb.RegisterServiceRequest{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err = client.pbProtected.RegisterService(ctx, req)
 	if err != nil || resp.Secret != secretServiceID2 {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -486,19 +486,19 @@ func TestUnregisterService(t *testing.T) {
 	defer cancel()
 
 	permission := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	req := &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
-	resp, err := client.pbclient.RegisterService(ctx, req)
+	req := &pb.RegisterServiceRequest{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: "serviceID"})
+	_, err = client.pbProtected.UnregisterService(ctx, &pb.UnregisterServiceRequest{ServiceId: "serviceID"})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	req = &pb.RegisterServiceReq{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
-	resp2, err := client.pbclient.RegisterService(ctx, req)
+	req = &pb.RegisterServiceRequest{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
+	resp2, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -531,14 +531,14 @@ func TestGetPermissions(t *testing.T) {
 
 	serviceID := "serviceID"
 	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	req := &pb.RegisterServiceReq{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
-	resp, err := client.pbclient.RegisterService(ctx, req)
+	req := &pb.RegisterServiceRequest{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
+	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	reqPerm := &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
-	perm, err := client.pbclientPublic.GetPermissions(ctx, reqPerm)
+	reqPerm := &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
+	perm, err := client.pbPublic.GetPermissions(ctx, reqPerm)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -551,13 +551,13 @@ func TestGetPermissions(t *testing.T) {
 		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
 	}
 
-	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: serviceID})
+	_, err = client.pbProtected.UnregisterService(ctx, &pb.UnregisterServiceRequest{ServiceId: serviceID})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	reqPerm = &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
-	_, err = client.pbclientPublic.GetPermissions(ctx, reqPerm)
+	reqPerm = &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
+	_, err = client.pbPublic.GetPermissions(ctx, reqPerm)
 	if err == nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -592,14 +592,14 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 
 	serviceID := "serviceID"
 	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	req := &pb.RegisterServiceReq{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
-	resp, err := client.pbclient.RegisterService(ctx, req)
+	req := &pb.RegisterServiceRequest{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
+	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	reqPerm := &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
-	perm, err := clientPublic.pbclientPublic.GetPermissions(ctx, reqPerm)
+	reqPerm := &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
+	perm, err := clientPublic.pbPublic.GetPermissions(ctx, reqPerm)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -612,13 +612,13 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 		t.Fatalf("Wrong perm: received %v expected %v", perm, vis.Permissions)
 	}
 
-	_, err = client.pbclient.UnregisterService(ctx, &pb.UnregisterServiceReq{ServiceId: serviceID})
+	_, err = client.pbProtected.UnregisterService(ctx, &pb.UnregisterServiceRequest{ServiceId: serviceID})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	reqPerm = &pb.GetPermissionsReq{Secret: resp.Secret, FunctionalServerId: "vis"}
-	_, err = clientPublic.pbclientPublic.GetPermissions(ctx, reqPerm)
+	reqPerm = &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
+	_, err = clientPublic.pbPublic.GetPermissions(ctx, reqPerm)
 	if err == nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -642,7 +642,7 @@ func TestUsersChanged(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	stream, err := client.pbclient.SubscribeUsersChanged(ctx, &empty.Empty{})
+	stream, err := client.pbPublic.SubscribeUsersChanged(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -653,7 +653,7 @@ func TestUsersChanged(t *testing.T) {
 
 	identHandler.usersChangedChannel <- newUsers
 
-	var message *pb.UsersChangedNtf
+	var message *pb.Users
 
 	if message, err = stream.Recv(); err != nil {
 		t.Fatalf("Error receiving message: %s", err)
@@ -677,8 +677,8 @@ func newTestClient(url string) (client *testClient, err error) {
 		return nil, err
 	}
 
-	client.pbclient = pb.NewIAManagerClient(client.connection)
-	client.pbclientPublic = pb.NewIAManagerPublicClient(client.connection)
+	client.pbProtected = pb.NewIAMProtectedServiceClient(client.connection)
+	client.pbPublic = pb.NewIAMPublicServiceClient(client.connection)
 
 	return client, nil
 }
@@ -692,7 +692,7 @@ func newTestClientPublic(url string) (client *testClient, err error) {
 		return nil, err
 	}
 
-	client.pbclientPublic = pb.NewIAManagerPublicClient(client.connectionPublic)
+	client.pbPublic = pb.NewIAMPublicServiceClient(client.connectionPublic)
 
 	return client, nil
 }
