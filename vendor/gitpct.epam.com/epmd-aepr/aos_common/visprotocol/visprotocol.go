@@ -24,6 +24,7 @@ package visprotocol
 // VIS actions
 const (
 	ActionGet            = "get"
+	ActionGetMetadata    = "getMetadata"
 	ActionSet            = "set"
 	ActionAuth           = "authorize"
 	ActionSubscribe      = "subscribe"
@@ -66,6 +67,20 @@ type AuthResponse struct {
 	MessageHeader
 	Error *ErrorInfo `json:"error,omitempty"`
 	TTL   int64      `json:"TTL,omitempty"`
+}
+
+// VIS request for getMetadata
+type MetadataRequest struct {
+	MessageHeader
+	Path string `json:"path"`
+}
+
+// VIS response for getMetadata
+type MetadataResponse struct {
+	MessageHeader
+	Error     *ErrorInfo  `json:"error,omitempty"`
+	Metadata  interface{} `json:"metadata,omitempty"`
+	Timestamp int64       `json:"timestamp"`
 }
 
 // GetRequest VIS get request

@@ -43,10 +43,10 @@ github.com/pkg/errors
 github.com/sirupsen/logrus
 # github.com/thales-e-security/pool v0.0.2
 github.com/thales-e-security/pool
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210713152207-c523a792a812
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210928130140-41cdb2842108
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/aoserrors
-gitpct.epam.com/epmd-aepr/aos_common/api/iamanager
+gitpct.epam.com/epmd-aepr/aos_common/api/iamanager/v1
 gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils
 gitpct.epam.com/epmd-aepr/aos_common/utils/testtools
 gitpct.epam.com/epmd-aepr/aos_common/utils/tpmkey
@@ -58,7 +58,6 @@ gitpct.epam.com/epmd-aepr/aos_common/wsserver
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
 # golang.org/x/net v0.0.0-20201029221708-28c70e62bb1d
-golang.org/x/net/context
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack

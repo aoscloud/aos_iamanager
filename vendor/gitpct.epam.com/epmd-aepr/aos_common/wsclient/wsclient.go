@@ -114,7 +114,7 @@ func (client *Client) Connect(url string) (err error) {
 	if client.isConnected {
 		return aoserrors.Errorf("client %s already connected", client.name)
 	}
-	
+
 	connection, _, err := client.wsDialer.Dial(url, nil)
 	if err != nil {
 		return aoserrors.Wrap(err)
