@@ -24,9 +24,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_iamanager/certhandler"
 )

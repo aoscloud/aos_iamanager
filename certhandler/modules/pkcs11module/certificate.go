@@ -23,10 +23,10 @@ import (
 	"encoding/asn1"
 	"errors"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
