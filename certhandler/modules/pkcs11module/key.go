@@ -29,9 +29,9 @@ import (
 	"math/big"
 	"unsafe"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
