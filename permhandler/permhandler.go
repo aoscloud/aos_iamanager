@@ -22,8 +22,8 @@ import (
 	"encoding/base64"
 	"sync"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************

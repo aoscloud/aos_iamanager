@@ -1,6 +1,16 @@
 # github.com/ThalesIgnite/crypto11 v1.2.5
 ## explicit
 github.com/ThalesIgnite/crypto11
+# github.com/aoscloud/aos_common v0.0.0-20211220123623-d23b9d38e838
+## explicit
+github.com/aoscloud/aos_common/aoserrors
+github.com/aoscloud/aos_common/api/iamanager/v1
+github.com/aoscloud/aos_common/utils/cryptutils
+github.com/aoscloud/aos_common/utils/testtools
+github.com/aoscloud/aos_common/utils/tpmkey
+github.com/aoscloud/aos_common/visprotocol
+github.com/aoscloud/aos_common/wsclient
+github.com/aoscloud/aos_common/wsserver
 # github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 ## explicit
 github.com/coreos/go-systemd/daemon
@@ -39,21 +49,11 @@ github.com/mattn/go-sqlite3
 github.com/miekg/pkcs11
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
-# github.com/sirupsen/logrus v1.7.0
+# github.com/sirupsen/logrus v1.8.1
 ## explicit
 github.com/sirupsen/logrus
 # github.com/thales-e-security/pool v0.0.2
 github.com/thales-e-security/pool
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210928130140-41cdb2842108
-## explicit
-gitpct.epam.com/epmd-aepr/aos_common/aoserrors
-gitpct.epam.com/epmd-aepr/aos_common/api/iamanager/v1
-gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils
-gitpct.epam.com/epmd-aepr/aos_common/utils/testtools
-gitpct.epam.com/epmd-aepr/aos_common/utils/tpmkey
-gitpct.epam.com/epmd-aepr/aos_common/visprotocol
-gitpct.epam.com/epmd-aepr/aos_common/wsclient
-gitpct.epam.com/epmd-aepr/aos_common/wsserver
 # golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 ## explicit
 golang.org/x/crypto/cryptobyte

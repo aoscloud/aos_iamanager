@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Copyright 2021 Renesas Inc.
-// Copyright 2021 EPAM Systems Inc.
+// Copyright (C) 2021 Renesas Electronics Corporation.
+// Copyright (C) 2021 EPAM Systems, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 	"path"
 	"reflect"
 
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 /*******************************************************************************

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Copyright 2021 Renesas Inc.
-// Copyright 2021 EPAM Systems Inc.
+// Copyright (C) 2021 Renesas Electronics Corporation.
+// Copyright (C) 2021 EPAM Systems, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,13 +19,12 @@ package tpmkey
 
 import (
 	"crypto"
-	"crypto/rsa"
 	"io"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -33,31 +32,23 @@ import (
  ******************************************************************************/
 
 // MakePersistent moves key to TPM persistent storage
-func (key *rsaKey) MakePersistent(persistentHandle tpmutil.Handle) (err error) {
+func (key *eccKey) MakePersistent(persistentHandle tpmutil.Handle) (err error) {
 	return aoserrors.Wrap(makePersistent(&key.tpmKey, persistentHandle))
 }
 
 // Public returns public key
-func (key *rsaKey) Public() (publicKey crypto.PublicKey) {
+func (key *eccKey) Public() (publicKey crypto.PublicKey) {
 	return key.publicKey
 }
 
 // Password returns key password
-func (key *rsaKey) Password() (password string) {
+func (key *eccKey) Password() (password string) {
 	return key.password
 }
 
 // Sign signs digest with the private key
-func (key *rsaKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
-	alg := tpm2.AlgRSASSA
-
-	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		if pssOpts.SaltLength != rsa.PSSSaltLengthAuto {
-			return nil, aoserrors.New("salt length must be rsa.PSSSaltLengthAuto")
-		}
-
-		alg = tpm2.AlgRSAPSS
-	}
+func (key *eccKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+	alg := tpm2.AlgECDSA
 
 	tpmHash, ok := supportedHash[opts.HashFunc()]
 	if !ok {
@@ -76,37 +67,4 @@ func (key *rsaKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (sig
 	signature, err = sign(key.tpmKey, digest, scheme)
 
 	return signature, aoserrors.Wrap(err)
-}
-
-// Decrypt decrypts data with private key
-func (key *rsaKey) Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error) {
-	var scheme tpm2.AsymScheme
-	var label string
-
-	switch opt := opts.(type) {
-	case *rsa.OAEPOptions:
-		hashOpt, ok := supportedHash[opt.Hash]
-		if !ok {
-			return nil, aoserrors.Errorf("unsupported hash algorithm: %v", opt.Hash)
-		}
-
-		scheme = tpm2.AsymScheme{
-			Alg:  tpm2.AlgOAEP,
-			Hash: hashOpt,
-		}
-
-		label = string(opt.Label)
-
-	case nil, *rsa.PKCS1v15DecryptOptions:
-		scheme = tpm2.AsymScheme{
-			Alg: tpm2.AlgRSAES,
-		}
-
-	default:
-		return nil, aoserrors.New("unsupported decrypt opts")
-	}
-
-	plaintext, err = decryptRSA(key.tpmKey, msg, scheme, label)
-
-	return plaintext, aoserrors.Wrap(err)
 }

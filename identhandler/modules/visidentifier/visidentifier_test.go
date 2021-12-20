@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/visprotocol"
+	"github.com/aoscloud/aos_common/wsserver"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	"gitpct.epam.com/epmd-aepr/aos_common/visprotocol"
-	"gitpct.epam.com/epmd-aepr/aos_common/wsserver"
 
 	"aos_iamanager/identhandler"
 	"aos_iamanager/identhandler/modules/visidentifier"

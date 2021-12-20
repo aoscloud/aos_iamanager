@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Copyright 2020 EPAM Systems Inc.
+// Copyright (C) 2021 EPAM Systems, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 // This package contains different tools which are used in unit tests by
