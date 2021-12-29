@@ -218,9 +218,7 @@ func (module *TPMModule) ValidateCertificates() (
 	}
 
 	for _, info := range validInfos {
-		if _, ok := keyMap[info.KeyURL]; ok {
-			delete(keyMap, info.KeyURL)
-		}
+		delete(keyMap, info.KeyURL)
 	}
 
 	for keyURL := range keyMap {

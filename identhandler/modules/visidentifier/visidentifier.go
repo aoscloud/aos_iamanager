@@ -37,7 +37,6 @@ import (
 
 const (
 	usersChangedChannelSize = 1
-	errorChannelSize        = 1
 )
 
 const reconnectTimeout = 10 * time.Second
@@ -273,8 +272,8 @@ func (instance *Instance) handleConnection(url string) {
 
 		instance.wg.Done()
 
-		select {
-		case err := <-instance.wsClient.ErrorChannel:
+		{
+			err := <-instance.wsClient.ErrorChannel
 			log.Errorf("VIS connection errors: %s", err)
 
 			instance.wg.Add(1)
@@ -299,7 +298,9 @@ func (instance *Instance) messageHandler(message []byte) {
 
 	switch header.Action {
 	case visprotocol.ActionSubscription:
-		instance.processSubscriptions(message)
+		if err := instance.processSubscriptions(message); err != nil {
+			log.Errorf("Failed to process subscription: %s", err)
+		}
 
 	default:
 		log.WithField("action", header.Action).Warning("Unexpected message received")

@@ -133,7 +133,7 @@ func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.Cert
 	}
 	defer rows.Close()
 
-	for rows.Next() {
+	if rows.Next() {
 		if err = rows.Scan(&cert.Issuer, &cert.Serial, &cert.CertURL, &cert.KeyURL, &cert.NotAfter); err != nil {
 			return cert, aoserrors.Wrap(err)
 		}

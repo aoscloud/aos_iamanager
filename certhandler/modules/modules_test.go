@@ -72,11 +72,6 @@ const (
  * Types
  ******************************************************************************/
 
-type certDesc struct {
-	certType string
-	certInfo certhandler.CertInfo
-}
-
 type createModuleType func(doReset bool) (module certhandler.CertModule, err error)
 
 /*******************************************************************************
@@ -641,7 +636,11 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Creating primary key failed: %v", err)
 	}
-	defer tpm2.FlushContext(tpmSimulator, handle)
+	defer func() {
+		if flushErr := tpm2.FlushContext(tpmSimulator, handle); flushErr != nil {
+			t.Errorf("Can't flush context: %s", flushErr)
+		}
+	}()
 
 	scheme := &tpm2.AsymScheme{Alg: tpm2.AlgOAEP, Hash: tpm2.AlgSHA256}
 	label := "label"
@@ -964,7 +963,13 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 		if err = ctx.FindObjectsInit(session, template); err != nil {
 			return nil, err
 		}
-		defer ctx.FindObjectsFinal(session)
+		defer func() {
+			if objErr := ctx.FindObjectsFinal(session); objErr != nil {
+				if err == nil {
+					err = aoserrors.Wrap(objErr)
+				}
+			}
+		}()
 
 		for {
 			handles, _, err := ctx.FindObjects(session, 32)
@@ -1013,7 +1018,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 func checkLocationURLs(t *testing.T, location, itemType string, expectedURLs []string) {
 	t.Helper()
 
-	existingURLs := make([]string, 0)
+	var existingURLs []string
 
 	locationURL, err := url.Parse(location)
 	if err != nil {
