@@ -31,7 +31,6 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
-	"aos_iamanager/identhandler"
 	"aos_iamanager/identhandler/modules/fileidentifier"
 )
 
@@ -47,7 +46,6 @@ import (
  * Vars
  ******************************************************************************/
 
-var identifier identhandler.IdentModule
 var tmpDir string
 
 /*******************************************************************************

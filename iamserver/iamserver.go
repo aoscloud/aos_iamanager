@@ -421,7 +421,7 @@ func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (
 
 	var opts []grpc.ServerOption
 
-	if insecure == false {
+	if !insecure {
 		tlsConfig, err := cryptutils.GetServerMutualTLSConfig(cfg.CACert, cfg.CertStorage)
 		if err != nil {
 			log.Errorf("Can't get mTLS config: %s", err)
@@ -437,7 +437,11 @@ func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (
 	pb.RegisterIAMProtectedServiceServer(server.grpcServer, server)
 	pb.RegisterIAMPublicServiceServer(server.grpcServer, server)
 
-	go server.grpcServer.Serve(server.listener)
+	go func() {
+		if err := server.grpcServer.Serve(server.listener); err != nil {
+			log.Errorf("Can't serve grpc server: %s", err)
+		}
+	}()
 
 	return nil
 }
@@ -451,7 +455,7 @@ func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err
 
 	var opts []grpc.ServerOption
 
-	if insecure == false {
+	if !insecure {
 		tlsConfig, err := cryptutils.GetServerTLSConfig(cfg.CertStorage)
 		if err != nil {
 			log.Errorf("Can't get TLS config: %s", err)
@@ -466,7 +470,11 @@ func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err
 
 	pb.RegisterIAMPublicServiceServer(server.grpcServerPublic, server)
 
-	go server.grpcServerPublic.Serve(server.listenerPublic)
+	go func() {
+		if err := server.grpcServerPublic.Serve(server.listenerPublic); err != nil {
+			log.Errorf("Can't serve public grpc server: %s", err)
+		}
+	}()
 
 	return nil
 }

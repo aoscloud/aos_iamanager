@@ -671,7 +671,8 @@ func TestUsersChanged(t *testing.T) {
 func newTestClient(url string) (client *testClient, err error) {
 	client = &testClient{}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	if client.connection, err = grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock()); err != nil {
 		return nil, err
@@ -686,7 +687,8 @@ func newTestClient(url string) (client *testClient, err error) {
 func newTestClientPublic(url string) (client *testClient, err error) {
 	client = &testClient{}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	if client.connectionPublic, err = grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock()); err != nil {
 		return nil, err

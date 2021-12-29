@@ -215,9 +215,7 @@ func (module *SWModule) ValidateCertificates() (
 			return nil, nil, nil, aoserrors.Wrap(err)
 		}
 
-		if _, ok := keyMap[key.Path]; ok {
-			delete(keyMap, key.Path)
-		}
+		delete(keyMap, key.Path)
 	}
 
 	for keyFilePath := range keyMap {
