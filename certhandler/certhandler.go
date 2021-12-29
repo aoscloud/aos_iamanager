@@ -385,7 +385,7 @@ func (handler *Handler) Close() {
  ******************************************************************************/
 
 func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
-	if len(certs) < 0 {
+	if len(certs) == 0 {
 		return aoserrors.New("invalid certificate count")
 	}
 
