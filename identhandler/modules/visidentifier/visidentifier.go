@@ -93,7 +93,9 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 
 	if instance.wsClient, err = wsclient.New(
 		"VIS",
-		wsclient.ClientParam{CaCertFile: instance.config.CaCertFile, WebSocketTimeout: time.Duration(instance.config.WebSocketTimeout)},
+		wsclient.ClientParam{
+			CaCertFile: instance.config.CaCertFile, WebSocketTimeout: time.Duration(instance.config.WebSocketTimeout),
+		},
 		instance.messageHandler); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}

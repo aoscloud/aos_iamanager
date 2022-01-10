@@ -212,7 +212,8 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 		return nil, aoserrors.Errorf("module %s not found", certType)
 	}
 
-	csrData, err := createCSR(handler.systemID, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
+	csrData, err := createCSR(handler.systemID,
+		descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -288,7 +289,8 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 }
 
 // GetCertificate returns certificate info
-func (handler *Handler) GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error) {
+func (handler *Handler) GetCertificate(
+	certType string, issuer []byte, serial string) (certURL, keyURL string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -356,7 +358,8 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 		return aoserrors.Errorf("module %s not found", certType)
 	}
 
-	x509Certs, err := cryptutils.PEMToX509Cert(pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert}))
+	x509Certs, err := cryptutils.PEMToX509Cert(
+		pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert}))
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -420,7 +423,8 @@ func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
 	}
 }
 
-func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (csr []byte, err error) {
+func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (
+	csr []byte, err error) {
 	template := &x509.CertificateRequest{
 		Subject:  pkix.Name{CommonName: systemID},
 		DNSNames: alternativeNames,

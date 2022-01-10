@@ -69,7 +69,8 @@ func New() (handler *Handler, err error) {
 }
 
 // RegisterService adds new service into cache and creates secret
-func (handler *Handler) RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error) {
+func (handler *Handler) RegisterService(
+	serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -107,7 +108,8 @@ func (handler *Handler) UnregisterService(serviceID string) {
 }
 
 // GetPermissions returns service id and permissions by secret and functional server ID
-func (handler *Handler) GetPermissions(secret, funcServerId string) (serviceID string, permissions map[string]string, err error) {
+func (handler *Handler) GetPermissions(
+	secret, funcServerId string) (serviceID string, permissions map[string]string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
