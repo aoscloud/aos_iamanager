@@ -79,7 +79,7 @@ func init() {
  * Private
  ******************************************************************************/
 
-func cleanup(workingDir, dbFile string) {
+func cleanup(dbFile string) {
 	log.Debug("System cleanup")
 
 	log.WithField("file", dbFile).Debug("Delete DB file")
@@ -178,7 +178,7 @@ func main() {
 	if err != nil {
 		if err == database.ErrVersionMismatch {
 			log.Warning("Unsupported database version")
-			cleanup(cfg.WorkingDir, dbFile)
+			cleanup(dbFile)
 			db, err = database.New(dbFile)
 		}
 

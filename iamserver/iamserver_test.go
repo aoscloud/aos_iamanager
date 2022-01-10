@@ -711,7 +711,7 @@ func TestUsersChanged(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func newTestClient(url string) (client *testClient, err error) {
+func newTestClient(url string) (client *testClient, err error) { // nolint:unparam // param added for future purposes
 	client = &testClient{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
