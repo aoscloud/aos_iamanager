@@ -196,7 +196,7 @@ func (db *Database) Close() {
 func (db *Database) getVersion() (version uint64, err error) {
 	stmt, err := db.sql.Prepare("SELECT version FROM config")
 	if err != nil {
-		return version, err
+		return version, aoserrors.Wrap(err)
 	}
 	defer stmt.Close()
 
@@ -239,7 +239,7 @@ func (db *Database) isTableExist(name string) (result bool, err error) {
 
 	result = rows.Next()
 
-	return result, rows.Err()
+	return result, aoserrors.Wrap(rows.Err())
 }
 
 func (db *Database) createConfigTable() (err error) {

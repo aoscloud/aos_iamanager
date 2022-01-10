@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
@@ -237,7 +238,7 @@ func generateConfig(systemIDPath, boardModelPath, usersPath string) (config []by
 func writeUsers(usersFile string, users []string) (err error) {
 	file, err := os.Create(usersFile)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
@@ -247,12 +248,16 @@ func writeUsers(usersFile string, users []string) (err error) {
 		fmt.Fprintln(writer, claim)
 	}
 
-	return writer.Flush()
+	if err = writer.Flush(); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	return nil
 }
 
 func writeID(filePth string, ID string) (err error) {
 	if err = ioutil.WriteFile(filePth, []byte(ID), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
