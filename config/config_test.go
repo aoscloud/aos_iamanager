@@ -26,6 +26,8 @@ import (
 	"path"
 	"reflect"
 	"testing"
+
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -185,7 +187,7 @@ func DiskEncryptionCmdArgs(t *testing.T) {
 
 func saveConfigFile(fileName string, configContent string) (err error) {
 	if err = ioutil.WriteFile(fileName, []byte(configContent), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -258,11 +260,11 @@ func setup() (err error) {
 	configFile := path.Join(tmpDir, "aos_iamanager.cfg")
 
 	if err = saveConfigFile(configFile, configContent); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if cfg, err = config.New(configFile); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -270,7 +272,7 @@ func setup() (err error) {
 
 func cleanup() (err error) {
 	if err := os.RemoveAll(tmpDir); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

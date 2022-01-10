@@ -184,11 +184,11 @@ IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 -----END RSA PRIVATE KEY-----`
 
 	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -208,18 +208,18 @@ func setup() (err error) {
 
 	url, err := url.Parse(serverURL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if server, err = wsserver.New("TestServer", url.Host, crtFile, keyFile, testHandler); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	time.Sleep(1 * time.Second)
 
 	if vis, err = visidentifier.New([]byte(
 		`{"VisServer": "wss://localhost:443", "CaCertFile": "` + crtFile + `"}`)); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -231,7 +231,7 @@ func cleanup() (err error) {
 	}
 
 	if err = vis.Close(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -321,7 +321,7 @@ func (handler *clientHandler) ProcessMessage(
 	var header visprotocol.MessageHeader
 
 	if err = json.Unmarshal(message, &header); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	var rsp interface{}
@@ -339,7 +339,7 @@ func (handler *clientHandler) ProcessMessage(
 		var unsubscribeReq visprotocol.UnsubscribeRequest
 
 		if err = json.Unmarshal(message, &unsubscribeReq); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		unsubscribeRsp := visprotocol.UnsubscribeResponse{
@@ -369,7 +369,7 @@ func (handler *clientHandler) ProcessMessage(
 		}
 
 		if err = json.Unmarshal(message, &getReq); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		switch getReq.Path {
@@ -395,7 +395,7 @@ func (handler *clientHandler) ProcessMessage(
 		rsp = &setRsp
 
 		if err = json.Unmarshal(message, &setReq); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		switch setReq.Path {

@@ -790,23 +790,27 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 func createSwModule(doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(certStorage); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s"}`, certStorage))
 
-	return swmodule.New("test", config)
+	if module, err = swmodule.New("test", config); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return module, nil
 }
 
 func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err := os.RemoveAll(certStorage); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if err = tpmSimulator.ManufactureReset(); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -816,24 +820,32 @@ func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s", "lockoutMaxTry": %d,
 		"recoveryTime": %d, "lockoutRecoveryTime": %d}`, certStorage, lockoutMaxRetries, recoveryTime, lockoutRecoveryTime))
 
-	return tpmmodule.New("test", config, tpmSimulator)
+	if module, err = tpmmodule.New("test", config, tpmSimulator); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return module, nil
 }
 
 func createPKCS11Module(doReset bool) (module certhandler.CertModule, err error) {
 	if doReset {
 		if err = os.RemoveAll(pkcs11DBPath); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if err = os.MkdirAll(pkcs11DBPath, 0o755); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	config := json.RawMessage(fmt.Sprintf(
 		`{"library":"%s","userPinPath":"%s"}`, pkcs11LibPath, path.Join(tmpDir, "userPin.txt")))
 
-	return pkcs11module.New("test", config)
+	if module, err = pkcs11module.New("test", config); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return module, nil
 }
 
 func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
@@ -864,7 +876,7 @@ func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
 func getExistingFileItems(itemType, storagePath string) (existingURLs []string, err error) {
 	content, err := ioutil.ReadDir(storagePath)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	for _, item := range content {
@@ -908,7 +920,7 @@ func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
 	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	for _, value := range values {
@@ -952,7 +964,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 		Pin:        userPin,
 	})
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 	defer pkcs11Ctx.Close()
 
@@ -968,7 +980,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 		}
 
 		if err = ctx.FindObjectsInit(session, template); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 		defer func() {
 			if objErr := ctx.FindObjectsFinal(session); objErr != nil {
@@ -981,7 +993,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 		for {
 			handles, _, err := ctx.FindObjects(session, 32)
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			for _, handle := range handles {
@@ -990,7 +1002,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 					pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
 				})
 				if err != nil {
-					return nil, err
+					return nil, aoserrors.Wrap(err)
 				}
 
 				existingURLs = append(existingURLs, createPkcs11URL(token, userPin, label, string(attributes[0].Value)))
@@ -1004,13 +1016,13 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 	case "key":
 		keys, err := pkcs11Ctx.FindKeyPairs(nil, []byte(label))
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		for _, key := range keys {
 			attr, err := pkcs11Ctx.GetAttribute(key, crypto11.CkaId)
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			existingURLs = append(existingURLs, createPkcs11URL(token, userPin, label, string(attr.Value)))
