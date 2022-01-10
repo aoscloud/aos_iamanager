@@ -41,7 +41,7 @@ const (
 
 type secretKey string
 
-// Handler update handler
+// Handler update handler.
 type Handler struct {
 	sync.Mutex
 
@@ -57,7 +57,7 @@ type servicePermissions struct {
  * Public
  ******************************************************************************/
 
-// New returns pointer to new Handler
+// New returns pointer to new Handler.
 func New() (handler *Handler, err error) {
 	handler = &Handler{}
 
@@ -68,7 +68,7 @@ func New() (handler *Handler, err error) {
 	return handler, nil
 }
 
-// RegisterService adds new service into cache and creates secret
+// RegisterService adds new service into cache and creates secret.
 func (handler *Handler) RegisterService(
 	serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error) {
 	handler.Lock()
@@ -91,7 +91,7 @@ func (handler *Handler) RegisterService(
 	return string(newSecret), nil
 }
 
-// UnregisterService deletes service with permissions from cache
+// UnregisterService deletes service with permissions from cache.
 func (handler *Handler) UnregisterService(serviceID string) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -107,7 +107,7 @@ func (handler *Handler) UnregisterService(serviceID string) {
 	delete(handler.secrets, secretKey(secret))
 }
 
-// GetPermissions returns service id and permissions by secret and functional server ID
+// GetPermissions returns service id and permissions by secret and functional server ID.
 func (handler *Handler) GetPermissions(
 	secret, funcServerId string) (serviceID string, permissions map[string]string, err error) {
 	handler.Lock()

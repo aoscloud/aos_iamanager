@@ -42,7 +42,7 @@ const usersChangedChannelSize = 1
  * Types
  ******************************************************************************/
 
-// Instance vis identifier instance
+// Instance vis identifier instance.
 type Instance struct {
 	sync.Mutex
 
@@ -68,7 +68,7 @@ type instanceConfig struct {
  * Public
  ******************************************************************************/
 
-// New creates new file identifier instance
+// New creates new file identifier instance.
 func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err error) {
 	log.Info("Create file identification instance")
 
@@ -95,14 +95,14 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 	return instance, nil
 }
 
-// Close closes vis identifier instance
+// Close closes vis identifier instance.
 func (instance *Instance) Close() (err error) {
 	log.Info("Close file identification instance")
 
 	return nil
 }
 
-// GetSystemID returns the system ID
+// GetSystemID returns the system ID.
 func (instance *Instance) GetSystemID() (systemID string, err error) {
 	instance.Lock()
 	defer instance.Unlock()
@@ -112,7 +112,7 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	return instance.systemID, aoserrors.Wrap(err)
 }
 
-// GetBoardModel returns the board model
+// GetBoardModel returns the board model.
 func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	instance.Lock()
 	defer instance.Unlock()
@@ -122,7 +122,7 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	return instance.boardModel, aoserrors.Wrap(err)
 }
 
-// GetUsers returns the user claims
+// GetUsers returns the user claims.
 func (instance *Instance) GetUsers() (users []string, err error) {
 	instance.Lock()
 	defer instance.Unlock()
@@ -132,7 +132,7 @@ func (instance *Instance) GetUsers() (users []string, err error) {
 	return instance.users, aoserrors.Wrap(err)
 }
 
-// SetUsers sets the user claims
+// SetUsers sets the user claims.
 func (instance *Instance) SetUsers(users []string) (err error) {
 	instance.Lock()
 	defer instance.Unlock()
@@ -156,7 +156,7 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	return nil
 }
 
-// UsersChangedChannel returns users changed channel
+// UsersChangedChannel returns users changed channel.
 func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
 	return instance.usersChangedChannel
 }

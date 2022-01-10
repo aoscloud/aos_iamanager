@@ -18,7 +18,7 @@
 package certmodules
 
 import (
-	// include all supported plugins
+	// include all supported plugins.
 	_ "aos_iamanager/certhandler/modules/pkcs11module"
 	_ "aos_iamanager/certhandler/modules/swmodule"
 	_ "aos_iamanager/certhandler/modules/tpmmodule"
