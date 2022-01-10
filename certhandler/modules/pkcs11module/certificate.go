@@ -134,7 +134,7 @@ func updateIssuerCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 		}
 
 		if _, err = findCertificateBySubject(ctx, session, x509Cert.RawSubject); err != nil {
-			if err != errCertNotFound {
+			if !errors.Is(err, errCertNotFound) {
 				return aoserrors.Wrap(err)
 			}
 
