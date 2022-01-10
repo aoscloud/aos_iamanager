@@ -172,8 +172,6 @@ func TestUpdateCertificate(t *testing.T) {
 			var certInfos []certhandler.CertInfo
 
 			for _, key := range keys {
-				// Create CSR
-
 				csr, err := testtools.CreateCSR(key)
 				if err != nil {
 					t.Fatalf("Can't create CSR: %s", err)
@@ -211,7 +209,6 @@ func TestUpdateCertificate(t *testing.T) {
 				}
 
 				certInfos = append(certInfos, certInfo)
-
 			}
 
 			if err = module.Close(); err != nil {
@@ -355,7 +352,6 @@ func TestValidateCertificates(t *testing.T) {
 	// * onlyCert    - cert without key
 	// * onlyKey     - key without cert
 	// * invalidFile - invalid file
-
 	testData := []string{"valid", "onlyCert", "valid", "onlyKey", "valid"}
 
 	for _, createModule := range []createModuleType{createSwModule, createTpmModule, createPKCS11Module} {
@@ -375,8 +371,6 @@ func TestValidateCertificates(t *testing.T) {
 		var goodItems []certhandler.CertInfo
 
 		for _, item := range testData {
-			// Create key
-
 			key, err := module.CreateKey(password, cryptutils.AlgRSA)
 			if err != nil {
 				t.Fatalf("Can't create key: %s", err)
@@ -595,15 +589,18 @@ func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get TPM capabilities: %v", err)
 	}
+
 	maxRetries, recoveryTime, lockoutRecovery := caps[0].(tpm2.TaggedProperty).Value,
 		caps[1].(tpm2.TaggedProperty).Value, caps[2].(tpm2.TaggedProperty).Value
 
 	if maxRetries == 0 {
 		t.Error("maxTries is 0")
 	}
+
 	if recoveryTime == 0 {
 		t.Error("recoveryTime is 0")
 	}
+
 	if lockoutRecovery == 0 {
 		t.Error("lockoutRecovery is 0")
 	}
@@ -640,6 +637,7 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Creating primary key failed: %v", err)
 	}
+
 	defer func() {
 		if flushErr := tpm2.FlushContext(tpmSimulator, handle); flushErr != nil {
 			t.Errorf("Can't flush context: %s", flushErr)
@@ -665,6 +663,7 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get capabilities: %v", err)
 	}
+
 	if caps[0].(tpm2.TaggedProperty).Value != 1 {
 		t.Errorf("Got %d, expected 1", caps[0].(tpm2.TaggedProperty).Value)
 	}
@@ -857,6 +856,7 @@ func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
 		for i, existing := range existingURLs {
 			if expected == existing {
 				found = true
+
 				existingURLs = append(existingURLs[:i], existingURLs[i+1:]...)
 
 				break
@@ -982,6 +982,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 		if err = ctx.FindObjectsInit(session, template); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
+
 		defer func() {
 			if objErr := ctx.FindObjectsFinal(session); objErr != nil {
 				if err == nil {
@@ -997,7 +998,6 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 			}
 
 			for _, handle := range handles {
-
 				attributes, err := ctx.GetAttributeValue(session, handle, []*pkcs11.Attribute{
 					pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
 				})

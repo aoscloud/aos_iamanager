@@ -112,6 +112,7 @@ func TestGetCertTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -134,6 +135,7 @@ func TestFinishProvisioning(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error creating temporary dir: %s", err)
 	}
+
 	defer os.RemoveAll(tmpDir)
 
 	finishFile := path.Join(tmpDir, "finish.sh")
@@ -152,6 +154,7 @@ func TestFinishProvisioning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -180,6 +183,7 @@ func TestSetOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -222,6 +226,7 @@ func TestCreateKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	certHandler.csr = []byte("this is csr")
@@ -259,6 +264,7 @@ func TestApplyCert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	certHandler.certURL = "certURL"
@@ -296,6 +302,7 @@ func TestGetCert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	certHandler.certURL = "certURL"
@@ -338,6 +345,7 @@ func TestGetSystemInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	identHandler.systemID = "testSystemID"
@@ -374,6 +382,7 @@ func TestGetUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	identHandler.users = []string{"user1", "user2", "user3"}
@@ -405,6 +414,7 @@ func TestSetUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	identHandler.users = []string{"user1", "user2", "user3"}
@@ -440,6 +450,7 @@ func TestRegisterService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -447,6 +458,7 @@ func TestRegisterService(t *testing.T) {
 
 	permission := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
 	req := &pb.RegisterServiceRequest{ServiceId: "serviceID1", Permissions: map[string]*pb.Permissions{"vis": permission}}
+
 	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -457,6 +469,7 @@ func TestRegisterService(t *testing.T) {
 	}
 
 	req = &pb.RegisterServiceRequest{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
+
 	resp, err = client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -469,6 +482,7 @@ func TestRegisterService(t *testing.T) {
 	secretServiceID2 := resp.Secret
 
 	req = &pb.RegisterServiceRequest{ServiceId: "serviceID2", Permissions: map[string]*pb.Permissions{"vis": permission}}
+
 	resp, err = client.pbProtected.RegisterService(ctx, req)
 	if err != nil || resp.Secret != secretServiceID2 {
 		t.Fatalf("Can't send request: %s", err)
@@ -492,6 +506,7 @@ func TestUnregisterService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -499,6 +514,7 @@ func TestUnregisterService(t *testing.T) {
 
 	permission := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
 	req := &pb.RegisterServiceRequest{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
+
 	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -510,6 +526,7 @@ func TestUnregisterService(t *testing.T) {
 	}
 
 	req = &pb.RegisterServiceRequest{ServiceId: "serviceID", Permissions: map[string]*pb.Permissions{"vis": permission}}
+
 	resp2, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -537,6 +554,7 @@ func TestGetPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -545,12 +563,14 @@ func TestGetPermissions(t *testing.T) {
 	serviceID := "serviceID"
 	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
 	req := &pb.RegisterServiceRequest{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
+
 	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
 	reqPerm := &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
+
 	perm, err := client.pbPublic.GetPermissions(ctx, reqPerm)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -570,8 +590,7 @@ func TestGetPermissions(t *testing.T) {
 	}
 
 	reqPerm = &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
-	_, err = client.pbPublic.GetPermissions(ctx, reqPerm)
-	if err == nil {
+	if _, err = client.pbPublic.GetPermissions(ctx, reqPerm); err == nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 }
@@ -593,12 +612,14 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	clientPublic, err := newTestClientPublic(serverPublicURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -607,12 +628,14 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 	serviceID := "serviceID"
 	vis := &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
 	req := &pb.RegisterServiceRequest{ServiceId: serviceID, Permissions: map[string]*pb.Permissions{"vis": vis}}
+
 	resp, err := client.pbProtected.RegisterService(ctx, req)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
 	reqPerm := &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
+
 	perm, err := clientPublic.pbPublic.GetPermissions(ctx, reqPerm)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
@@ -632,8 +655,7 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 	}
 
 	reqPerm = &pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: "vis"}
-	_, err = clientPublic.pbPublic.GetPermissions(ctx, reqPerm)
-	if err == nil {
+	if _, err = clientPublic.pbPublic.GetPermissions(ctx, reqPerm); err == nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 }
@@ -652,6 +674,7 @@ func TestUsersChanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
+
 	defer client.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

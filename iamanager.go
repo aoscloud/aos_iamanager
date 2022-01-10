@@ -83,6 +83,7 @@ func cleanup(workingDir, dbFile string) {
 	log.Debug("System cleanup")
 
 	log.WithField("file", dbFile).Debug("Delete DB file")
+
 	if err := os.RemoveAll(dbFile); err != nil {
 		log.Fatalf("Can't cleanup database: %s", err)
 	}
@@ -160,6 +161,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error: %s", err)
 	}
+
 	log.SetLevel(logLevel)
 
 	log.WithFields(log.Fields{"configFile": *configFile, "version": GitSummary}).Info("Start IAM")

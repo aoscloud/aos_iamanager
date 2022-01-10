@@ -260,8 +260,10 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certificates",
 			len(certs), descriptor.config.MaxItems)
 
-		var minTime time.Time
-		var minIndex int
+		var (
+			minTime  time.Time
+			minIndex int
+		)
 
 		for i, cert := range certs {
 			if minTime.IsZero() || cert.NotAfter.Before(minTime) {
@@ -516,6 +518,7 @@ func (handler *Handler) syncStorage() (err error) {
 			for i, existingItem := range existingItems {
 				if validItem == existingItem {
 					found = true
+
 					existingItems = append(existingItems[:i], existingItems[i+1:]...)
 
 					break
