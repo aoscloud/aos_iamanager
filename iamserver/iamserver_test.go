@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v1"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
@@ -689,7 +690,7 @@ func newTestClient(url string) (client *testClient, err error) {
 	defer cancel()
 
 	if client.connection, err = grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock()); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	client.pbProtected = pb.NewIAMProtectedServiceClient(client.connection)
@@ -705,7 +706,7 @@ func newTestClientPublic(url string) (client *testClient, err error) {
 	defer cancel()
 
 	if client.connectionPublic, err = grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock()); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	client.pbPublic = pb.NewIAMPublicServiceClient(client.connectionPublic)
