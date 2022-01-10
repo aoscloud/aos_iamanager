@@ -18,6 +18,7 @@
 package certhandler
 
 import (
+	"aos_iamanager/config"
 	"bytes"
 	"crypto"
 	"crypto/rand"
@@ -35,8 +36,6 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/config"
 )
 
 /*******************************************************************************
@@ -450,7 +449,8 @@ func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key
 
 		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{
 			Id:    oidExtensionExtendedKeyUsage,
-			Value: oidsValue})
+			Value: oidsValue,
+		})
 	}
 
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)

@@ -18,6 +18,7 @@
 package fileidentifier_test
 
 import (
+	"aos_iamanager/identhandler/modules/fileidentifier"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -30,8 +31,6 @@ import (
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/identhandler/modules/fileidentifier"
 )
 
 /*******************************************************************************
@@ -56,7 +55,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -224,8 +224,10 @@ func generateConfig(systemIDPath, boardModelPath, usersPath string) (config []by
 
 	var err error
 
-	if config, err = json.Marshal(&adapterConfig{SystemIDPath: systemIDPath,
-		BoardModelPath: boardModelPath, UsersPath: usersPath}); err != nil {
+	if config, err = json.Marshal(&adapterConfig{
+		SystemIDPath:   systemIDPath,
+		BoardModelPath: boardModelPath, UsersPath: usersPath,
+	}); err != nil {
 		log.Fatalf("Can't marshal config: %s", err)
 	}
 
@@ -249,7 +251,7 @@ func writeUsers(usersFile string, users []string) (err error) {
 }
 
 func writeID(filePth string, ID string) (err error) {
-	if err = ioutil.WriteFile(filePth, []byte(ID), 0644); err != nil {
+	if err = ioutil.WriteFile(filePth, []byte(ID), 0o644); err != nil {
 		return err
 	}
 

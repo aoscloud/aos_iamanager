@@ -18,6 +18,7 @@
 package swmodule
 
 import (
+	"aos_iamanager/certhandler"
 	"container/list"
 	"crypto"
 	"crypto/ecdsa"
@@ -38,8 +39,6 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************
@@ -91,7 +90,7 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		}
 	}
 
-	if err = os.MkdirAll(swModule.config.StoragePath, 0755); err != nil {
+	if err = os.MkdirAll(swModule.config.StoragePath, 0o755); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -120,7 +119,7 @@ func (module *SWModule) Clear() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
+	if err = os.MkdirAll(module.config.StoragePath, 0o755); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -162,7 +161,8 @@ func (module *SWModule) ValidateCertificates() (
 		if item.IsDir() {
 			log.WithFields(log.Fields{
 				"certType": module.certType,
-				"dir":      absItemPath}).Warn("Unexpected dir found in storage, remove it")
+				"dir":      absItemPath,
+			}).Warn("Unexpected dir found in storage, remove it")
 
 			if err = os.RemoveAll(absItemPath); err != nil {
 				return nil, nil, nil, aoserrors.Wrap(err)
@@ -203,7 +203,8 @@ func (module *SWModule) ValidateCertificates() (
 		if !keyFound {
 			log.WithFields(log.Fields{
 				"certType": module.certType,
-				"file":     absItemPath}).Warn("Found certificate without corresponding key")
+				"file":     absItemPath,
+			}).Warn("Found certificate without corresponding key")
 
 			invalidCerts = append(invalidCerts, fileToURL(absItemPath))
 		}
@@ -221,7 +222,8 @@ func (module *SWModule) ValidateCertificates() (
 	for keyFilePath := range keyMap {
 		log.WithFields(log.Fields{
 			"certType": module.certType,
-			"file":     keyFilePath}).Warn("Found key without corresponding certificate")
+			"file":     keyFilePath,
+		}).Warn("Found key without corresponding certificate")
 
 		invalidKeys = append(invalidKeys, fileToURL(keyFilePath))
 	}
@@ -335,7 +337,8 @@ func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 func (module *SWModule) RemoveCertificate(certURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"certURL":  certURL}).Debug("Remove certificate")
+		"certURL":  certURL,
+	}).Debug("Remove certificate")
 
 	cert, err := url.Parse(certURL)
 	if err != nil {
@@ -353,7 +356,8 @@ func (module *SWModule) RemoveCertificate(certURL, password string) (err error) 
 func (module *SWModule) RemoveKey(keyURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"keyURL":   keyURL}).Debug("Remove key")
+		"keyURL":   keyURL,
+	}).Debug("Remove key")
 
 	key, err := url.Parse(keyURL)
 	if err != nil {

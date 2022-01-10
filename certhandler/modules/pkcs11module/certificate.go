@@ -68,7 +68,8 @@ func createCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	log.WithFields(log.Fields{
 		"session": session,
 		"id":      id,
-		"label":   label}).Debug("Create certificate chain")
+		"label":   label,
+	}).Debug("Create certificate chain")
 
 	if len(x509Certs) == 0 {
 		return nil, aoserrors.New("empty certificate chain")
@@ -87,7 +88,6 @@ func createCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 func createCertificate(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	id, label string, x509Cert *x509.Certificate) (cert *pkcs11Certificate, err error) {
-
 	serial, err := asn1.Marshal(x509Cert.SerialNumber)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -163,7 +163,8 @@ func findCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 	for _, object := range objects {
 		attributes, err := ctx.GetAttributeValue(session, object.handle, []*pkcs11.Attribute{
-			pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, nil), pkcs11.NewAttribute(pkcs11.CKA_ISSUER, nil)})
+			pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, nil), pkcs11.NewAttribute(pkcs11.CKA_ISSUER, nil),
+		})
 		if err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
@@ -171,7 +172,8 @@ func findCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 		certs = append(certs, &pkcs11Certificate{
 			pkcs11Object: *object,
 			subject:      attributes[0].Value,
-			issuer:       attributes[1].Value})
+			issuer:       attributes[1].Value,
+		})
 	}
 
 	return certs, nil

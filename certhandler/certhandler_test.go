@@ -18,6 +18,8 @@
 package certhandler_test
 
 import (
+	"aos_iamanager/certhandler"
+	"aos_iamanager/config"
 	"bytes"
 	"crypto"
 	"crypto/rand"
@@ -39,9 +41,6 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/certhandler"
-	"aos_iamanager/config"
 )
 
 /*******************************************************************************
@@ -87,7 +86,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -133,7 +133,9 @@ func TestGetCertTypes(t *testing.T) {
 		CertModules: []config.ModuleConfig{
 			{ID: "cert1", Plugin: "testmodule"},
 			{ID: "cert2", Plugin: "testmodule"},
-			{ID: "cert3", Plugin: "testmodule"}}}
+			{ID: "cert3", Plugin: "testmodule"},
+		},
+	}
 
 	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
@@ -187,11 +189,13 @@ func TestSetOwner(t *testing.T) {
 
 func TestCreateKey(t *testing.T) {
 	cfg := config.Config{CertModules: []config.ModuleConfig{
-		{ID: "cert1",
+		{
+			ID:               "cert1",
 			Plugin:           "testmodule",
 			ExtendedKeyUsage: []string{"serverAuth", "clientAuth"},
 			AlternativeNames: []string{"name1", "name2"},
-		}}}
+		},
+	}}
 
 	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {
@@ -409,7 +413,8 @@ func TestSyncStorage(t *testing.T) {
 
 func TestCreateSelfSignedCert(t *testing.T) {
 	cfg := config.Config{CertModules: []config.ModuleConfig{
-		{ID: "cert1", Plugin: "testmodule"}}}
+		{ID: "cert1", Plugin: "testmodule"},
+	}}
 
 	handler, err := certhandler.New("testID", &cfg, &testStorage{})
 	if err != nil {

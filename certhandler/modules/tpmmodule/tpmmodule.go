@@ -18,6 +18,7 @@
 package tpmmodule
 
 import (
+	"aos_iamanager/certhandler"
 	"container/list"
 	"crypto"
 	"crypto/x509"
@@ -38,8 +39,6 @@ import (
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************
@@ -106,7 +105,7 @@ func New(certType string, configJSON json.RawMessage,
 		tpmModule.device = device
 	}
 
-	if err = os.MkdirAll(tpmModule.config.StoragePath, 0755); err != nil {
+	if err = os.MkdirAll(tpmModule.config.StoragePath, 0o755); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -172,7 +171,8 @@ func (module *TPMModule) ValidateCertificates() (
 		if item.IsDir() {
 			log.WithFields(log.Fields{
 				"certType": module.certType,
-				"dir":      absItemPath}).Warn("Unexpected dir found in storage, remove it")
+				"dir":      absItemPath,
+			}).Warn("Unexpected dir found in storage, remove it")
 
 			if err = os.RemoveAll(absItemPath); err != nil {
 				return nil, nil, nil, aoserrors.Wrap(err)
@@ -211,7 +211,8 @@ func (module *TPMModule) ValidateCertificates() (
 		if !keyFound {
 			log.WithFields(log.Fields{
 				"certType": module.certType,
-				"file":     absItemPath}).Warn("Found certificate without corresponding key")
+				"file":     absItemPath,
+			}).Warn("Found certificate without corresponding key")
 
 			invalidCerts = append(invalidCerts, fileToURL(absItemPath))
 		}
@@ -224,7 +225,8 @@ func (module *TPMModule) ValidateCertificates() (
 	for keyURL := range keyMap {
 		log.WithFields(log.Fields{
 			"certType": module.certType,
-			"keyURL":   keyURL}).Warn("Found key without corresponding certificate")
+			"keyURL":   keyURL,
+		}).Warn("Found key without corresponding certificate")
 
 		invalidKeys = append(invalidKeys, keyURL)
 	}
@@ -272,7 +274,8 @@ func (module *TPMModule) Clear() (err error) {
 
 	if err = tpm2.Clear(module.device, tpm2.HandleLockout, tpm2.AuthCommand{
 		Session:    tpm2.HandlePasswordSession,
-		Attributes: tpm2.AttrContinueSession}); err != nil {
+		Attributes: tpm2.AttrContinueSession,
+	}); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -280,7 +283,7 @@ func (module *TPMModule) Clear() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = os.MkdirAll(module.config.StoragePath, 0755); err != nil {
+	if err = os.MkdirAll(module.config.StoragePath, 0o755); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -375,7 +378,8 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 func (module *TPMModule) RemoveCertificate(certURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"certURL":  certURL}).Debug("Remove certificate")
+		"certURL":  certURL,
+	}).Debug("Remove certificate")
 
 	cert, err := url.Parse(certURL)
 	if err != nil {
@@ -393,7 +397,8 @@ func (module *TPMModule) RemoveCertificate(certURL, password string) (err error)
 func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"keyURL":   keyURL}).Debug("Remove key")
+		"keyURL":   keyURL,
+	}).Debug("Remove key")
 
 	key, err := url.Parse(keyURL)
 	if err != nil {
