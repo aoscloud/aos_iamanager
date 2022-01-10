@@ -45,6 +45,11 @@ const (
 	serverPublicURL = "localhost:8089"
 )
 
+const (
+	certURLStr = "certURL"
+	keyURLStr  = "keyURL"
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -267,7 +272,7 @@ func TestApplyCert(t *testing.T) {
 
 	defer client.close()
 
-	certHandler.certURL = "certURL"
+	certHandler.certURL = certURLStr
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -305,8 +310,8 @@ func TestGetCert(t *testing.T) {
 
 	defer client.close()
 
-	certHandler.certURL = "certURL"
-	certHandler.keyURL = "keyURL"
+	certHandler.certURL = certURLStr
+	certHandler.keyURL = keyURLStr
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -322,11 +327,11 @@ func TestGetCert(t *testing.T) {
 		t.Errorf("Wrong response type: %s", response.Type)
 	}
 
-	if response.CertUrl != "certURL" {
+	if response.CertUrl != certURLStr {
 		t.Errorf("Wrong cert URL: %s", response.CertUrl)
 	}
 
-	if response.KeyUrl != "keyURL" {
+	if response.KeyUrl != keyURLStr {
 		t.Errorf("Wrong key URL: %s", response.KeyUrl)
 	}
 }
