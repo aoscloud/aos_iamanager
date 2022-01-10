@@ -67,6 +67,11 @@ const (
 	pkcs11DBPath  = "/var/lib/softhsm/tokens/"
 )
 
+const (
+	passwordStr = "password"
+	keyStr      = "key"
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -144,7 +149,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 			// Set owner
 
-			password := "password"
+			password := passwordStr
 
 			if err = module.SetOwner(password); err != nil {
 				t.Fatalf("Can't set owner: %s", err)
@@ -362,7 +367,7 @@ func TestValidateCertificates(t *testing.T) {
 
 		// Set owner
 
-		password := "password"
+		password := passwordStr
 
 		if err = module.SetOwner(password); err != nil {
 			t.Fatalf("Can't set owner: %s", err)
@@ -501,7 +506,7 @@ func TestSetOwnerClear(t *testing.T) {
 
 		// Set owner
 
-		password := "password"
+		password := passwordStr
 
 		if err = module.SetOwner(password); err != nil {
 			t.Fatalf("Can't set owner: %s", err)
@@ -573,7 +578,7 @@ func TestSetOwnerClear(t *testing.T) {
 
 // Test for TPM only
 func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
-	password := "password"
+	password := passwordStr
 
 	module, err := createTpmModule(true)
 	if err != nil {
@@ -608,7 +613,7 @@ func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 
 // Test for TPM only
 func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
-	password := "password"
+	password := passwordStr
 	pcrSelection7 := tpm2.PCRSelection{Hash: tpm2.AlgSHA1, PCRs: []int{7}}
 
 	module, err := createTpmModule(true)
@@ -677,7 +682,7 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 
 	// Set owner
 
-	password := "password"
+	password := passwordStr
 
 	if err = module.SetOwner(password); err != nil {
 		t.Fatalf("Can't set owner: %s", err)
@@ -892,7 +897,7 @@ func getExistingFileItems(itemType, storagePath string) (existingURLs []string, 
 				continue
 			}
 
-		case "key":
+		case keyStr:
 			if _, err = cryptutils.LoadKey(absItemPath); err != nil {
 				continue
 			}
@@ -911,7 +916,7 @@ func getExistingFileItems(itemType, storagePath string) (existingURLs []string, 
 
 func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
 	switch itemType {
-	case "key":
+	case keyStr:
 
 	default:
 		return nil, aoserrors.Errorf("unsupported item type: %s", itemType)
@@ -1013,7 +1018,7 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 			}
 		}
 
-	case "key":
+	case keyStr:
 		keys, err := pkcs11Ctx.FindKeyPairs(nil, []byte(label))
 		if err != nil {
 			return nil, aoserrors.Wrap(err)
