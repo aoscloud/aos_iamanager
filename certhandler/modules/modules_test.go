@@ -187,7 +187,8 @@ func TestUpdateCertificate(t *testing.T) {
 					t.Fatalf("Can't write CSR to file: %s", err)
 				}
 
-				out, err := exec.Command("openssl", "req", "-text", "-noout", "-verify", "-inform", "PEM", "-in", csrFile).CombinedOutput()
+				out, err := exec.Command(
+					"openssl", "req", "-text", "-noout", "-verify", "-inform", "PEM", "-in", csrFile).CombinedOutput()
 				if err != nil {
 					t.Fatalf("Can't verify CSR: %s, %s", out, err)
 				}
@@ -624,9 +625,10 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	}
 
 	handle, _, err := tpm2.CreatePrimary(tpmSimulator, tpm2.HandleOwner, pcrSelection7, password, "", tpm2.Public{
-		Type:       tpm2.AlgRSA,
-		NameAlg:    tpm2.AlgSHA256,
-		Attributes: tpm2.FlagDecrypt | tpm2.FlagUserWithAuth | tpm2.FlagFixedParent | tpm2.FlagFixedTPM | tpm2.FlagSensitiveDataOrigin,
+		Type:    tpm2.AlgRSA,
+		NameAlg: tpm2.AlgSHA256,
+		Attributes: tpm2.FlagDecrypt | tpm2.FlagUserWithAuth | tpm2.FlagFixedParent |
+			tpm2.FlagFixedTPM | tpm2.FlagSensitiveDataOrigin,
 		RSAParameters: &tpm2.RSAParams{
 			Sign: &tpm2.SigScheme{
 				Alg:  tpm2.AlgNull,
@@ -828,7 +830,8 @@ func createPKCS11Module(doReset bool) (module certhandler.CertModule, err error)
 		}
 	}
 
-	config := json.RawMessage(fmt.Sprintf(`{"library":"%s","userPinPath":"%s"}`, pkcs11LibPath, path.Join(tmpDir, "userPin.txt")))
+	config := json.RawMessage(fmt.Sprintf(
+		`{"library":"%s","userPinPath":"%s"}`, pkcs11LibPath, path.Join(tmpDir, "userPin.txt")))
 
 	return pkcs11module.New("test", config)
 }

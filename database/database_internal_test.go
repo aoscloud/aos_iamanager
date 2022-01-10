@@ -189,22 +189,46 @@ func TestGetCertificates(t *testing.T) {
 
 	data := [][]certhandler.CertInfo{
 		{
-			certhandler.CertInfo{Issuer: "issuer0", Serial: "s0", CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer0", Serial: "s1", CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer0", Serial: "s2", CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer0", Serial: "s3", CertURL: "certURL3", KeyURL: "keyURL3", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer0", Serial: "s4", CertURL: "certURL4", KeyURL: "keyURL4", NotAfter: time.Now().UTC()},
+			certhandler.CertInfo{
+				Issuer: "issuer0", Serial: "s0", CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer0", Serial: "s1", CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer0", Serial: "s2", CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer0", Serial: "s3", CertURL: "certURL3", KeyURL: "keyURL3", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer0", Serial: "s4", CertURL: "certURL4", KeyURL: "keyURL4", NotAfter: time.Now().UTC(),
+			},
 		},
 		{
-			certhandler.CertInfo{Issuer: "issuer1", Serial: "s0", CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer1", Serial: "s1", CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer1", Serial: "s2", CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC()},
+			certhandler.CertInfo{
+				Issuer: "issuer1", Serial: "s0", CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer1", Serial: "s1", CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer1", Serial: "s2", CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC(),
+			},
 		},
 		{
-			certhandler.CertInfo{Issuer: "issuer2", Serial: "s0", CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer2", Serial: "s1", CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer2", Serial: "s2", CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC()},
-			certhandler.CertInfo{Issuer: "issuer2", Serial: "s3", CertURL: "certURL3", KeyURL: "keyURL3", NotAfter: time.Now().UTC()},
+			certhandler.CertInfo{
+				Issuer: "issuer2", Serial: "s0", CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer2", Serial: "s1", CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer2", Serial: "s2", CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC(),
+			},
+			certhandler.CertInfo{
+				Issuer: "issuer2", Serial: "s3", CertURL: "certURL3", KeyURL: "keyURL3", NotAfter: time.Now().UTC(),
+			},
 		},
 	}
 

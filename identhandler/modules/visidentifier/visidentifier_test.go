@@ -217,7 +217,8 @@ func setup() (err error) {
 
 	time.Sleep(1 * time.Second)
 
-	if vis, err = visidentifier.New([]byte(`{"VisServer": "wss://localhost:443", "CaCertFile": "` + crtFile + `"}`)); err != nil {
+	if vis, err = visidentifier.New([]byte(
+		`{"VisServer": "wss://localhost:443", "CaCertFile": "` + crtFile + `"}`)); err != nil {
 		return err
 	}
 
@@ -315,7 +316,8 @@ func TestUsersChanged(t *testing.T) {
  * Interfaces
  ******************************************************************************/
 
-func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageType int, message []byte) (response []byte, err error) {
+func (handler *clientHandler) ProcessMessage(
+	client *wsserver.Client, messageType int, message []byte) (response []byte, err error) {
 	var header visprotocol.MessageHeader
 
 	if err = json.Unmarshal(message, &header); err != nil {

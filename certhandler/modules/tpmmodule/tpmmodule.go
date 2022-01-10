@@ -258,8 +258,10 @@ func (module *TPMModule) SetOwner(password string) (err error) {
 
 	if !ownerSet {
 		// If all parameters are zeros, left them default (3, 1000, 1000)
-		if module.config.LockoutMaxTry != 0 || module.config.RecoveryTime != 0 || module.config.LockoutRecoveryTime != 0 {
-			if err = tpm2.DictionaryAttackParameters(module.device, auth, module.config.LockoutMaxTry, module.config.RecoveryTime, module.config.LockoutRecoveryTime); err != nil {
+		if module.config.LockoutMaxTry != 0 || module.config.RecoveryTime != 0 ||
+			module.config.LockoutRecoveryTime != 0 {
+			if err = tpm2.DictionaryAttackParameters(module.device, auth, module.config.LockoutMaxTry,
+				module.config.RecoveryTime, module.config.LockoutRecoveryTime); err != nil {
 				return aoserrors.Wrap(err)
 			}
 		}
@@ -410,7 +412,8 @@ func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = tpm2.EvictControl(module.device, password, tpm2.HandleOwner, tpmutil.Handle(handle), tpmutil.Handle(handle)); err != nil {
+	if err = tpm2.EvictControl(module.device, password, tpm2.HandleOwner, tpmutil.Handle(handle),
+		tpmutil.Handle(handle)); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

@@ -92,11 +92,13 @@ func TestModules(t *testing.T) {
 		t.Error("Wrong module id")
 	}
 
-	if cfg.CertModules[0].Plugin != "test1" || cfg.CertModules[1].Plugin != "test2" || cfg.CertModules[2].Plugin != "test3" {
+	if cfg.CertModules[0].Plugin != "test1" || cfg.CertModules[1].Plugin != "test2" ||
+		cfg.CertModules[2].Plugin != "test3" {
 		t.Error("Wrong plugin value")
 	}
 
-	if cfg.CertModules[0].Algorithm != "rsa" || cfg.CertModules[1].Algorithm != "ecc" || cfg.CertModules[2].Algorithm != "rsa" {
+	if cfg.CertModules[0].Algorithm != "rsa" || cfg.CertModules[1].Algorithm != "ecc" ||
+		cfg.CertModules[2].Algorithm != "rsa" {
 		t.Error("Wrong plugin value")
 	}
 
@@ -104,11 +106,13 @@ func TestModules(t *testing.T) {
 		t.Error("Wrong max items value")
 	}
 
-	if cfg.CertModules[0].Disabled != false || cfg.CertModules[1].Disabled != false || cfg.CertModules[2].Disabled != true {
+	if cfg.CertModules[0].Disabled != false || cfg.CertModules[1].Disabled != false ||
+		cfg.CertModules[2].Disabled != true {
 		t.Error("Wrong disabled value")
 	}
 
-	if cfg.CertModules[0].SkipValidation != true || cfg.CertModules[1].SkipValidation != false || cfg.CertModules[2].SkipValidation != false {
+	if cfg.CertModules[0].SkipValidation != true || cfg.CertModules[1].SkipValidation != false ||
+		cfg.CertModules[2].SkipValidation != false {
 		t.Error("Wrong skip validation value")
 	}
 
