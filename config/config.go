@@ -29,7 +29,7 @@ import (
  * Types
  ******************************************************************************/
 
-// Config instance
+// Config instance.
 type Config struct {
 	ServerURL                 string         `json:"serverURL"`
 	ServerPublicURL           string         `json:"serverPublicURL"`
@@ -45,7 +45,7 @@ type Config struct {
 	} `json:"identifier"`
 }
 
-// ModuleConfig module configuration
+// ModuleConfig module configuration.
 type ModuleConfig struct {
 	ID               string          `json:"id"`
 	Plugin           string          `json:"plugin"`
@@ -62,7 +62,7 @@ type ModuleConfig struct {
  * Public
  ******************************************************************************/
 
-// New creates new config object
+// New creates new config object.
 func New(fileName string) (config *Config, err error) {
 	file, err := os.Open(fileName)
 	if err != nil {

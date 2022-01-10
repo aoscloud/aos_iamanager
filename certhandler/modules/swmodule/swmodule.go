@@ -55,7 +55,7 @@ const (
  * Types
  ******************************************************************************/
 
-// SWModule SW certificate module
+// SWModule SW certificate module.
 type SWModule struct {
 	certType string
 	config   moduleConfig
@@ -78,7 +78,7 @@ var ecsdaCurveID = elliptic.P384()
  * Public
  ******************************************************************************/
 
-// New creates ssh module instance
+// New creates ssh module instance.
 func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create SW module")
 
@@ -97,21 +97,21 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 	return swModule, nil
 }
 
-// Close closes SW module
+// Close closes SW module.
 func (module *SWModule) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close SW module")
 
 	return aoserrors.Wrap(err)
 }
 
-// SetOwner owns security storage
+// SetOwner owns security storage.
 func (module *SWModule) SetOwner(password string) (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Set owner")
 
 	return nil
 }
 
-// Clear clears security storage
+// Clear clears security storage.
 func (module *SWModule) Clear() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
@@ -126,7 +126,7 @@ func (module *SWModule) Clear() (err error) {
 	return nil
 }
 
-// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
+// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys.
 func (module *SWModule) ValidateCertificates() (
 	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
@@ -231,7 +231,7 @@ func (module *SWModule) ValidateCertificates() (
 	return validInfos, invalidCerts, invalidKeys, nil
 }
 
-// CreateKey creates key pair
+// CreateKey creates key pair.
 func (module *SWModule) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
@@ -261,7 +261,7 @@ func (module *SWModule) CreateKey(password, algorithm string) (key crypto.Privat
 	return key, nil
 }
 
-// ApplyCertificate applies certificate
+// ApplyCertificate applies certificate.
 func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
@@ -336,7 +336,7 @@ func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	return certInfo, "", nil
 }
 
-// RemoveCertificate removes certificate
+// RemoveCertificate removes certificate.
 func (module *SWModule) RemoveCertificate(certURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
@@ -355,7 +355,7 @@ func (module *SWModule) RemoveCertificate(certURL, password string) (err error) 
 	return nil
 }
 
-// RemoveKey removes key
+// RemoveKey removes key.
 func (module *SWModule) RemoveKey(keyURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,

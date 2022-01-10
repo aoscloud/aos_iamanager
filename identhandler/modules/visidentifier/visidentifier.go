@@ -49,7 +49,7 @@ const (
  * Types
  ******************************************************************************/
 
-// Instance vis identifier instance
+// Instance vis identifier instance.
 type Instance struct {
 	config instanceConfig
 
@@ -81,7 +81,7 @@ type instanceConfig struct {
  * Public
  ******************************************************************************/
 
-// New creates new vis identifier instance
+// New creates new vis identifier instance.
 func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err error) {
 	log.Info("Create VIS identification instance")
 
@@ -109,7 +109,7 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 	return instance, nil
 }
 
-// Close closes vis identifier instance
+// Close closes vis identifier instance.
 func (instance *Instance) Close() (err error) {
 	log.Info("Close VIS identification instance")
 
@@ -135,7 +135,7 @@ func (instance *Instance) Close() (err error) {
 	return aoserrors.Wrap(retErr)
 }
 
-// GetSystemID returns the system ID
+// GetSystemID returns the system ID.
 func (instance *Instance) GetSystemID() (systemID string, err error) {
 	instance.wg.Wait()
 
@@ -168,7 +168,7 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	return instance.vin, aoserrors.Wrap(err)
 }
 
-// GetBoardModel returns the board model
+// GetBoardModel returns the board model.
 func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	instance.wg.Wait()
 
@@ -201,7 +201,7 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	return instance.boardModel, aoserrors.Wrap(err)
 }
 
-// GetUsers returns the user claims
+// GetUsers returns the user claims.
 func (instance *Instance) GetUsers() (users []string, err error) {
 	instance.wg.Wait()
 
@@ -230,7 +230,7 @@ func (instance *Instance) GetUsers() (users []string, err error) {
 	return instance.users, aoserrors.Wrap(err)
 }
 
-// SetUsers sets the user claims
+// SetUsers sets the user claims.
 func (instance *Instance) SetUsers(users []string) (err error) {
 	instance.wg.Wait()
 
@@ -252,7 +252,7 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	return nil
 }
 
-// UsersChangedChannel returns users changed channel
+// UsersChangedChannel returns users changed channel.
 func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
 	return instance.usersChangedChannel
 }
