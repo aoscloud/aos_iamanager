@@ -19,6 +19,7 @@ package database
 
 import (
 	"aos_iamanager/certhandler"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path"
@@ -76,7 +77,7 @@ func TestDBVersion(t *testing.T) {
 	db, err = New(dbPath)
 	if err == nil {
 		t.Error("Expect version mismatch error")
-	} else if err != ErrVersionMismatch {
+	} else if !errors.Is(err, ErrVersionMismatch) {
 		t.Errorf("Can't create database: %s", err)
 	}
 

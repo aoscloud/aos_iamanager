@@ -21,6 +21,7 @@ import (
 	"aos_iamanager/config"
 	"context"
 	"encoding/base64"
+	"errors"
 	"net"
 	"os/exec"
 	"sync"
@@ -318,7 +319,7 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 
 	<-stream.Context().Done()
 
-	if err = stream.Context().Err(); err != nil && err != context.Canceled {
+	if err = stream.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
 		log.Errorf("Stream error: %s", err)
 	} else {
 		log.Debug("Stream closed")
