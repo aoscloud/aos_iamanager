@@ -18,6 +18,12 @@
 package main
 
 import (
+	"aos_iamanager/certhandler"
+	"aos_iamanager/config"
+	"aos_iamanager/database"
+	"aos_iamanager/iamserver"
+	"aos_iamanager/identhandler"
+	"aos_iamanager/permhandler"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -31,14 +37,9 @@ import (
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
-	"aos_iamanager/certhandler"
 	_ "aos_iamanager/certhandler/modules"
-	"aos_iamanager/config"
-	"aos_iamanager/database"
-	"aos_iamanager/iamserver"
-	"aos_iamanager/identhandler"
+
 	_ "aos_iamanager/identhandler/modules"
-	"aos_iamanager/permhandler"
 )
 
 /*******************************************************************************
@@ -70,7 +71,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 }
 
 /*******************************************************************************
@@ -95,7 +97,8 @@ func newJournalHook() (hook *journalHook) {
 			log.ErrorLevel: journal.PriErr,
 			log.FatalLevel: journal.PriCrit,
 			log.PanicLevel: journal.PriEmerg,
-		}}
+		},
+	}
 
 	return hook
 }

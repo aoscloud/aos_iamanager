@@ -18,6 +18,7 @@
 package database
 
 import (
+	"aos_iamanager/certhandler"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -25,10 +26,8 @@ import (
 	"path/filepath"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	_ "github.com/mattn/go-sqlite3" //ignore lint
+	_ "github.com/mattn/go-sqlite3" // ignore lint
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************
@@ -74,7 +73,7 @@ func New(name string) (db *Database, err error) {
 		if !os.IsNotExist(err) {
 			return db, aoserrors.Wrap(err)
 		}
-		if err = os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+		if err = os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 			return db, aoserrors.Wrap(err)
 		}
 	}

@@ -18,6 +18,7 @@
 package pkcs11module
 
 import (
+	"aos_iamanager/certhandler"
 	"container/list"
 	"crypto"
 	"crypto/elliptic"
@@ -38,8 +39,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************
@@ -98,8 +97,10 @@ type moduleConfig struct {
  * Vars
  ******************************************************************************/
 
-var ctxMutex = sync.Mutex{}
-var ctxCount = map[string]int{}
+var (
+	ctxMutex = sync.Mutex{}
+	ctxCount = map[string]int{}
+)
 
 // TEE Client UUID name space identifier (UUIDv4) from linux kernel
 // https://github.com/OP-TEE/optee_os/pull/4222
@@ -202,7 +203,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		if userPIN, err = module.getUserPIN(); err != nil {
 			userPIN = uniuri.New()
 
-			if err = ioutil.WriteFile(module.config.UserPINPath, []byte(userPIN), 0600); err != nil {
+			if err = ioutil.WriteFile(module.config.UserPINPath, []byte(userPIN), 0o600); err != nil {
 				return aoserrors.Wrap(err)
 			}
 		}
@@ -528,7 +529,8 @@ func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err err
 
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"certURL":  certURL}).Debug("Remove certificate")
+		"certURL":  certURL,
+	}).Debug("Remove certificate")
 
 	urlTemplate, err := parseURL(certURL)
 	if err != nil {
@@ -567,7 +569,8 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 
 	log.WithFields(log.Fields{
 		"certType": module.certType,
-		"keyURL":   keyURL}).Debug("Remove key")
+		"keyURL":   keyURL,
+	}).Debug("Remove key")
 
 	urlTemplate, err := parseURL(keyURL)
 	if err != nil {
@@ -580,13 +583,15 @@ func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 	}
 
 	privObjs, err := findObjects(module.ctx, session, append([]*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY)}, urlTemplate...))
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
+	}, urlTemplate...))
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 
 	pubObjs, err := findObjects(module.ctx, session, append([]*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY)}, urlTemplate...))
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+	}, urlTemplate...))
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}

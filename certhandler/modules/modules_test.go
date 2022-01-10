@@ -18,6 +18,10 @@
 package certmodules_test
 
 import (
+	"aos_iamanager/certhandler"
+	"aos_iamanager/certhandler/modules/pkcs11module"
+	"aos_iamanager/certhandler/modules/swmodule"
+	"aos_iamanager/certhandler/modules/tpmmodule"
 	"bytes"
 	"crypto"
 	"crypto/ecdsa"
@@ -52,11 +56,6 @@ import (
 
 	"golang.org/x/crypto/cryptobyte"
 	"golang.org/x/crypto/cryptobyte/asn1"
-
-	"aos_iamanager/certhandler"
-	"aos_iamanager/certhandler/modules/pkcs11module"
-	"aos_iamanager/certhandler/modules/swmodule"
-	"aos_iamanager/certhandler/modules/tpmmodule"
 )
 
 /*******************************************************************************
@@ -78,9 +77,11 @@ type createModuleType func(doReset bool) (module certhandler.CertModule, err err
  * Var
  ******************************************************************************/
 
-var tmpDir string
-var certStorage string
-var tpmSimulator *simulator.Simulator
+var (
+	tmpDir       string
+	certStorage  string
+	tpmSimulator *simulator.Simulator
+)
 
 /*******************************************************************************
  * Init
@@ -90,7 +91,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -181,7 +183,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 				csrFile := path.Join(tmpDir, "data.csr")
 
-				if err = ioutil.WriteFile(csrFile, csr, 0644); err != nil {
+				if err = ioutil.WriteFile(csrFile, csr, 0o644); err != nil {
 					t.Fatalf("Can't write CSR to file: %s", err)
 				}
 
@@ -726,7 +728,8 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 	userPin := string(data)
 
 	pkcs11Ctx, err := crypto11.Configure(&crypto11.Config{
-		Path: pkcs11LibPath, TokenLabel: "aos", Pin: userPin})
+		Path: pkcs11LibPath, TokenLabel: "aos", Pin: userPin,
+	})
 	if err != nil {
 		t.Fatalf("Can't create PKCS11 context: %s", err)
 	}
@@ -820,7 +823,7 @@ func createPKCS11Module(doReset bool) (module certhandler.CertModule, err error)
 			return nil, err
 		}
 
-		if err = os.MkdirAll(pkcs11DBPath, 0755); err != nil {
+		if err = os.MkdirAll(pkcs11DBPath, 0o755); err != nil {
 			return nil, err
 		}
 	}
@@ -943,7 +946,8 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 	pkcs11Ctx, err := crypto11.Configure(&crypto11.Config{
 		Path:       pkcs11LibPath,
 		TokenLabel: token,
-		Pin:        userPin})
+		Pin:        userPin,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -980,7 +984,8 @@ func getExistingPKCS11Items(token, userPin, label, itemType string) (existingURL
 			for _, handle := range handles {
 
 				attributes, err := ctx.GetAttributeValue(session, handle, []*pkcs11.Attribute{
-					pkcs11.NewAttribute(pkcs11.CKA_ID, nil)})
+					pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -1067,7 +1072,6 @@ func verifyASN1(pub *ecdsa.PublicKey, hash, sig []byte) bool {
 	if !input.ReadASN1(&inner, asn1.SEQUENCE) || !input.Empty() || !inner.ReadASN1Integer(r) ||
 		!inner.ReadASN1Integer(s) || !inner.Empty() {
 		return false
-
 	}
 
 	return ecdsa.Verify(pub, hash, r, s)

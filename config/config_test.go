@@ -18,6 +18,7 @@
 package config_test
 
 import (
+	"aos_iamanager/config"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -25,16 +26,16 @@ import (
 	"path"
 	"reflect"
 	"testing"
-
-	"aos_iamanager/config"
 )
 
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
-var cfg *config.Config
-var tmpDir string
+var (
+	cfg    *config.Config
+	tmpDir string
+)
 
 /*******************************************************************************
  * Main
@@ -179,7 +180,7 @@ func DiskEncryptionCmdArgs(t *testing.T) {
  ******************************************************************************/
 
 func saveConfigFile(fileName string, configContent string) (err error) {
-	if err = ioutil.WriteFile(fileName, []byte(configContent), 0644); err != nil {
+	if err = ioutil.WriteFile(fileName, []byte(configContent), 0o644); err != nil {
 		return err
 	}
 

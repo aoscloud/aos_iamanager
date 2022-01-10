@@ -18,6 +18,9 @@
 package iamserver_test
 
 import (
+	"aos_iamanager/config"
+	"aos_iamanager/iamserver"
+	"aos_iamanager/permhandler"
 	"context"
 	"io/ioutil"
 	"os"
@@ -30,10 +33,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-
-	"aos_iamanager/config"
-	"aos_iamanager/iamserver"
-	"aos_iamanager/permhandler"
 )
 
 /*******************************************************************************
@@ -84,7 +83,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -139,7 +139,8 @@ func TestFinishProvisioning(t *testing.T) {
 	server, err := iamserver.New(&config.Config{
 		ServerURL:                 serverURL,
 		ServerPublicURL:           serverPublicURL,
-		FinishProvisioningCmdArgs: []string{"touch", finishFile}}, &testIdentHandler{}, &testCertHandler{}, nil, true)
+		FinishProvisioningCmdArgs: []string{"touch", finishFile},
+	}, &testIdentHandler{}, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
