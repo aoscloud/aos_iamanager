@@ -498,7 +498,8 @@ func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
-	if _, err = createCertificateChain(module.ctx, module.session, currentKey.getID(), module.certType, x509Certs); err != nil {
+	if _, err = createCertificateChain(module.ctx, module.session,
+		currentKey.getID(), module.certType, x509Certs); err != nil {
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
@@ -917,7 +918,8 @@ func (module *PKCS11Module) getSlotID() (id uint, err error) {
 	}
 
 	if paramCount >= 2 {
-		return 0, aoserrors.New("only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
+		return 0, aoserrors.New(
+			"only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
 	}
 
 	if module.config.SlotID != nil {
@@ -1006,16 +1008,18 @@ func (module *PKCS11Module) displayInfo(slotID uint) (err error) {
 	}
 
 	log.WithFields(log.Fields{
-		"slotID":        slotID,
-		"label":         tokenInfo.Label,
-		"manufacturer":  tokenInfo.ManufacturerID,
-		"model":         tokenInfo.Model,
-		"serial":        tokenInfo.SerialNumber,
-		"hwVersion":     fmt.Sprintf("%d.%d", tokenInfo.HardwareVersion.Major, tokenInfo.HardwareVersion.Major),
-		"fwVersion":     fmt.Sprintf("%d.%d", tokenInfo.FirmwareVersion.Major, tokenInfo.FirmwareVersion.Major),
-		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
-		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
-		"flags":         tokenInfo.Flags,
+		"slotID":       slotID,
+		"label":        tokenInfo.Label,
+		"manufacturer": tokenInfo.ManufacturerID,
+		"model":        tokenInfo.Model,
+		"serial":       tokenInfo.SerialNumber,
+		"hwVersion":    fmt.Sprintf("%d.%d", tokenInfo.HardwareVersion.Major, tokenInfo.HardwareVersion.Major),
+		"fwVersion":    fmt.Sprintf("%d.%d", tokenInfo.FirmwareVersion.Major, tokenInfo.FirmwareVersion.Major),
+		"publicMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory,
+			tokenInfo.TotalPublicMemory),
+		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory,
+			tokenInfo.TotalPrivateMemory),
+		"flags": tokenInfo.Flags,
 	}).Debug("Token info")
 
 	return nil
@@ -1027,8 +1031,10 @@ func (module *PKCS11Module) tokenMemInfo() (err error) {
 		return aoserrors.Wrap(err)
 	}
 	log.WithFields(log.Fields{
-		"publicMemory":  fmt.Sprintf("%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
-		"privateMemory": fmt.Sprintf("%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
+		"publicMemory": fmt.Sprintf(
+			"%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),
+		"privateMemory": fmt.Sprintf(
+			"%d/%d", tokenInfo.TotalPrivateMemory-tokenInfo.FreePrivateMemory, tokenInfo.TotalPrivateMemory),
 	}).Debug("Token mem info")
 
 	return nil

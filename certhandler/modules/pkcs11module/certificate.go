@@ -276,7 +276,8 @@ func appendIfNotExist(certs []*pkcs11Certificate, cert *pkcs11Certificate) (newC
 	return append(certs, cert)
 }
 
-func checkCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle) (invalidCerts []*pkcs11Certificate, err error) {
+func checkCertificateChain(
+	ctx *pkcs11.Ctx, session pkcs11.SessionHandle) (invalidCerts []*pkcs11Certificate, err error) {
 	log.Debug("Checking certificate chain")
 
 	template := []*pkcs11.Attribute{

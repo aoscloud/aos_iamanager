@@ -99,7 +99,8 @@ type PermissionHandler interface {
  ******************************************************************************/
 
 // New creates new IAM server instance
-func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler, permissionHandler PermissionHandler, insecure bool) (server *Server, err error) {
+func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
+	permissionHandler PermissionHandler, insecure bool) (server *Server, err error) {
 	server = &Server{
 		identHandler:              identHandler,
 		certHandler:               certHandler,
@@ -159,7 +160,8 @@ func (server *Server) FinishProvisioning(context context.Context, req *empty.Emp
 	rsp = &empty.Empty{}
 
 	if len(server.finishProvisioningCmdArgs) > 0 {
-		output, err := exec.Command(server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
+		output, err := exec.Command(
+			server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
 		if err != nil {
 			return rsp, aoserrors.Errorf("message: %s, err: %s", string(output), err)
 		}
@@ -199,7 +201,8 @@ func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp 
 }
 
 // CreateKey creates private key
-func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (rsp *pb.CreateKeyResponse, err error) {
+func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (
+	rsp *pb.CreateKeyResponse, err error) {
 	rsp = &pb.CreateKeyResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process create key request")
@@ -217,7 +220,8 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 }
 
 // ApplyCert applies certificate
-func (server *Server) ApplyCert(context context.Context, req *pb.ApplyCertRequest) (rsp *pb.ApplyCertResponse, err error) {
+func (server *Server) ApplyCert(
+	context context.Context, req *pb.ApplyCertRequest) (rsp *pb.ApplyCertResponse, err error) {
 	rsp = &pb.ApplyCertResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process apply cert request")
@@ -338,7 +342,8 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 }
 
 // RegisterService registers new service and creates secret
-func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
+func (server *Server) RegisterService(
+	ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
 	rsp = &pb.RegisterServiceResponse{}
 
 	log.WithField("serviceID", req.ServiceId).Debug("Process register service")
@@ -361,7 +366,8 @@ func (server *Server) RegisterService(ctx context.Context, req *pb.RegisterServi
 }
 
 // UnregisterService unregisters service
-func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterServiceRequest) (rsp *empty.Empty, err error) {
+func (server *Server) UnregisterService(
+	ctx context.Context, req *pb.UnregisterServiceRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
 	log.WithField("serviceID", req.ServiceId).Debug("Process unregister service")
@@ -372,7 +378,8 @@ func (server *Server) UnregisterService(ctx context.Context, req *pb.UnregisterS
 }
 
 // GetPermissions returns permissions by secret and functional server ID
-func (server *Server) GetPermissions(ctx context.Context, req *pb.PermissionsRequest) (rsp *pb.PermissionsResponse, err error) {
+func (server *Server) GetPermissions(
+	ctx context.Context, req *pb.PermissionsRequest) (rsp *pb.PermissionsResponse, err error) {
 	rsp = &pb.PermissionsResponse{}
 
 	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")

@@ -125,7 +125,8 @@ func (db *Database) AddCertificate(certType string, cert certhandler.CertInfo) (
 
 // GetCertificate returns certificate by issuer and serial
 func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.CertInfo, err error) {
-	rows, err := db.sql.Query("SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE issuer = ? AND serial = ?",
+	rows, err := db.sql.Query(
+		"SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE issuer = ? AND serial = ?",
 		issuer, serial)
 	if err != nil {
 		return cert, aoserrors.Wrap(err)
@@ -145,7 +146,8 @@ func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.Cert
 
 // GetCertificates returns certificates of selected type
 func (db *Database) GetCertificates(certType string) (certs []certhandler.CertInfo, err error) {
-	rows, err := db.sql.Query("SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE type = ?", certType)
+	rows, err := db.sql.Query(
+		"SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE type = ?", certType)
 	if err != nil {
 		return certs, aoserrors.Wrap(err)
 	}

@@ -100,7 +100,8 @@ func init() {
 func TestGetCertTypes(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -167,7 +168,8 @@ func TestFinishProvisioning(t *testing.T) {
 func TestSetOwner(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -208,7 +210,8 @@ func TestSetOwner(t *testing.T) {
 func TestCreateKey(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -244,7 +247,8 @@ func TestCreateKey(t *testing.T) {
 func TestApplyCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -280,7 +284,8 @@ func TestApplyCert(t *testing.T) {
 func TestGetCert(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, certHandler, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, certHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -321,7 +326,8 @@ func TestGetCert(t *testing.T) {
 func TestGetSystemInfo(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -356,7 +362,8 @@ func TestGetSystemInfo(t *testing.T) {
 func TestGetUsers(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -386,7 +393,8 @@ func TestGetUsers(t *testing.T) {
 func TestSetUsers(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -420,7 +428,8 @@ func TestRegisterService(t *testing.T) {
 		t.Fatalf("Can't create permissions handler: %s", err)
 	}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, &testCertHandler{}, permHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -471,7 +480,8 @@ func TestUnregisterService(t *testing.T) {
 		t.Fatalf("Can't create permissions handler: %s", err)
 	}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, &testCertHandler{}, permHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -515,7 +525,8 @@ func TestGetPermissions(t *testing.T) {
 		t.Fatalf("Can't create permissions handler: %s", err)
 	}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, &testCertHandler{}, permHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -570,7 +581,8 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 		t.Fatalf("Can't create permissions handler: %s", err)
 	}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, &testIdentHandler{}, &testCertHandler{}, permHandler, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, &testCertHandler{}, permHandler, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -628,7 +640,8 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 func TestUsersChanged(t *testing.T) {
 	identHandler := &testIdentHandler{usersChangedChannel: make(chan []string, 1)}
 
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL}, identHandler, &testCertHandler{}, nil, true)
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		identHandler, &testCertHandler{}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
@@ -730,7 +743,8 @@ func (handler *testCertHandler) ApplyCertificate(certType string, cert []byte) (
 	return handler.certURL, handler.err
 }
 
-func (handler *testCertHandler) GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error) {
+func (handler *testCertHandler) GetCertificate(certType string, issuer []byte, serial string) (
+	certURL, keyURL string, err error) {
 	return handler.certURL, handler.keyURL, handler.err
 }
 

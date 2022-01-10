@@ -296,9 +296,12 @@ func TestGetCertificate(t *testing.T) {
 	}
 	defer handler.Close()
 
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "1", "certURL1", "keyURL1", time.Now()})
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "2", "certURL2", "keyURL2", time.Now()})
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "3", "certURL3", "keyURL3", time.Now()})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "1", "certURL1", "keyURL1", time.Now()})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "2", "certURL2", "keyURL2", time.Now()})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{base64.StdEncoding.EncodeToString([]byte("issuer")), "3", "certURL3", "keyURL3", time.Now()})
 
 	certURL, keyURL, err := handler.GetCertificate("cert1", []byte("issuer"), "2")
 	if err != nil {
@@ -387,11 +390,16 @@ func TestSyncStorage(t *testing.T) {
 		{Issuer: "issuer7", Serial: "serial7", CertURL: "cert7", KeyURL: "key7"},
 	}
 
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer1", Serial: "serial1", CertURL: "cert1", KeyURL: "key1"})
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer2", Serial: "serial2", CertURL: "cert2", KeyURL: "key2"})
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer3", Serial: "serial3", CertURL: "cert3", KeyURL: "key3"})
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer4", Serial: "serial4", CertURL: "cert4", KeyURL: "key4"})
-	_ = storage.AddCertificate("cert1", certhandler.CertInfo{Issuer: "issuer5", Serial: "serial5", CertURL: "cert5", KeyURL: "key5"})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{Issuer: "issuer1", Serial: "serial1", CertURL: "cert1", KeyURL: "key1"})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{Issuer: "issuer2", Serial: "serial2", CertURL: "cert2", KeyURL: "key2"})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{Issuer: "issuer3", Serial: "serial3", CertURL: "cert3", KeyURL: "key3"})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{Issuer: "issuer4", Serial: "serial4", CertURL: "cert4", KeyURL: "key4"})
+	_ = storage.AddCertificate("cert1",
+		certhandler.CertInfo{Issuer: "issuer5", Serial: "serial5", CertURL: "cert5", KeyURL: "key5"})
 
 	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
@@ -469,7 +477,8 @@ func (module *testModule) CreateKey(password, algorithm string) (key crypto.Priv
 	return module.data.key, nil
 }
 
-func (module *testModule) ApplyCertificate(certs []*x509.Certificate) (certInfo certhandler.CertInfo, password string, err error) {
+func (module *testModule) ApplyCertificate(
+	certs []*x509.Certificate) (certInfo certhandler.CertInfo, password string, err error) {
 	return module.data.certInfo, "", nil
 }
 
