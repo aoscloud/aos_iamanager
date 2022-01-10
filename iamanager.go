@@ -24,6 +24,7 @@ import (
 	"aos_iamanager/iamserver"
 	"aos_iamanager/identhandler"
 	"aos_iamanager/permhandler"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -176,7 +177,7 @@ func main() {
 
 	db, err := database.New(dbFile)
 	if err != nil {
-		if err == database.ErrVersionMismatch {
+		if errors.Is(err, database.ErrVersionMismatch) {
 			log.Warning("Unsupported database version")
 			cleanup(dbFile)
 			db, err = database.New(dbFile)

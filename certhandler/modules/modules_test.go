@@ -29,6 +29,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -659,7 +660,9 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 
 	// Try RSADecrypt with bad password
 	if _, err = tpm2.RSADecrypt(tpmSimulator, handle, "bad password", encrypted, scheme, label); err != nil {
-		if sessionErr, ok := err.(tpm2.SessionError); !ok || sessionErr.Code != tpm2.RCAuthFail {
+		var sessionErr tpm2.SessionError
+
+		if !errors.As(err, &sessionErr) || sessionErr.Code != tpm2.RCAuthFail {
 			t.Fatalf("RSA decryption failed with unexpected error: %v", err)
 		}
 	}

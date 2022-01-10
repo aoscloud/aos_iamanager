@@ -203,7 +203,7 @@ func (db *Database) getVersion() (version uint64, err error) {
 
 	err = stmt.QueryRow().Scan(&version)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return version, aoserrors.Wrap(ErrNotExist)
 		}
 

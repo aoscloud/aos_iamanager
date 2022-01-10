@@ -25,6 +25,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
@@ -816,9 +817,9 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 
 	info, err := module.ctx.GetSessionInfo(module.session)
 	if err != nil {
-		pkcs11Err, ok := err.(pkcs11.Error)
+		var pkcs11Err pkcs11.Error
 
-		if !ok || uint(pkcs11Err) != pkcs11.CKR_SESSION_HANDLE_INVALID {
+		if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_SESSION_HANDLE_INVALID {
 			return 0, aoserrors.Wrap(err)
 		}
 
@@ -847,9 +848,9 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 		log.WithFields(log.Fields{"session": session, "slotID": module.slotID, "userPin": module.userPIN}).Debug("User login")
 
 		if err = module.ctx.Login(session, pkcs11.CKU_USER, module.userPIN); err != nil {
-			pkcs11Err, ok := err.(pkcs11.Error)
+			var pkcs11Err pkcs11.Error
 
-			if !ok || pkcs11Err != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
+			if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
 				return 0, aoserrors.Wrap(err)
 			}
 		}
@@ -859,9 +860,9 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 		log.WithFields(log.Fields{"session": session, "slotID": module.slotID}).Debug("User logout")
 
 		if err = module.ctx.Logout(session); err != nil {
-			pkcs11Err, ok := err.(pkcs11.Error)
+			var pkcs11Err pkcs11.Error
 
-			if !ok || pkcs11Err != pkcs11.CKR_USER_NOT_LOGGED_IN {
+			if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_USER_NOT_LOGGED_IN {
 				return 0, aoserrors.Wrap(err)
 			}
 		}
@@ -877,9 +878,9 @@ func (module *PKCS11Module) releaseSession() (err error) {
 		log.WithFields(log.Fields{"session": module.session, "slotID": module.slotID}).Debug("Close session")
 
 		if err = module.ctx.CloseSession(module.session); err != nil {
-			pkcs11Err, ok := err.(pkcs11.Error)
+			var pkcs11Err pkcs11.Error
 
-			if !ok || uint(pkcs11Err) != pkcs11.CKR_SESSION_HANDLE_INVALID {
+			if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_SESSION_HANDLE_INVALID {
 				return aoserrors.Wrap(err)
 			}
 		}
