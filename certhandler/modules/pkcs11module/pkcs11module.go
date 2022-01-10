@@ -62,6 +62,12 @@ const (
 	envLoginGID  = "CKTEEC_LOGIN_GID"
 )
 
+const (
+	loginTypeGroup  = "group"
+	loginTypeUser   = "user"
+	loginTypePublic = "public"
+)
+
 const rsaKeyLength = 2048
 
 /*******************************************************************************
@@ -640,13 +646,13 @@ func findObjectIndexByID(id string, objs []*pkcs11Object) (index int, err error)
 
 func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error) {
 	switch loginType {
-	case "public":
+	case loginTypePublic:
 		return loginType, nil
 
-	case "user":
+	case loginTypeUser:
 		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("uid=%d", uid)))), nil
 
-	case "group":
+	case loginTypeGroup:
 		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("gid=%d", gid)))), nil
 
 	default:
@@ -656,7 +662,7 @@ func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error
 
 func setTeeEnvVars(loginType string, gid uint32) (err error) {
 	switch loginType {
-	case "user", "group", "public":
+	case loginTypeUser, loginTypeGroup, loginTypePublic:
 		if os.Getenv(envLoginType) != loginType {
 			log.WithFields(log.Fields{"name": envLoginType, "value": loginType}).Debug("Set environment variable")
 
@@ -665,7 +671,7 @@ func setTeeEnvVars(loginType string, gid uint32) (err error) {
 			}
 		}
 
-		if loginType == "group" {
+		if loginType == loginTypeGroup {
 			gidStr := strconv.FormatUint(uint64(gid), 32)
 
 			log.WithFields(log.Fields{"name": envLoginGID, "value": gidStr}).Debug("Set environment variable")
