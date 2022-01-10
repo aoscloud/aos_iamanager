@@ -73,6 +73,7 @@ func New(name string) (db *Database, err error) {
 		if !os.IsNotExist(err) {
 			return db, aoserrors.Wrap(err)
 		}
+
 		if err = os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 			return db, aoserrors.Wrap(err)
 		}

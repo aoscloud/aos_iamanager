@@ -317,8 +317,10 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
-	var currentKey tpmkey.TPMKey
-	var next *list.Element
+	var (
+		currentKey tpmkey.TPMKey
+		next       *list.Element
+	)
 
 	for e := module.pendingKeys.Front(); e != nil; e = next {
 		next = e.Next()
@@ -332,6 +334,7 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 
 		if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
 			currentKey = key
+
 			module.pendingKeys.Remove(e)
 
 			break
@@ -556,6 +559,7 @@ func (module *TPMModule) flushTransientHandles() (err error) {
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
+
 	for _, value := range values {
 		handle, ok := value.(tpmutil.Handle)
 		if !ok {
