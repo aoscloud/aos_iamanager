@@ -225,6 +225,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	if err = module.ctx.Login(session, pkcs11.CKU_SO, soPIN); err != nil {
 		return aoserrors.Wrap(err)
 	}
+
 	defer func() {
 		err = aoserrors.Wrap(module.ctx.Logout(session))
 	}()
@@ -458,6 +459,7 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 		module.pendingKeys.Remove(module.pendingKeys.Front())
 	}
+
 	return privateKey, aoserrors.Wrap(err)
 }
 
@@ -469,8 +471,10 @@ func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
-	var currentKey privateKey
-	var next *list.Element
+	var (
+		currentKey privateKey
+		next       *list.Element
+	)
 
 	for e := module.pendingKeys.Front(); e != nil; e = next {
 		next = e.Next()
@@ -484,6 +488,7 @@ func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 
 		if cryptutils.CheckCertificate(x509Certs[0], key) == nil {
 			currentKey = key
+
 			module.pendingKeys.Remove(e)
 
 			break
@@ -898,11 +903,11 @@ func (module *PKCS11Module) getTokenLabel() (label string) {
 	return defaultTokenLabel
 }
 
-func (module *PKCS11Module) getSlotID() (id uint, err error) {
-	// Find our slot either by slotId or by slot index or by tokenLabel
-	// If neither one is specified try to find slot by default token label.
-	// If slot is not found, try to find first free slot.
+// Find our slot either by slotId or by slot index or by tokenLabel
+// If neither one is specified try to find slot by default token label.
+// If slot is not found, try to find first free slot.
 
+func (module *PKCS11Module) getSlotID() (id uint, err error) {
 	paramCount := 0
 
 	if module.config.SlotID != nil {
@@ -1030,6 +1035,7 @@ func (module *PKCS11Module) tokenMemInfo() (err error) {
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
+
 	log.WithFields(log.Fields{
 		"publicMemory": fmt.Sprintf(
 			"%d/%d", tokenInfo.TotalPublicMemory-tokenInfo.FreePublicMemory, tokenInfo.TotalPublicMemory),

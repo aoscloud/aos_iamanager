@@ -320,6 +320,7 @@ func getValueByPath(path string, value interface{}) (result interface{}, err err
 		if value, ok = valueMap[path]; !ok {
 			return nil, aoserrors.New("path not found")
 		}
+
 		return value, nil
 	}
 
@@ -339,6 +340,7 @@ func (instance *Instance) processSubscriptions(message []byte) (err error) {
 
 	// serve subscriptions
 	subscriptionFound := false
+
 	instance.subscribeMap.Range(func(key, value interface{}) bool {
 		if key.(string) == notification.SubscriptionID {
 			subscriptionFound = true
@@ -376,6 +378,7 @@ func (instance *Instance) updateUsers(value interface{}) (err error) {
 		if !ok {
 			return aoserrors.New("wrong users type")
 		}
+
 		instance.users[i] = item
 	}
 

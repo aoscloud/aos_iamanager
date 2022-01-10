@@ -50,6 +50,7 @@ func TestRegisterUnregisterService(t *testing.T) {
 	serviceID2 := "serviceID2"
 
 	funcServerPermissions := map[string]map[string]string{"vis": {"*": "rw", "test": "r"}}
+
 	secret1, err := permissionHandler.RegisterService(serviceID1, funcServerPermissions)
 	if err != nil || secret1 == "" {
 		t.Fatalf("Can't register service: %s", err)
