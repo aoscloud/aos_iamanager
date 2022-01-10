@@ -45,17 +45,17 @@ const (
  * Vars
  ******************************************************************************/
 
-// ErrNotExist is returned when requested entry not exist in DB
+// ErrNotExist is returned when requested entry not exist in DB.
 var ErrNotExist = errors.New("entry doesn't not exist")
 
-// ErrVersionMismatch is returned when DB has unsupported DB version
+// ErrVersionMismatch is returned when DB has unsupported DB version.
 var ErrVersionMismatch = errors.New("version mismatch")
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
-// Database structure with database information
+// Database structure with database information.
 type Database struct {
 	sql *sql.DB
 }
@@ -64,7 +64,7 @@ type Database struct {
  * Public
  ******************************************************************************/
 
-// New creates new database handle
+// New creates new database handle.
 func New(name string) (db *Database, err error) {
 	log.WithField("name", name).Debug("Open database")
 
@@ -114,7 +114,7 @@ func New(name string) (db *Database, err error) {
 	return db, nil
 }
 
-// AddCertificate adds new certificate to database
+// AddCertificate adds new certificate to database.
 func (db *Database) AddCertificate(certType string, cert certhandler.CertInfo) (err error) {
 	if _, err = db.sql.Exec("INSERT INTO certificates values(?, ?, ?, ?, ?, ?)",
 		certType, cert.Issuer, cert.Serial, cert.CertURL, cert.KeyURL, cert.NotAfter); err != nil {
@@ -124,7 +124,7 @@ func (db *Database) AddCertificate(certType string, cert certhandler.CertInfo) (
 	return nil
 }
 
-// GetCertificate returns certificate by issuer and serial
+// GetCertificate returns certificate by issuer and serial.
 func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.CertInfo, err error) {
 	rows, err := db.sql.Query(
 		"SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE issuer = ? AND serial = ?",
@@ -145,7 +145,7 @@ func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.Cert
 	return cert, aoserrors.Wrap(ErrNotExist)
 }
 
-// GetCertificates returns certificates of selected type
+// GetCertificates returns certificates of selected type.
 func (db *Database) GetCertificates(certType string) (certs []certhandler.CertInfo, err error) {
 	rows, err := db.sql.Query(
 		"SELECT issuer, serial, certURL, keyURL, notAfter FROM certificates WHERE type = ?", certType)
@@ -167,7 +167,7 @@ func (db *Database) GetCertificates(certType string) (certs []certhandler.CertIn
 	return certs, nil
 }
 
-// RemoveCertificate removes certificate from database
+// RemoveCertificate removes certificate from database.
 func (db *Database) RemoveCertificate(certType, certURL string) (err error) {
 	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ? AND certURL = ?", certType, certURL); err != nil {
 		return aoserrors.Wrap(err)
@@ -176,7 +176,7 @@ func (db *Database) RemoveCertificate(certType, certURL string) (err error) {
 	return nil
 }
 
-// RemoveAllCertificates removes all certificate from database
+// RemoveAllCertificates removes all certificate from database.
 func (db *Database) RemoveAllCertificates(certType string) (err error) {
 	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ?", certType); err != nil {
 		return aoserrors.Wrap(err)
@@ -185,7 +185,7 @@ func (db *Database) RemoveAllCertificates(certType string) (err error) {
 	return nil
 }
 
-// Close closes database
+// Close closes database.
 func (db *Database) Close() {
 	db.sql.Close()
 }

@@ -75,7 +75,7 @@ const rsaKeyLength = 2048
  * Types
  ******************************************************************************/
 
-// PKCS11Module PKCS11 certificate module
+// PKCS11Module PKCS11 certificate module.
 type PKCS11Module struct {
 	certType    string
 	config      moduleConfig
@@ -119,7 +119,7 @@ var ecsdaCurveID = elliptic.P384()
  * Public
  ******************************************************************************/
 
-// New creates ssh module instance
+// New creates ssh module instance.
 func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create PKCS11 module")
 
@@ -163,7 +163,7 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 	return pkcs11Module, nil
 }
 
-// Close closes PKCS11 module
+// Close closes PKCS11 module.
 func (module *PKCS11Module) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close PKCS11 module")
 
@@ -182,7 +182,7 @@ func (module *PKCS11Module) Close() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-// SetOwner owns slot
+// SetOwner owns slot.
 func (module *PKCS11Module) SetOwner(password string) (err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()
@@ -250,7 +250,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 	return nil
 }
 
-// Clear clears security storage
+// Clear clears security storage.
 func (module *PKCS11Module) Clear() (err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()
@@ -293,7 +293,7 @@ func (module *PKCS11Module) Clear() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
+// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys.
 func (module *PKCS11Module) ValidateCertificates() (
 	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
 	ctxMutex.Lock()
@@ -428,7 +428,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 	return validInfos, invalidCerts, invalidKeys, nil
 }
 
-// CreateKey creates key pair
+// CreateKey creates key pair.
 func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()
@@ -470,7 +470,7 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 	return privateKey, aoserrors.Wrap(err)
 }
 
-// ApplyCertificate applies certificate
+// ApplyCertificate applies certificate.
 func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 	certInfo certhandler.CertInfo, password string, err error) {
 	ctxMutex.Lock()
@@ -535,7 +535,7 @@ func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
 	return certInfo, "", nil
 }
 
-// RemoveCertificate removes certificate
+// RemoveCertificate removes certificate.
 func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()
@@ -575,7 +575,7 @@ func (module *PKCS11Module) RemoveCertificate(certURL, password string) (err err
 	return aoserrors.Wrap(err)
 }
 
-// RemoveKey removes key
+// RemoveKey removes key.
 func (module *PKCS11Module) RemoveKey(keyURL, password string) (err error) {
 	ctxMutex.Lock()
 	defer ctxMutex.Unlock()

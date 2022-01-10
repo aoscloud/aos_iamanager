@@ -40,14 +40,14 @@ var plugins = make(map[string]NewPlugin)
  * Types
  ******************************************************************************/
 
-// Handler identification handler
+// Handler identification handler.
 type Handler struct {
 	sync.Mutex
 
 	module IdentModule
 }
 
-// IdentModule identification module interface
+// IdentModule identification module interface.
 type IdentModule interface {
 	GetSystemID() (systemdID string, err error)
 	GetBoardModel() (boardModel string, err error)
@@ -57,21 +57,21 @@ type IdentModule interface {
 	Close() (err error)
 }
 
-// NewPlugin plugin new function
+// NewPlugin plugin new function.
 type NewPlugin func(configJSON json.RawMessage) (module IdentModule, err error)
 
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
-// RegisterPlugin registers module plugin
+// RegisterPlugin registers module plugin.
 func RegisterPlugin(plugin string, newFunc NewPlugin) {
 	log.WithField("plugin", plugin).Info("Register identification plugin")
 
 	plugins[plugin] = newFunc
 }
 
-// New returns pointer to new Handler
+// New returns pointer to new Handler.
 func New(cfg *config.Config) (handler *Handler, err error) {
 	handler = &Handler{}
 
@@ -89,14 +89,14 @@ func New(cfg *config.Config) (handler *Handler, err error) {
 	return handler, nil
 }
 
-// Close closes identification handler
+// Close closes identification handler.
 func (handler *Handler) Close() {
 	log.Debug("Close identification handler")
 
 	handler.module.Close()
 }
 
-// GetSystemID return system ID
+// GetSystemID return system ID.
 func (handler *Handler) GetSystemID() (systemdID string, err error) {
 	if systemdID, err = handler.module.GetSystemID(); err != nil {
 		return "", aoserrors.Wrap(err)
@@ -105,7 +105,7 @@ func (handler *Handler) GetSystemID() (systemdID string, err error) {
 	return systemdID, nil
 }
 
-// GetBoardModel return board model
+// GetBoardModel return board model.
 func (handler *Handler) GetBoardModel() (boardModel string, err error) {
 	if boardModel, err = handler.module.GetBoardModel(); err != nil {
 		return "", aoserrors.Wrap(err)
@@ -114,7 +114,7 @@ func (handler *Handler) GetBoardModel() (boardModel string, err error) {
 	return boardModel, nil
 }
 
-// GetUsers returns current users
+// GetUsers returns current users.
 func (handler *Handler) GetUsers() (users []string, err error) {
 	if users, err = handler.module.GetUsers(); err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -123,12 +123,12 @@ func (handler *Handler) GetUsers() (users []string, err error) {
 	return users, nil
 }
 
-// SetUsers set current users
+// SetUsers set current users.
 func (handler *Handler) SetUsers(users []string) (err error) {
 	return aoserrors.Wrap(handler.module.SetUsers(users))
 }
 
-// UsersChangedChannel returns users changed channel
+// UsersChangedChannel returns users changed channel.
 func (handler *Handler) UsersChangedChannel() (channel <-chan []string) {
 	return handler.module.UsersChangedChannel()
 }

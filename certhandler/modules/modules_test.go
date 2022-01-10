@@ -577,7 +577,7 @@ func TestSetOwnerClear(t *testing.T) {
 	}
 }
 
-// Test for TPM only
+// Test for TPM only.
 func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 	password := passwordStr
 
@@ -612,7 +612,7 @@ func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 	}
 }
 
-// Test for TPM only
+// Test for TPM only.
 func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	password := passwordStr
 	pcrSelection7 := tpm2.PCRSelection{Hash: tpm2.AlgSHA1, PCRs: []int{7}}

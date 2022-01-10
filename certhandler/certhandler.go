@@ -65,7 +65,7 @@ var plugins = make(map[string]NewPlugin)
  * Types
  ******************************************************************************/
 
-// Handler update handler
+// Handler update handler.
 type Handler struct {
 	sync.Mutex
 
@@ -74,7 +74,7 @@ type Handler struct {
 	moduleDescriptors map[string]moduleDescriptor
 }
 
-// CertInfo certificate info
+// CertInfo certificate info.
 type CertInfo struct {
 	Issuer   string
 	Serial   string
@@ -83,7 +83,7 @@ type CertInfo struct {
 	NotAfter time.Time
 }
 
-// CertStorage provides API to store/retreive certificates info
+// CertStorage provides API to store/retrieve certificates info.
 type CertStorage interface {
 	AddCertificate(certType string, cert CertInfo) (err error)
 	GetCertificate(issuer, serial string) (cert CertInfo, err error)
@@ -92,7 +92,7 @@ type CertStorage interface {
 	RemoveAllCertificates(certType string) (err error)
 }
 
-// CertModule provides API to manage module certificates
+// CertModule provides API to manage module certificates.
 type CertModule interface {
 	ValidateCertificates() (validInfos []CertInfo, invalidCerts, invalidKeys []string, err error)
 	SetOwner(password string) (err error)
@@ -104,7 +104,7 @@ type CertModule interface {
 	Close() (err error)
 }
 
-// NewPlugin plugin new function
+// NewPlugin plugin new function.
 type NewPlugin func(certType string, configJSON json.RawMessage) (module CertModule, err error)
 
 type moduleDescriptor struct {
@@ -118,14 +118,14 @@ type moduleDescriptor struct {
  * Public
  ******************************************************************************/
 
-// RegisterPlugin registers module plugin
+// RegisterPlugin registers module plugin.
 func RegisterPlugin(plugin string, newFunc NewPlugin) {
 	log.WithField("plugin", plugin).Info("Register certificate plugin")
 
 	plugins[plugin] = newFunc
 }
 
-// New returns pointer to new Handler
+// New returns pointer to new Handler.
 func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
 	handler = &Handler{systemID: systemID, moduleDescriptors: make(map[string]moduleDescriptor), storage: storage}
 
@@ -153,7 +153,7 @@ func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Han
 	return handler, nil
 }
 
-// GetCertTypes returns IAM cert types
+// GetCertTypes returns IAM cert types.
 func (handler *Handler) GetCertTypes() (certTypes []string) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -167,7 +167,7 @@ func (handler *Handler) GetCertTypes() (certTypes []string) {
 	return certTypes
 }
 
-// SetOwner owns security storage
+// SetOwner owns security storage.
 func (handler *Handler) SetOwner(certType, password string) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -180,7 +180,7 @@ func (handler *Handler) SetOwner(certType, password string) (err error) {
 	return aoserrors.Wrap(descriptor.module.SetOwner(password))
 }
 
-// Clear clears security storage
+// Clear clears security storage.
 func (handler *Handler) Clear(certType string) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -197,7 +197,7 @@ func (handler *Handler) Clear(certType string) (err error) {
 	return aoserrors.Wrap(handler.storage.RemoveAllCertificates(certType))
 }
 
-// CreateKey creates key pair
+// CreateKey creates key pair.
 func (handler *Handler) CreateKey(certType, password string) (csr []byte, err error) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -221,7 +221,7 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 	return csrData, nil
 }
 
-// ApplyCertificate applies certificate
+// ApplyCertificate applies certificate.
 func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -290,7 +290,7 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 	return certURL, nil
 }
 
-// GetCertificate returns certificate info
+// GetCertificate returns certificate info.
 func (handler *Handler) GetCertificate(
 	certType string, issuer []byte, serial string) (certURL, keyURL string, err error) {
 	handler.Lock()
@@ -373,7 +373,7 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 	return nil
 }
 
-// Close closes certificate handler
+// Close closes certificate handler.
 func (handler *Handler) Close() {
 	log.Debug("Close certificate handler")
 

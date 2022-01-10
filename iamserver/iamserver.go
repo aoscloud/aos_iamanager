@@ -38,6 +38,7 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
+
 const discEncryptyonType = "diskencryption"
 
 /*******************************************************************************
@@ -48,7 +49,7 @@ const discEncryptyonType = "diskencryption"
  * Types
  ******************************************************************************/
 
-// Server IAM server instance
+// Server IAM server instance.
 type Server struct {
 	sync.Mutex
 
@@ -68,7 +69,7 @@ type Server struct {
 	pb.UnimplementedIAMPublicServiceServer
 }
 
-// CertHandler interface
+// CertHandler interface.
 type CertHandler interface {
 	GetCertTypes() (certTypes []string)
 	SetOwner(certType, password string) (err error)
@@ -79,7 +80,7 @@ type CertHandler interface {
 	CreateSelfSignedCert(certType, password string) (err error)
 }
 
-// IdentHandler interface
+// IdentHandler interface.
 type IdentHandler interface {
 	GetSystemID() (systemdID string, err error)
 	GetBoardModel() (boardModel string, err error)
@@ -88,7 +89,7 @@ type IdentHandler interface {
 	UsersChangedChannel() (channel <-chan []string)
 }
 
-// PermissionHandler interface
+// PermissionHandler interface.
 type PermissionHandler interface {
 	RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error)
 	UnregisterService(serviceID string)
@@ -99,7 +100,7 @@ type PermissionHandler interface {
  * Public
  ******************************************************************************/
 
-// New creates new IAM server instance
+// New creates new IAM server instance.
 func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 	permissionHandler PermissionHandler, insecure bool) (server *Server, err error) {
 	server = &Server{
@@ -130,7 +131,7 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 	return server, nil
 }
 
-// Close closes IAM server instance
+// Close closes IAM server instance.
 func (server *Server) Close() (err error) {
 	if errCloseServerProtected := server.closeServerProtected(); errCloseServerProtected != nil {
 		if err == nil {
@@ -147,7 +148,7 @@ func (server *Server) Close() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-// GetCertTypes return all IAM cert types
+// GetCertTypes return all IAM cert types.
 func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (rsp *pb.CertTypes, err error) {
 	rsp = &pb.CertTypes{Types: server.certHandler.GetCertTypes()}
 
@@ -156,7 +157,7 @@ func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (r
 	return rsp, nil
 }
 
-// FinishProvisioning notifies IAM that provisioning is finished
+// FinishProvisioning notifies IAM that provisioning is finished.
 func (server *Server) FinishProvisioning(context context.Context, req *empty.Empty) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
@@ -171,7 +172,7 @@ func (server *Server) FinishProvisioning(context context.Context, req *empty.Emp
 	return rsp, nil
 }
 
-// SetOwner makes IAM owner of secure storage
+// SetOwner makes IAM owner of secure storage.
 func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
@@ -186,7 +187,7 @@ func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest)
 	return rsp, nil
 }
 
-// Clear clears certificates and keys storages
+// Clear clears certificates and keys storages.
 func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
@@ -201,7 +202,7 @@ func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp 
 	return rsp, nil
 }
 
-// CreateKey creates private key
+// CreateKey creates private key.
 func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (
 	rsp *pb.CreateKeyResponse, err error) {
 	rsp = &pb.CreateKeyResponse{Type: req.Type}
@@ -220,7 +221,7 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 	return rsp, nil
 }
 
-// ApplyCert applies certificate
+// ApplyCert applies certificate.
 func (server *Server) ApplyCert(
 	context context.Context, req *pb.ApplyCertRequest) (rsp *pb.ApplyCertResponse, err error) {
 	rsp = &pb.ApplyCertResponse{Type: req.Type}
@@ -236,7 +237,7 @@ func (server *Server) ApplyCert(
 	return rsp, nil
 }
 
-// GetCert returns certificate URI by issuer
+// GetCert returns certificate URI by issuer.
 func (server *Server) GetCert(context context.Context, req *pb.GetCertRequest) (rsp *pb.GetCertResponse, err error) {
 	rsp = &pb.GetCertResponse{Type: req.Type}
 
@@ -255,7 +256,7 @@ func (server *Server) GetCert(context context.Context, req *pb.GetCertRequest) (
 	return rsp, nil
 }
 
-// GetSystemInfo returns system information
+// GetSystemInfo returns system information.
 func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (rsp *pb.SystemInfo, err error) {
 	rsp = &pb.SystemInfo{}
 
@@ -276,7 +277,7 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 	return rsp, nil
 }
 
-// GetUsers returns users
+// GetUsers returns users.
 func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *pb.Users, err error) {
 	rsp = &pb.Users{}
 
@@ -291,7 +292,7 @@ func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *
 	return rsp, nil
 }
 
-// SetUsers sets users
+// SetUsers sets users.
 func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
@@ -306,7 +307,7 @@ func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *emp
 	return rsp, nil
 }
 
-// SubscribeUsersChanged creates stream for users changed notifications
+// SubscribeUsersChanged creates stream for users changed notifications.
 func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 	stream pb.IAMPublicService_SubscribeUsersChangedServer) (err error) {
 	server.streamsWg.Add(1)
@@ -342,7 +343,7 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 	return nil
 }
 
-// RegisterService registers new service and creates secret
+// RegisterService registers new service and creates secret.
 func (server *Server) RegisterService(
 	ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
 	rsp = &pb.RegisterServiceResponse{}
@@ -366,7 +367,7 @@ func (server *Server) RegisterService(
 	return rsp, nil
 }
 
-// UnregisterService unregisters service
+// UnregisterService unregisters service.
 func (server *Server) UnregisterService(
 	ctx context.Context, req *pb.UnregisterServiceRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
@@ -378,7 +379,7 @@ func (server *Server) UnregisterService(
 	return rsp, nil
 }
 
-// GetPermissions returns permissions by secret and functional server ID
+// GetPermissions returns permissions by secret and functional server ID.
 func (server *Server) GetPermissions(
 	ctx context.Context, req *pb.PermissionsRequest) (rsp *pb.PermissionsResponse, err error) {
 	rsp = &pb.PermissionsResponse{}
@@ -398,7 +399,7 @@ func (server *Server) GetPermissions(
 	return rsp, nil
 }
 
-// EncryptDisk perform disk encryption
+// EncryptDisk perform disk encryption.
 func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 

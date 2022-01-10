@@ -58,7 +58,7 @@ const (
  * Types
  ******************************************************************************/
 
-// TPMModule TPM certificate module
+// TPMModule TPM certificate module.
 type TPMModule struct {
 	certType      string
 	config        moduleConfig
@@ -80,7 +80,7 @@ type moduleConfig struct {
  * Public
  ******************************************************************************/
 
-// New creates ssh module instance
+// New creates ssh module instance.
 func New(certType string, configJSON json.RawMessage,
 	device io.ReadWriteCloser) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create TPM module")
@@ -116,7 +116,7 @@ func New(certType string, configJSON json.RawMessage,
 	return tpmModule, nil
 }
 
-// Close closes TPM module
+// Close closes TPM module.
 func (module *TPMModule) Close() (err error) {
 	log.WithField("certType", module.certType).Info("Close TPM module")
 
@@ -139,7 +139,7 @@ func (module *TPMModule) Close() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys
+// ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys.
 func (module *TPMModule) ValidateCertificates() (
 	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
@@ -234,7 +234,7 @@ func (module *TPMModule) ValidateCertificates() (
 	return validInfos, invalidCerts, invalidKeys, nil
 }
 
-// SetOwner owns security storage
+// SetOwner owns security storage.
 func (module *TPMModule) SetOwner(password string) (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Set owner")
 
@@ -270,7 +270,7 @@ func (module *TPMModule) SetOwner(password string) (err error) {
 	return nil
 }
 
-// Clear clears security storage
+// Clear clears security storage.
 func (module *TPMModule) Clear() (err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Clear")
 
@@ -292,7 +292,7 @@ func (module *TPMModule) Clear() (err error) {
 	return nil
 }
 
-// CreateKey creates key pair
+// CreateKey creates key pair.
 func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.PrivateKey, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Create key")
 
@@ -312,7 +312,7 @@ func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.Priva
 	return newKey, nil
 }
 
-// ApplyCertificate applies certificate
+// ApplyCertificate applies certificate.
 func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	certInfo certhandler.CertInfo, password string, err error) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
@@ -379,7 +379,7 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	return certInfo, currentKey.Password(), nil
 }
 
-// RemoveCertificate removes certificate
+// RemoveCertificate removes certificate.
 func (module *TPMModule) RemoveCertificate(certURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
@@ -398,7 +398,7 @@ func (module *TPMModule) RemoveCertificate(certURL, password string) (err error)
 	return nil
 }
 
-// RemoveKey removes key
+// RemoveKey removes key.
 func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
 	log.WithFields(log.Fields{
 		"certType": module.certType,
