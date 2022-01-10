@@ -18,6 +18,7 @@
 package iamserver
 
 import (
+	"aos_iamanager/config"
 	"context"
 	"encoding/base64"
 	"net"
@@ -31,8 +32,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"aos_iamanager/config"
 )
 
 /*******************************************************************************
@@ -107,7 +106,8 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		permissionHandler:         permissionHandler,
 		closeChannel:              make(chan struct{}, 1),
 		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs,
-		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs}
+		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs,
+	}
 
 	defer func() {
 		if err != nil {
@@ -238,7 +238,8 @@ func (server *Server) GetCert(context context.Context, req *pb.GetCertRequest) (
 	log.WithFields(log.Fields{
 		"type":   req.Type,
 		"serial": req.Serial,
-		"issuer": base64.StdEncoding.EncodeToString(req.Issuer)}).Debug("Process get cert request")
+		"issuer": base64.StdEncoding.EncodeToString(req.Issuer),
+	}).Debug("Process get cert request")
 
 	if rsp.CertUrl, rsp.KeyUrl, err = server.certHandler.GetCertificate(req.Type, req.Issuer, req.Serial); err != nil {
 		log.Errorf("Get certificate error: %s", err)

@@ -18,6 +18,8 @@
 package visidentifier_test
 
 import (
+	"aos_iamanager/identhandler"
+	"aos_iamanager/identhandler/modules/visidentifier"
 	"encoding/json"
 	"io/ioutil"
 	"net/url"
@@ -33,9 +35,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/identhandler"
-	"aos_iamanager/identhandler/modules/visidentifier"
 )
 
 /*******************************************************************************
@@ -57,8 +56,10 @@ type clientHandler struct {
  * Vars
  ******************************************************************************/
 
-var vis identhandler.IdentModule
-var server *wsserver.Server
+var (
+	vis    identhandler.IdentModule
+	server *wsserver.Server
+)
 
 var testHandler = &clientHandler{}
 
@@ -72,7 +73,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -181,11 +183,11 @@ QRUogt5UZOrxFviUMF3wtG/D7hOlq0AFdxsstV7BGdOrlZEvdCKZ1/U8Ybl/Q5PV
 IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 -----END RSA PRIVATE KEY-----`
 
-	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0644); err != nil {
+	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0o644); err != nil {
 		return err
 	}
 
-	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0644); err != nil {
+	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0o644); err != nil {
 		return err
 	}
 
@@ -328,7 +330,8 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 
 		rsp = &visprotocol.SubscribeResponse{
 			MessageHeader:  header,
-			SubscriptionID: handler.subscriptionID}
+			SubscriptionID: handler.subscriptionID,
+		}
 
 	case visprotocol.ActionUnsubscribe:
 		var unsubscribeReq visprotocol.UnsubscribeRequest
@@ -360,7 +363,8 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 		var getReq visprotocol.GetRequest
 
 		getRsp := visprotocol.GetResponse{
-			MessageHeader: header}
+			MessageHeader: header,
+		}
 
 		if err = json.Unmarshal(message, &getReq); err != nil {
 			return nil, err
@@ -383,7 +387,8 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 		var setReq visprotocol.SetRequest
 
 		setRsp := visprotocol.SetResponse{
-			MessageHeader: header}
+			MessageHeader: header,
+		}
 
 		rsp = &setRsp
 
@@ -410,7 +415,8 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 					message, err := json.Marshal(&visprotocol.SubscriptionNotification{
 						Action:         "subscription",
 						SubscriptionID: handler.subscriptionID,
-						Value:          map[string][]string{"Attribute.Vehicle.UserIdentification.Users": handler.users}})
+						Value:          map[string][]string{"Attribute.Vehicle.UserIdentification.Users": handler.users},
+					})
 					if err != nil {
 						log.Errorf("Error marshal request: %s", err)
 					}
@@ -438,9 +444,7 @@ func (handler *clientHandler) ProcessMessage(client *wsserver.Client, messageTyp
 }
 
 func (handler *clientHandler) ClientConnected(client *wsserver.Client) {
-
 }
 
 func (handler *clientHandler) ClientDisconnected(client *wsserver.Client) {
-
 }

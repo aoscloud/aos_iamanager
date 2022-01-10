@@ -279,7 +279,8 @@ func (key *pkcs11PrivateKey) moveToToken() (err error) {
 	log.WithFields(log.Fields{
 		"session":   key.session,
 		"handle":    key.publicKeyHandle,
-		"newHandle": newPublicHandle}).Debug("Copy public key to token")
+		"newHandle": newPublicHandle,
+	}).Debug("Copy public key to token")
 
 	newPrivateHandle, err := key.ctx.CopyObject(key.session, key.handle, template)
 	if err != nil {
@@ -289,7 +290,8 @@ func (key *pkcs11PrivateKey) moveToToken() (err error) {
 	log.WithFields(log.Fields{
 		"session":   key.session,
 		"handle":    key.handle,
-		"newHandle": newPrivateHandle}).Debug("Copy private key to token")
+		"newHandle": newPrivateHandle,
+	}).Debug("Copy private key to token")
 
 	if err = key.delete(); err != nil {
 		return aoserrors.Wrap(err)
@@ -311,8 +313,8 @@ func (key *pkcs11PrivateKeyRSA) loadPublicKey() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	var modulus = new(big.Int).SetBytes(attributes[0].Value)
-	var exponent = new(big.Int).SetBytes(attributes[1].Value)
+	modulus := new(big.Int).SetBytes(attributes[0].Value)
+	exponent := new(big.Int).SetBytes(attributes[1].Value)
 
 	if exponent.BitLen() > 32 || exponent.Sign() < 1 || int(exponent.Uint64()) < 2 {
 		return aoserrors.New("invalid RSA public key")
@@ -385,7 +387,8 @@ func createRSAKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 		"id":            id,
 		"label":         label,
 		"publicHandle":  publicHandle,
-		"privateHandle": privateHandle}).Debug("Generate RSA key")
+		"privateHandle": privateHandle,
+	}).Debug("Generate RSA key")
 
 	rsaKey := &pkcs11PrivateKeyRSA{
 		pkcs11PrivateKey: pkcs11PrivateKey{
@@ -445,7 +448,8 @@ func createECCKey(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 		"id":            id,
 		"label":         label,
 		"publicHandle":  publicHandle,
-		"privateHandle": privateHandle}).Debug("Generate ECC key")
+		"privateHandle": privateHandle,
+	}).Debug("Generate ECC key")
 
 	eccKey := &pkcs11PrivateKeyECC{
 		pkcs11PrivateKey: pkcs11PrivateKey{

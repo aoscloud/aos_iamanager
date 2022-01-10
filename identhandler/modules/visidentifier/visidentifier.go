@@ -18,8 +18,8 @@
 package visidentifier
 
 import (
+	"aos_iamanager/identhandler"
 	"encoding/json"
-
 	"sync"
 	"time"
 
@@ -27,8 +27,6 @@ import (
 	"github.com/aoscloud/aos_common/visprotocol"
 	"github.com/aoscloud/aos_common/wsclient"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/identhandler"
 )
 
 /*******************************************************************************
@@ -116,7 +114,8 @@ func (instance *Instance) Close() (err error) {
 	req := visprotocol.UnsubscribeAllRequest{
 		MessageHeader: visprotocol.MessageHeader{
 			Action:    visprotocol.ActionUnsubscribeAll,
-			RequestID: wsclient.GenerateRequestID()},
+			RequestID: wsclient.GenerateRequestID(),
+		},
 	}
 
 	var rsp visprotocol.UnsubscribeAllResponse
@@ -143,8 +142,10 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	req := visprotocol.GetRequest{
 		MessageHeader: visprotocol.MessageHeader{
 			Action:    visprotocol.ActionGet,
-			RequestID: wsclient.GenerateRequestID()},
-		Path: vinVISPath}
+			RequestID: wsclient.GenerateRequestID(),
+		},
+		Path: vinVISPath,
+	}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
 		return "", aoserrors.Wrap(err)
@@ -174,8 +175,10 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	req := visprotocol.GetRequest{
 		MessageHeader: visprotocol.MessageHeader{
 			Action:    visprotocol.ActionGet,
-			RequestID: wsclient.GenerateRequestID()},
-		Path: boardModelPath}
+			RequestID: wsclient.GenerateRequestID(),
+		},
+		Path: boardModelPath,
+	}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
 		return "", aoserrors.Wrap(err)
@@ -206,8 +209,10 @@ func (instance *Instance) GetUsers() (users []string, err error) {
 		req := visprotocol.GetRequest{
 			MessageHeader: visprotocol.MessageHeader{
 				Action:    visprotocol.ActionGet,
-				RequestID: wsclient.GenerateRequestID()},
-			Path: usersVISPath}
+				RequestID: wsclient.GenerateRequestID(),
+			},
+			Path: usersVISPath,
+		}
 
 		if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
 			return nil, aoserrors.Wrap(err)
@@ -232,7 +237,8 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	req := visprotocol.SetRequest{
 		MessageHeader: visprotocol.MessageHeader{
 			Action:    visprotocol.ActionSet,
-			RequestID: wsclient.GenerateRequestID()},
+			RequestID: wsclient.GenerateRequestID(),
+		},
 		Path:  usersVISPath,
 		Value: users,
 	}
@@ -395,8 +401,10 @@ func (instance *Instance) subscribe(path string, callback func(value interface{}
 	req := visprotocol.SubscribeRequest{
 		MessageHeader: visprotocol.MessageHeader{
 			Action:    visprotocol.ActionSubscribe,
-			RequestID: wsclient.GenerateRequestID()},
-		Path: path}
+			RequestID: wsclient.GenerateRequestID(),
+		},
+		Path: path,
+	}
 
 	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
 		return aoserrors.Wrap(err)

@@ -18,13 +18,12 @@
 package identhandler
 
 import (
+	"aos_iamanager/config"
 	"encoding/json"
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/config"
 )
 
 /*******************************************************************************

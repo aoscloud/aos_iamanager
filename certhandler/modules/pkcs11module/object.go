@@ -53,7 +53,8 @@ func (object *pkcs11Object) delete() (err error) {
 	log.WithFields(log.Fields{
 		"session": object.session,
 		"handle":  object.handle,
-		"id":      object.id}).Debug("Delete object")
+		"id":      object.id,
+	}).Debug("Delete object")
 
 	if err = object.ctx.DestroyObject(object.session, object.handle); err != nil {
 		return aoserrors.Wrap(err)
@@ -88,7 +89,8 @@ func findObjects(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 
 		for _, handle := range handles {
 			attributes, err := ctx.GetAttributeValue(session, handle, []*pkcs11.Attribute{
-				pkcs11.NewAttribute(pkcs11.CKA_ID, nil), pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil)})
+				pkcs11.NewAttribute(pkcs11.CKA_ID, nil), pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
+			})
 			if err != nil {
 				return nil, aoserrors.Wrap(err)
 			}

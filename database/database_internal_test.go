@@ -18,6 +18,7 @@
 package database
 
 import (
+	"aos_iamanager/certhandler"
 	"io/ioutil"
 	"os"
 	"path"
@@ -27,8 +28,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-
-	"aos_iamanager/certhandler"
 )
 
 /*******************************************************************************
@@ -96,8 +95,8 @@ func TestNewErrors(t *testing.T) {
 		t.Fatal("expecting error with no access rights")
 	}
 
-	//Trying to create test.db with no access rights
-	//Check fail of the createConfigTable
+	// Trying to create test.db with no access rights
+	// Check fail of the createConfigTable
 	db, err = New("/sys/test.db")
 	if err == nil {
 		db.Close()
@@ -119,16 +118,27 @@ func TestAddRemoveCertificate(t *testing.T) {
 	}
 
 	data := []testData{
-		{certType: "online", cert: certhandler.CertInfo{Issuer: "issuer0", Serial: "s0",
-			CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC()}, errorExpected: false},
-		{certType: "online", cert: certhandler.CertInfo{Issuer: "issuer0", Serial: "s0",
-			CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC()}, errorExpected: true},
-		{certType: "online", cert: certhandler.CertInfo{Issuer: "issuer1", Serial: "s0",
-			CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC()}, errorExpected: false},
-		{certType: "online", cert: certhandler.CertInfo{Issuer: "issuer1", Serial: "s0",
-			CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC()}, errorExpected: true},
-		{certType: "online", cert: certhandler.CertInfo{Issuer: "issuer2", Serial: "s0",
-			CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC()}, errorExpected: false}}
+		{certType: "online", cert: certhandler.CertInfo{
+			Issuer: "issuer0", Serial: "s0",
+			CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+		{certType: "online", cert: certhandler.CertInfo{
+			Issuer: "issuer0", Serial: "s0",
+			CertURL: "certURL0", KeyURL: "keyURL0", NotAfter: time.Now().UTC(),
+		}, errorExpected: true},
+		{certType: "online", cert: certhandler.CertInfo{
+			Issuer: "issuer1", Serial: "s0",
+			CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+		{certType: "online", cert: certhandler.CertInfo{
+			Issuer: "issuer1", Serial: "s0",
+			CertURL: "certURL1", KeyURL: "keyURL1", NotAfter: time.Now().UTC(),
+		}, errorExpected: true},
+		{certType: "online", cert: certhandler.CertInfo{
+			Issuer: "issuer2", Serial: "s0",
+			CertURL: "certURL2", KeyURL: "keyURL2", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+	}
 
 	// Add certificates
 
@@ -236,16 +246,27 @@ func TestRemoveAllCertificates(t *testing.T) {
 	}
 
 	data := []testData{
-		{certType: "remove", cert: certhandler.CertInfo{Issuer: "issuerR", Serial: "s0", CertURL: "certURL0",
-			KeyURL: "keyURL0", NotAfter: time.Now().UTC()}, errorExpected: false},
-		{certType: "remove", cert: certhandler.CertInfo{Issuer: "issuerR", Serial: "s1", CertURL: "certURL1",
-			KeyURL: "keyURL1", NotAfter: time.Now().UTC()}, errorExpected: false},
-		{certType: "remove", cert: certhandler.CertInfo{Issuer: "issuerR", Serial: "s2", CertURL: "certURL2",
-			KeyURL: "keyURL2", NotAfter: time.Now().UTC()}, errorExpected: false},
-		{certType: "remove", cert: certhandler.CertInfo{Issuer: "issuerR", Serial: "s3", CertURL: "certURL3",
-			KeyURL: "keyURL3", NotAfter: time.Now().UTC()}, errorExpected: false},
-		{certType: "remove", cert: certhandler.CertInfo{Issuer: "issuerR", Serial: "s4", CertURL: "certURL4",
-			KeyURL: "keyURL4", NotAfter: time.Now().UTC()}, errorExpected: false}}
+		{certType: "remove", cert: certhandler.CertInfo{
+			Issuer: "issuerR", Serial: "s0", CertURL: "certURL0",
+			KeyURL: "keyURL0", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{
+			Issuer: "issuerR", Serial: "s1", CertURL: "certURL1",
+			KeyURL: "keyURL1", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{
+			Issuer: "issuerR", Serial: "s2", CertURL: "certURL2",
+			KeyURL: "keyURL2", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{
+			Issuer: "issuerR", Serial: "s3", CertURL: "certURL3",
+			KeyURL: "keyURL3", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+		{certType: "remove", cert: certhandler.CertInfo{
+			Issuer: "issuerR", Serial: "s4", CertURL: "certURL4",
+			KeyURL: "keyURL4", NotAfter: time.Now().UTC(),
+		}, errorExpected: false},
+	}
 
 	// Add certificates
 
