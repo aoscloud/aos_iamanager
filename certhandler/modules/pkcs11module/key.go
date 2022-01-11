@@ -66,7 +66,7 @@ type privateKey interface {
  * Vars
  ******************************************************************************/
 
-var pkcs1Prefix = map[crypto.Hash][]byte{
+var pkcs1Prefix = map[crypto.Hash][]byte{ // nolint:gochecknoglobals // use as constant
 	crypto.SHA1: {
 		0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14,
 	},
@@ -84,7 +84,7 @@ var pkcs1Prefix = map[crypto.Hash][]byte{
 	},
 }
 
-var curvesMap = map[elliptic.Curve][]byte{
+var curvesMap = map[elliptic.Curve][]byte{ // nolint:gochecknoglobals // use as constant
 	elliptic.P224(): mustMarshalASN1(asn1.ObjectIdentifier{1, 3, 132, 0, 33}),
 	elliptic.P256(): mustMarshalASN1(asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}),
 	elliptic.P384(): mustMarshalASN1(asn1.ObjectIdentifier{1, 3, 132, 0, 34}),
