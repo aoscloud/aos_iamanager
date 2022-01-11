@@ -147,12 +147,9 @@ func (module *SWModule) ValidateCertificates() (
 			continue
 		}
 
-		key, err := cryptutils.LoadKey(absItemPath)
-		if err != nil {
-			continue
+		if key, err := cryptutils.LoadKey(absItemPath); err == nil {
+			keyMap[absItemPath] = key
 		}
-
-		keyMap[absItemPath] = key
 	}
 
 	for _, item := range content {
@@ -211,12 +208,11 @@ func (module *SWModule) ValidateCertificates() (
 	}
 
 	for _, info := range validInfos {
-		key, err := url.Parse(info.KeyURL)
-		if err != nil {
+		if key, err := url.Parse(info.KeyURL); err != nil {
 			return nil, nil, nil, aoserrors.Wrap(err)
+		} else {
+			delete(keyMap, key.Path)
 		}
-
-		delete(keyMap, key.Path)
 	}
 
 	for keyFilePath := range keyMap {

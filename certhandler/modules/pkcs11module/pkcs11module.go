@@ -303,13 +303,8 @@ func (module *PKCS11Module) ValidateCertificates() (
 
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
-	owned, err := module.isOwned()
-	if err != nil {
+	if owned, err := module.isOwned(); err != nil || !owned {
 		return nil, nil, nil, aoserrors.Wrap(err)
-	}
-
-	if !owned {
-		return nil, nil, nil, nil
 	}
 
 	session, err := module.getSession(true)
@@ -348,77 +343,28 @@ func (module *PKCS11Module) ValidateCertificates() (
 	}
 
 	// find valid private key + public key + certificate with same ID
-
-	k := 0
-
-	for i, privKeyObj := range privKeyObjs {
-		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Private key found")
-
-		pubKeyIndex, err := findObjectIndexByID(privKeyObj.id, pubKeyObjs)
-		if err != nil {
-			continue
-		}
-
-		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Public key found")
-
-		certIndex, err := findObjectIndexByID(privKeyObj.id, certObjs)
-		if err != nil {
-			continue
-		}
-
-		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Certificate found")
-
-		cert := &pkcs11Certificate{pkcs11Object: *certObjs[certIndex]}
-
-		x509Cert, err := cert.getX509Certificate()
-		if err != nil {
-			log.WithFields(log.Fields{"id": cert.id}).Errorf("Can't get x509 certificate: %s", err)
-
-			continue
-		}
-
-		validInfos = append(validInfos, certhandler.CertInfo{
-			Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
-			Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
-			NotAfter: x509Cert.NotAfter,
-			CertURL:  module.createURL(module.certType, certObjs[certIndex].id),
-			KeyURL:   module.createURL(module.certType, privKeyObj.id),
-		})
-
-		privKeyObjs[i], privKeyObjs[k] = privKeyObjs[k], privKeyObj
-		k++
-
-		certObjs = append(certObjs[:certIndex], certObjs[certIndex+1:]...)
-		pubKeyObjs = append(pubKeyObjs[:pubKeyIndex], pubKeyObjs[pubKeyIndex+1:]...)
-	}
-
-	privKeyObjs = privKeyObjs[k:]
+	validInfos = module.getValidInfo(&privKeyObjs, &pubKeyObjs, &certObjs)
 
 	// Fill remaining objects as invalid
+	invalidKeys = append(invalidKeys, module.getInvaidPkcsURLs(privKeyObjs, "Invalid private key")...)
 
-	for _, privKeyObj := range privKeyObjs {
-		log.WithFields(log.Fields{"id": privKeyObj.id}).Warn("Invalid private key")
+	invalidKeys = append(invalidKeys, module.getInvaidPkcsURLs(pubKeyObjs, "Invalid public key")...)
 
-		invalidKeys = append(invalidKeys, module.createURL(module.certType, privKeyObj.id))
-	}
+	invalidCerts = append(invalidCerts, module.getInvaidPkcsURLs(certObjs, "Invalid certificate")...)
 
-	for _, pubKeyObj := range pubKeyObjs {
-		log.WithFields(log.Fields{"id": pubKeyObj.id}).Warn("Invalid public key")
-
-		invalidKeys = append(invalidKeys, module.createURL(module.certType, pubKeyObj.id))
-	}
-
-	for _, certObj := range certObjs {
-		log.WithFields(log.Fields{"id": certObj.id}).Warn("Invalid certificate")
-
-		invalidCerts = append(invalidCerts, module.createURL(module.certType, certObj.id))
-	}
-
-	// Check certificate chains
-
-	invalidChainCerts, err := checkCertificateChain(module.ctx, session)
+	invlidChains, err := module.getIvalidCertChainURLs(session)
 	if err != nil {
 		return nil, nil, nil, aoserrors.Wrap(err)
+	}
+
+	return validInfos, append(invalidCerts, invlidChains...), invalidKeys, nil
+}
+
+func (module *PKCS11Module) getIvalidCertChainURLs(session pkcs11.SessionHandle) (invalidCerts []string, err error) {
+	// Check certificate chains
+	invalidChainCerts, err := checkCertificateChain(module.ctx, session)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
 	for _, cert := range invalidChainCerts {
@@ -427,7 +373,7 @@ func (module *PKCS11Module) ValidateCertificates() (
 		invalidCerts = append(invalidCerts, module.createURL("", cert.id))
 	}
 
-	return validInfos, invalidCerts, invalidKeys, nil
+	return invalidCerts, nil
 }
 
 // CreateKey creates key pair.
@@ -840,6 +786,7 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 	}
 
 	isUserLoggedIn := info.State == CKS_RO_USER_FUNCTIONS || info.State == CKS_RW_USER_FUNCTIONS
+
 	isSOLoggedIn := info.State == CKS_RW_SO_FUNCTIONS
 
 	if isSOLoggedIn {
@@ -1055,4 +1002,64 @@ func (module *PKCS11Module) tokenMemInfo() (err error) {
 	}).Debug("Token mem info")
 
 	return nil
+}
+
+func (module *PKCS11Module) getInvaidPkcsURLs(objects []*pkcs11Object, warnMsg string) (invalidObjURLs []string) {
+	for _, obj := range objects {
+		log.WithFields(log.Fields{"id": obj.id}).Warn(warnMsg)
+
+		invalidObjURLs = append(invalidObjURLs, module.createURL(module.certType, obj.id))
+	}
+
+	return invalidObjURLs
+}
+
+func (module *PKCS11Module) getValidInfo(privKeyObjs, pubKeyObjs,
+	certObjs *[]*pkcs11Object) (validInfos []certhandler.CertInfo) {
+	k := 0
+
+	for i, privKeyObj := range *privKeyObjs {
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Private key found")
+
+		pubKeyIndex, err := findObjectIndexByID(privKeyObj.id, *pubKeyObjs)
+		if err != nil {
+			continue
+		}
+
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Public key found")
+
+		certIndex, err := findObjectIndexByID(privKeyObj.id, *certObjs)
+		if err != nil {
+			continue
+		}
+
+		log.WithFields(log.Fields{"id": privKeyObj.id}).Debug("Certificate found")
+
+		cert := &pkcs11Certificate{pkcs11Object: *(*certObjs)[certIndex]}
+
+		x509Cert, err := cert.getX509Certificate()
+		if err != nil {
+			log.WithFields(log.Fields{"id": cert.id}).Errorf("Can't get x509 certificate: %s", err)
+
+			continue
+		}
+
+		validInfos = append(validInfos, certhandler.CertInfo{
+			Issuer:   base64.StdEncoding.EncodeToString(x509Cert.RawIssuer),
+			Serial:   fmt.Sprintf("%X", x509Cert.SerialNumber),
+			NotAfter: x509Cert.NotAfter,
+			CertURL:  module.createURL(module.certType, (*certObjs)[certIndex].id),
+			KeyURL:   module.createURL(module.certType, privKeyObj.id),
+		})
+
+		(*privKeyObjs)[i], (*privKeyObjs)[k] = (*privKeyObjs)[k], privKeyObj
+		k++
+
+		*certObjs = append((*certObjs)[:certIndex], (*certObjs)[certIndex+1:]...)
+		*pubKeyObjs = append((*pubKeyObjs)[:pubKeyIndex], (*pubKeyObjs)[pubKeyIndex+1:]...)
+	}
+
+	*privKeyObjs = (*privKeyObjs)[k:]
+
+	return validInfos
 }
