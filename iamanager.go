@@ -54,7 +54,7 @@ const dbFileName = "iamanager.db"
  ******************************************************************************/
 
 // GitSummary provided by govvv at compile-time.
-var GitSummary string
+var GitSummary string // nolint:gochecknoglobals
 
 /*******************************************************************************
  * Types

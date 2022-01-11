@@ -34,7 +34,7 @@ import (
  * Vars
  ******************************************************************************/
 
-var plugins = make(map[string]NewPlugin)
+var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
 
 /*******************************************************************************
  * Types
