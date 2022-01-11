@@ -50,6 +50,7 @@ const defaultTokenLabel = "aos"
 
 const maxPendingKeys = 16
 
+// nolint: stylecheck // standard defines
 const (
 	CKS_RO_PUBLIC_SESSION = iota
 	CKS_RO_USER_FUNCTIONS
@@ -113,7 +114,7 @@ var (
 // TEE Client UUID name space identifier (UUIDv4) from linux kernel
 // https://github.com/OP-TEE/optee_os/pull/4222
 // use as constant.
-var teeClientUuidNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6")) // nolint:gochecknoglobals
+var teeClientUUIDNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6")) // nolint:gochecknoglobals
 
 var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals
 
@@ -656,10 +657,10 @@ func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error
 		return loginType, nil
 
 	case loginTypeUser:
-		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("uid=%d", uid)))), nil
+		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUUIDNs, []byte(fmt.Sprintf("uid=%d", uid)))), nil
 
 	case loginTypeGroup:
-		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUuidNs, []byte(fmt.Sprintf("gid=%d", gid)))), nil
+		return fmt.Sprintf("%s:%s", loginType, uuid.NewSHA1(teeClientUUIDNs, []byte(fmt.Sprintf("gid=%d", gid)))), nil
 
 	default:
 		return "", aoserrors.Errorf("wrong TEE login type: %s", loginType)
