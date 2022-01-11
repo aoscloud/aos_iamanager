@@ -158,7 +158,8 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 		return "", aoserrors.Wrap(err)
 	}
 
-	ok := false
+	var ok bool
+
 	if instance.vin, ok = value.(string); !ok {
 		return "", aoserrors.New("wrong VIN type")
 	}
@@ -191,7 +192,8 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 		return "", aoserrors.Wrap(err)
 	}
 
-	ok := false
+	var ok bool
+
 	if instance.boardModel, ok = value.(string); !ok {
 		return "", aoserrors.New("wrong boardModel type")
 	}
