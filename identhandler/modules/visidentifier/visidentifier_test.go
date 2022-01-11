@@ -183,11 +183,11 @@ QRUogt5UZOrxFviUMF3wtG/D7hOlq0AFdxsstV7BGdOrlZEvdCKZ1/U8Ybl/Q5PV
 IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 -----END RSA PRIVATE KEY-----`
 
-	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0o644); err != nil {
+	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0o644); err != nil {
+	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

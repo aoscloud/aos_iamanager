@@ -187,7 +187,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 				csrFile := path.Join(tmpDir, "data.csr")
 
-				if err = ioutil.WriteFile(csrFile, csr, 0o644); err != nil {
+				if err = ioutil.WriteFile(csrFile, csr, 0o600); err != nil {
 					t.Fatalf("Can't write CSR to file: %s", err)
 				}
 

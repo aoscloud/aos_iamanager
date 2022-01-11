@@ -186,7 +186,7 @@ func DiskEncryptionCmdArgs(t *testing.T) {
  ******************************************************************************/
 
 func saveConfigFile(fileName string, configContent string) (err error) {
-	if err = ioutil.WriteFile(fileName, []byte(configContent), 0o644); err != nil {
+	if err = ioutil.WriteFile(fileName, []byte(configContent), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
