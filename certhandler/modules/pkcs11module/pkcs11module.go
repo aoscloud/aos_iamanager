@@ -806,10 +806,8 @@ func (module *PKCS11Module) releaseContext() (err error) {
 
 	if count >= 0 {
 		ctxCount[module.config.Library] = count
-	} else {
-		if err == nil {
-			err = aoserrors.New("wrong PKCS11 context count")
-		}
+	} else if err == nil {
+		err = aoserrors.New("wrong PKCS11 context count")
 	}
 
 	module.ctx.Destroy()
