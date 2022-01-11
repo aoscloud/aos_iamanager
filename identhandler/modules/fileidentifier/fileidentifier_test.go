@@ -218,7 +218,7 @@ func TestSetUsers(t *testing.T) {
 
 func generateConfig(systemIDPath, boardModelPath, usersPath string) (config []byte) {
 	type adapterConfig struct {
-		SystemIDPath   string `json:"systemIDPath"`
+		SystemIDPath   string `json:"systemIdPath"`
 		BoardModelPath string `json:"boardModelPath"`
 		UsersPath      string `json:"usersPath"`
 	}
