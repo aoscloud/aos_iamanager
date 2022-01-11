@@ -255,8 +255,8 @@ func writeUsers(usersFile string, users []string) (err error) {
 	return nil
 }
 
-func writeID(filePth string, ID string) (err error) {
-	if err = ioutil.WriteFile(filePth, []byte(ID), 0o600); err != nil {
+func writeID(filePth string, id string) (err error) {
+	if err = ioutil.WriteFile(filePth, []byte(id), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
