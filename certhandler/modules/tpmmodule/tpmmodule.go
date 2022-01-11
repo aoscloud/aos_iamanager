@@ -458,7 +458,7 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 		RSAParameters: &tpm2.RSAParams{
 			Symmetric: &tpm2.SymScheme{
 				Alg:     tpm2.AlgAES,
-				KeyBits: 256,
+				KeyBits: 256, // nolint:gomnd
 				Mode:    tpm2.AlgCFB,
 			},
 			KeyBits: rsaKeyLength,
