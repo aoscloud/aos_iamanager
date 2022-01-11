@@ -146,7 +146,7 @@ func main() { // nolint:funlen
 
 	// Show version
 	if *showVersion {
-		fmt.Printf("Version: %s\n", GitSummary)
+		fmt.Printf("Version: %s\n", GitSummary) // nolint:forbidigo // logs aren't initialized
 		return
 	}
 
