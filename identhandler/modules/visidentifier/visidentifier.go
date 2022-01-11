@@ -139,17 +139,8 @@ func (instance *Instance) Close() (err error) {
 func (instance *Instance) GetSystemID() (systemID string, err error) {
 	instance.wg.Wait()
 
-	var rsp visprotocol.GetResponse
-
-	req := visprotocol.GetRequest{
-		MessageHeader: visprotocol.MessageHeader{
-			Action:    visprotocol.ActionGet,
-			RequestID: wsclient.GenerateRequestID(),
-		},
-		Path: vinVISPath,
-	}
-
-	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
+	rsp, err := instance.sendGetRequest(vinVISPath)
+	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 
@@ -173,17 +164,8 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	instance.wg.Wait()
 
-	var rsp visprotocol.GetResponse
-
-	req := visprotocol.GetRequest{
-		MessageHeader: visprotocol.MessageHeader{
-			Action:    visprotocol.ActionGet,
-			RequestID: wsclient.GenerateRequestID(),
-		},
-		Path: boardModelPath,
-	}
-
-	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
+	rsp, err := instance.sendGetRequest(boardModelPath)
+	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 
@@ -208,17 +190,8 @@ func (instance *Instance) GetUsers() (users []string, err error) {
 	instance.wg.Wait()
 
 	if instance.users == nil {
-		var rsp visprotocol.GetResponse
-
-		req := visprotocol.GetRequest{
-			MessageHeader: visprotocol.MessageHeader{
-				Action:    visprotocol.ActionGet,
-				RequestID: wsclient.GenerateRequestID(),
-			},
-			Path: usersVISPath,
-		}
-
-		if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
+		rsp, err := instance.sendGetRequest(usersVISPath)
+		if err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 
@@ -428,4 +401,20 @@ func (instance *Instance) subscribe(path string, callback func(value interface{}
 	instance.subscribeMap.Store(rsp.SubscriptionID, callback)
 
 	return nil
+}
+
+func (instance *Instance) sendGetRequest(path string) (rsp visprotocol.GetResponse, err error) {
+	req := visprotocol.GetRequest{
+		MessageHeader: visprotocol.MessageHeader{
+			Action:    visprotocol.ActionGet,
+			RequestID: wsclient.GenerateRequestID(),
+		},
+		Path: path,
+	}
+
+	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
+		return rsp, aoserrors.Wrap(err)
+	}
+
+	return rsp, nil
 }
