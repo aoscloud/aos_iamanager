@@ -762,27 +762,37 @@ func (module *PKCS11Module) releaseContext() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHandle, err error) {
-	session = module.session
+func (module *PKCS11Module) getSessionInfo() (info pkcs11.SessionInfo, err error) {
+	session := module.session
 
-	info, err := module.ctx.GetSessionInfo(module.session)
-	if err != nil {
+	if info, err = module.ctx.GetSessionInfo(module.session); err != nil {
 		var pkcs11Err pkcs11.Error
 
 		if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_SESSION_HANDLE_INVALID {
-			return 0, aoserrors.Wrap(err)
+			return info, aoserrors.Wrap(err)
 		}
 
-		if session, err = module.ctx.OpenSession(module.slotID,
-			pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION); err != nil {
-			return 0, aoserrors.Wrap(err)
+		session, err = module.ctx.OpenSession(module.slotID, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+		if err != nil {
+			return info, aoserrors.Wrap(err)
 		}
 
 		log.WithFields(log.Fields{"session": session, "slotID": module.slotID}).Debug("Open session")
 
 		if info, err = module.ctx.GetSessionInfo(session); err != nil {
-			return 0, aoserrors.Wrap(err)
+			return info, aoserrors.Wrap(err)
 		}
+	}
+
+	module.session = session
+
+	return info, nil
+}
+
+func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHandle, err error) {
+	info, err := module.getSessionInfo()
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
 	}
 
 	isUserLoggedIn := info.State == CKS_RO_USER_FUNCTIONS || info.State == CKS_RW_USER_FUNCTIONS
@@ -790,15 +800,19 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 	isSOLoggedIn := info.State == CKS_RW_SO_FUNCTIONS
 
 	if isSOLoggedIn {
-		if err = module.ctx.Logout(session); err != nil {
+		if err = module.ctx.Logout(module.session); err != nil {
 			return 0, aoserrors.Wrap(err)
 		}
 	}
 
 	if userLogin && !isUserLoggedIn {
-		log.WithFields(log.Fields{"session": session, "slotID": module.slotID, "userPin": module.userPIN}).Debug("User login")
+		log.WithFields(log.Fields{
+			"session": module.session,
+			"slotID":  module.slotID,
+			"userPin": module.userPIN,
+		}).Debug("User login")
 
-		if err = module.ctx.Login(session, pkcs11.CKU_USER, module.userPIN); err != nil {
+		if err = module.ctx.Login(module.session, pkcs11.CKU_USER, module.userPIN); err != nil {
 			var pkcs11Err pkcs11.Error
 
 			if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
@@ -808,9 +822,9 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 	}
 
 	if !userLogin && isUserLoggedIn {
-		log.WithFields(log.Fields{"session": session, "slotID": module.slotID}).Debug("User logout")
+		log.WithFields(log.Fields{"session": module.session, "slotID": module.slotID}).Debug("User logout")
 
-		if err = module.ctx.Logout(session); err != nil {
+		if err = module.ctx.Logout(module.session); err != nil {
 			var pkcs11Err pkcs11.Error
 
 			if !errors.As(err, &pkcs11Err) || pkcs11Err != pkcs11.CKR_USER_NOT_LOGGED_IN {
@@ -819,9 +833,7 @@ func (module *PKCS11Module) getSession(userLogin bool) (session pkcs11.SessionHa
 		}
 	}
 
-	module.session = session
-
-	return session, nil
+	return module.session, nil
 }
 
 func (module *PKCS11Module) releaseSession() (err error) {
