@@ -188,13 +188,13 @@ func uin32ToBytes(value uint32) (result []byte) {
 func hashToPKCS11(hashFunction crypto.Hash) (hashAlg uint32, mgfAlg uint32, hashLen uint32, err error) {
 	switch hashFunction {
 	case crypto.SHA1:
-		return pkcs11.CKM_SHA_1, uint32(pkcs11.CKG_MGF1_SHA1), 20, nil
+		return pkcs11.CKM_SHA_1, uint32(pkcs11.CKG_MGF1_SHA1), 20, nil // nolint:gomnd
 	case crypto.SHA224:
-		return pkcs11.CKM_SHA224, uint32(pkcs11.CKG_MGF1_SHA224), 28, nil
+		return pkcs11.CKM_SHA224, uint32(pkcs11.CKG_MGF1_SHA224), 28, nil // nolint:gomnd
 	case crypto.SHA256:
 		return pkcs11.CKM_SHA256, uint32(pkcs11.CKG_MGF1_SHA256), 32, nil
 	case crypto.SHA384:
-		return pkcs11.CKM_SHA384, uint32(pkcs11.CKG_MGF1_SHA384), 48, nil
+		return pkcs11.CKM_SHA384, uint32(pkcs11.CKG_MGF1_SHA384), 48, nil // nolint:gomnd
 	case crypto.SHA512:
 		return pkcs11.CKM_SHA512, uint32(pkcs11.CKG_MGF1_SHA512), 64, nil
 	default:
@@ -251,7 +251,7 @@ func unmarshalECDSASignature(data []byte) (signature ecdsaSignature, err error) 
 		return ecdsaSignature{}, aoserrors.New("ECDSA signature length is invalid from")
 	}
 
-	n := len(data) / 2
+	n := len(data) / 2 // nolint:gomnd
 
 	signature.R, signature.S = new(big.Int), new(big.Int)
 
