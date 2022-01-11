@@ -821,7 +821,7 @@ func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
 		}
 	}
 
-	// Dictionary attack paramters
+	// Dictionary attack parameters
 	lockoutMaxRetries, recoveryTime, lockoutRecoveryTime := 3, 1000, 1000
 
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s", "lockoutMaxTry": %d,

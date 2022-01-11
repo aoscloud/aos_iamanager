@@ -931,7 +931,7 @@ func (module *PKCS11Module) getSlotID() (id uint, err error) {
 		paramCount++
 	}
 
-	if paramCount >= 2 {
+	if paramCount >= 2 { // nolint:gomnd
 		return 0, aoserrors.New(
 			"only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
 	}
