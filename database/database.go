@@ -134,6 +134,10 @@ func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.Cert
 	}
 	defer rows.Close()
 
+	if rows.Err() != nil {
+		return cert, aoserrors.Wrap(rows.Err())
+	}
+
 	if rows.Next() {
 		if err = rows.Scan(&cert.Issuer, &cert.Serial, &cert.CertURL, &cert.KeyURL, &cert.NotAfter); err != nil {
 			return cert, aoserrors.Wrap(err)
@@ -153,6 +157,10 @@ func (db *Database) GetCertificates(certType string) (certs []certhandler.CertIn
 		return certs, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
+
+	if rows.Err() != nil {
+		return certs, aoserrors.Wrap(rows.Err())
+	}
 
 	for rows.Next() {
 		var cert certhandler.CertInfo
