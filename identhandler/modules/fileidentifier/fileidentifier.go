@@ -55,7 +55,7 @@ type Instance struct {
 }
 
 type instanceConfig struct {
-	SystemIDPath   string `json:"systemIDPath"`
+	SystemIDPath   string `json:"systemIdPath"`
 	BoardModelPath string `json:"boardModelPath"`
 	UsersPath      string `json:"usersPath"`
 }
