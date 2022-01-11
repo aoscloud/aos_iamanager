@@ -250,8 +250,8 @@ func TestCreateKey(t *testing.T) {
 		t.Errorf("Wrong response type: %s", response.Type)
 	}
 
-	if string(response.Csr) != string(certHandler.csr) {
-		t.Errorf("Wrong CSR value: %s", string(response.Csr))
+	if response.Csr != string(certHandler.csr) {
+		t.Errorf("Wrong CSR value: %s", response.Csr)
 	}
 }
 
