@@ -93,7 +93,7 @@ type IdentHandler interface {
 type PermissionHandler interface {
 	RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error)
 	UnregisterService(serviceID string)
-	GetPermissions(secret, funcServerId string) (serviceID string, permissions map[string]string, err error)
+	GetPermissions(secret, funcServerID string) (serviceID string, permissions map[string]string, err error)
 }
 
 /*******************************************************************************
