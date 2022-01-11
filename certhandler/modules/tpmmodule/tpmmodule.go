@@ -509,6 +509,7 @@ func (module *TPMModule) newKey(password, algorithm string) (key tpmkey.TPMKey, 
 		return nil, aoserrors.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
+	// nolint:dogsled // passwords are not using
 	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKey(module.device, module.primaryHandle,
 		tpm2.PCRSelection{}, password, "", keyTemplate)
 	if err != nil {
