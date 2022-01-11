@@ -198,8 +198,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 
 	module.pendingKeys = list.New()
 
-	soPIN := ""
-	userPIN := ""
+	var soPIN, userPIN string
 
 	if module.config.TEELoginType != "" {
 		if userPIN, err = getTeeUserPIN(module.config.TEELoginType, module.config.UID, module.config.GID); err != nil {
@@ -448,10 +447,14 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 	switch strings.ToLower(algorithm) {
 	case cryptutils.AlgRSA:
-		privateKey, err = createRSAKey(module.ctx, session, id, module.certType, rsaKeyLength)
+		if privateKey, err = createRSAKey(module.ctx, session, id, module.certType, rsaKeyLength); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
 
 	case cryptutils.AlgECC:
-		privateKey, err = createECCKey(module.ctx, session, id, module.certType, ecsdaCurveID)
+		if privateKey, err = createECCKey(module.ctx, session, id, module.certType, ecsdaCurveID); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
 
 	default:
 		return nil, aoserrors.Errorf("unsupported algorithm: %s", algorithm)
