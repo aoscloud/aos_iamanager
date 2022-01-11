@@ -72,7 +72,7 @@ type moduleConfig struct {
  * Vars
  ******************************************************************************/
 
-var ecsdaCurveID = elliptic.P384()
+var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals // use as constant
 
 /*******************************************************************************
  * Public

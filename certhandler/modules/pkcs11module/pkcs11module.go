@@ -104,6 +104,7 @@ type moduleConfig struct {
  * Vars
  ******************************************************************************/
 
+// nolint:gochecknoglobals
 var (
 	ctxMutex = sync.Mutex{}
 	ctxCount = map[string]int{}
@@ -111,9 +112,10 @@ var (
 
 // TEE Client UUID name space identifier (UUIDv4) from linux kernel
 // https://github.com/OP-TEE/optee_os/pull/4222
-var teeClientUuidNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6"))
+// use as constant
+var teeClientUuidNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6")) // nolint:gochecknoglobals
 
-var ecsdaCurveID = elliptic.P384()
+var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals
 
 /*******************************************************************************
  * Public
