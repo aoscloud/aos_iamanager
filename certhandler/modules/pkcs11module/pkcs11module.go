@@ -96,7 +96,7 @@ type moduleConfig struct {
 	TEELoginType     string   `json:"teeLoginType"`
 	UID              uint32   `json:"uid"`
 	GID              uint32   `json:"gid"`
-	ModulePathInURL  bool     `json:"modulePathInURL"`
+	ModulePathInURL  bool     `json:"modulePathInUrl"`
 	ClearHookCmdArgs []string `json:"clearHookCmdArgs"`
 }
 
@@ -112,7 +112,7 @@ var (
 
 // TEE Client UUID name space identifier (UUIDv4) from linux kernel
 // https://github.com/OP-TEE/optee_os/pull/4222
-// use as constant
+// use as constant.
 var teeClientUuidNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6")) // nolint:gochecknoglobals
 
 var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals

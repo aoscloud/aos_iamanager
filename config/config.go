@@ -31,8 +31,8 @@ import (
 
 // Config instance.
 type Config struct {
-	ServerURL                 string         `json:"serverURL"`
-	ServerPublicURL           string         `json:"serverPublicURL"`
+	ServerURL                 string         `json:"serverUrl"`
+	ServerPublicURL           string         `json:"serverPublicUrl"`
 	CACert                    string         `json:"caCert"`
 	CertStorage               string         `json:"certStorage"`
 	WorkingDir                string         `json:"workingDir"`
