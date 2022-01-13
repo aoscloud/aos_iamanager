@@ -18,7 +18,6 @@
 package swmodule
 
 import (
-	"aos_iamanager/certhandler"
 	"container/list"
 	"crypto"
 	"crypto/ecdsa"
@@ -39,6 +38,8 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

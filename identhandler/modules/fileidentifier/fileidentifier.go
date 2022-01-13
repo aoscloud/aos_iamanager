@@ -18,7 +18,6 @@
 package fileidentifier
 
 import (
-	"aos_iamanager/identhandler"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -30,6 +29,8 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/identhandler"
 )
 
 /*******************************************************************************

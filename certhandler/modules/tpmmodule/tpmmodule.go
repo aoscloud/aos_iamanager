@@ -18,7 +18,6 @@
 package tpmmodule
 
 import (
-	"aos_iamanager/certhandler"
 	"container/list"
 	"crypto"
 	"crypto/x509"
@@ -39,6 +38,8 @@ import (
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************
