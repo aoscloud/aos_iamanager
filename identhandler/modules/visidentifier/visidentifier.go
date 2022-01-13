@@ -18,7 +18,6 @@
 package visidentifier
 
 import (
-	"aos_iamanager/identhandler"
 	"encoding/json"
 	"sync"
 	"time"
@@ -27,6 +26,8 @@ import (
 	"github.com/aoscloud/aos_common/visprotocol"
 	"github.com/aoscloud/aos_common/wsclient"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/identhandler"
 )
 
 /*******************************************************************************

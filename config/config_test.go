@@ -18,7 +18,6 @@
 package config_test
 
 import (
-	"aos_iamanager/config"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -28,6 +27,8 @@ import (
 	"testing"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+
+	"github.com/aoscloud/aos_iamanager/config"
 )
 
 /*******************************************************************************

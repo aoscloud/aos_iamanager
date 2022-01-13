@@ -19,6 +19,6 @@ package identmodules
 
 import (
 	// include all supported plugins.
-	_ "aos_iamanager/identhandler/modules/fileidentifier"
-	_ "aos_iamanager/identhandler/modules/visidentifier"
+	_ "github.com/aoscloud/aos_iamanager/identhandler/modules/fileidentifier"
+	_ "github.com/aoscloud/aos_iamanager/identhandler/modules/visidentifier"
 )

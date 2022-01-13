@@ -18,7 +18,7 @@
 package pkcs11module
 
 import (
-	"aos_iamanager/certhandler"
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

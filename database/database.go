@@ -18,7 +18,6 @@
 package database
 
 import (
-	"aos_iamanager/certhandler"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -28,6 +27,8 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	_ "github.com/mattn/go-sqlite3" // ignore lint
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

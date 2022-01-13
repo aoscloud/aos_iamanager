@@ -1,4 +1,4 @@
-module aos_iamanager
+module github.com/aoscloud/aos_iamanager
 
 go 1.14
 

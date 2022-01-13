@@ -18,8 +18,9 @@
 package tpmmodule
 
 import (
-	"aos_iamanager/certhandler"
 	"encoding/json"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

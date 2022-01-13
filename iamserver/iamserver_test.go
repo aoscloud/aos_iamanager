@@ -18,9 +18,6 @@
 package iamserver_test
 
 import (
-	"aos_iamanager/config"
-	"aos_iamanager/iamserver"
-	"aos_iamanager/permhandler"
 	"context"
 	"io/ioutil"
 	"os"
@@ -34,6 +31,10 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	"github.com/aoscloud/aos_iamanager/config"
+	"github.com/aoscloud/aos_iamanager/iamserver"
+	"github.com/aoscloud/aos_iamanager/permhandler"
 )
 
 /*******************************************************************************

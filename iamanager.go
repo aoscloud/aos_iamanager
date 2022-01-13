@@ -18,12 +18,6 @@
 package main
 
 import (
-	"aos_iamanager/certhandler"
-	"aos_iamanager/config"
-	"aos_iamanager/database"
-	"aos_iamanager/iamserver"
-	"aos_iamanager/identhandler"
-	"aos_iamanager/permhandler"
 	"errors"
 	"flag"
 	"fmt"
@@ -38,9 +32,15 @@ import (
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
-	_ "aos_iamanager/certhandler/modules"
+	"github.com/aoscloud/aos_iamanager/certhandler"
+	"github.com/aoscloud/aos_iamanager/config"
+	"github.com/aoscloud/aos_iamanager/database"
+	"github.com/aoscloud/aos_iamanager/iamserver"
+	"github.com/aoscloud/aos_iamanager/identhandler"
+	"github.com/aoscloud/aos_iamanager/permhandler"
 
-	_ "aos_iamanager/identhandler/modules"
+	_ "github.com/aoscloud/aos_iamanager/certhandler/modules"
+	_ "github.com/aoscloud/aos_iamanager/identhandler/modules"
 )
 
 /*******************************************************************************

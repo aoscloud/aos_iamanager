@@ -18,7 +18,6 @@
 package fileidentifier_test
 
 import (
-	"aos_iamanager/identhandler/modules/fileidentifier"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -32,6 +31,8 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/identhandler/modules/fileidentifier"
 )
 
 /*******************************************************************************

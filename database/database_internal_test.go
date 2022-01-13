@@ -18,7 +18,6 @@
 package database
 
 import (
-	"aos_iamanager/certhandler"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -29,6 +28,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

@@ -18,7 +18,6 @@
 package pkcs11module
 
 import (
-	"aos_iamanager/certhandler"
 	"container/list"
 	"crypto"
 	"crypto/elliptic"
@@ -40,6 +39,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

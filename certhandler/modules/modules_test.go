@@ -18,10 +18,6 @@
 package certmodules_test
 
 import (
-	"aos_iamanager/certhandler"
-	"aos_iamanager/certhandler/modules/pkcs11module"
-	"aos_iamanager/certhandler/modules/swmodule"
-	"aos_iamanager/certhandler/modules/tpmmodule"
 	"bytes"
 	"crypto"
 	"crypto/ecdsa"
@@ -57,6 +53,11 @@ import (
 
 	"golang.org/x/crypto/cryptobyte"
 	"golang.org/x/crypto/cryptobyte/asn1"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
+	"github.com/aoscloud/aos_iamanager/certhandler/modules/pkcs11module"
+	"github.com/aoscloud/aos_iamanager/certhandler/modules/swmodule"
+	"github.com/aoscloud/aos_iamanager/certhandler/modules/tpmmodule"
 )
 
 /*******************************************************************************
