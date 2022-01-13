@@ -18,12 +18,13 @@
 package permhandler_test
 
 import (
-	"aos_iamanager/permhandler"
 	"os"
 	"reflect"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/permhandler"
 )
 
 /*******************************************************************************

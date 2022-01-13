@@ -18,8 +18,6 @@
 package identhandler_test
 
 import (
-	"aos_iamanager/config"
-	"aos_iamanager/identhandler"
 	"encoding/json"
 	"os"
 	"reflect"
@@ -27,6 +25,9 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/config"
+	"github.com/aoscloud/aos_iamanager/identhandler"
 )
 
 /*******************************************************************************

@@ -18,7 +18,7 @@
 package swmodule
 
 import (
-	"aos_iamanager/certhandler"
+	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
 /*******************************************************************************

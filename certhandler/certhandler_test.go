@@ -18,8 +18,6 @@
 package certhandler_test
 
 import (
-	"aos_iamanager/certhandler"
-	"aos_iamanager/config"
 	"bytes"
 	"crypto"
 	"crypto/rand"
@@ -41,6 +39,9 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/certhandler"
+	"github.com/aoscloud/aos_iamanager/config"
 )
 
 /*******************************************************************************

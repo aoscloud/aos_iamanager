@@ -18,8 +18,6 @@
 package visidentifier_test
 
 import (
-	"aos_iamanager/identhandler"
-	"aos_iamanager/identhandler/modules/visidentifier"
 	"encoding/json"
 	"io/ioutil"
 	"net/url"
@@ -35,6 +33,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_iamanager/identhandler"
+	"github.com/aoscloud/aos_iamanager/identhandler/modules/visidentifier"
 )
 
 /*******************************************************************************

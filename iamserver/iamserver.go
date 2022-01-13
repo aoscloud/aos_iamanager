@@ -18,7 +18,6 @@
 package iamserver
 
 import (
-	"aos_iamanager/config"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -33,6 +32,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/aoscloud/aos_iamanager/config"
 )
 
 /*******************************************************************************

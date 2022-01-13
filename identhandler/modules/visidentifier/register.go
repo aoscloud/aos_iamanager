@@ -17,7 +17,7 @@
 
 package visidentifier
 
-import "aos_iamanager/identhandler"
+import "github.com/aoscloud/aos_iamanager/identhandler"
 
 /*******************************************************************************
  * Init
