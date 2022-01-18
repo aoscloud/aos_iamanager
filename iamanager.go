@@ -64,6 +64,14 @@ type journalHook struct {
 	severityMap map[log.Level]journal.Priority
 }
 
+type iaManager struct {
+	db                 *database.Database
+	identHandler       *identhandler.Handler
+	certHandler        *certhandler.Handler
+	permissionsHandler *permhandler.Handler
+	server             *iamserver.Server
+}
+
 /*******************************************************************************
  * Init
  ******************************************************************************/
@@ -74,6 +82,82 @@ func init() {
 		TimestampFormat:  "2006-01-02 15:04:05.000",
 		FullTimestamp:    true,
 	})
+}
+
+/*******************************************************************************
+ * IAManager
+ ******************************************************************************/
+
+func newIAManger(cfg *config.Config) (iam *iaManager, err error) {
+	defer func() {
+		if err != nil {
+			iam.close()
+			iam = nil
+		}
+	}()
+
+	iam = &iaManager{}
+
+	// Create DB
+	dbFile := path.Join(cfg.WorkingDir, dbFileName)
+
+	iam.db, err = database.New(dbFile)
+	if err != nil {
+		if errors.Is(err, database.ErrVersionMismatch) {
+			log.Warning("Unsupported database version")
+			cleanup(dbFile)
+			iam.db, err = database.New(dbFile)
+		}
+
+		if err != nil {
+			return iam, aoserrors.Wrap(err)
+		}
+	}
+
+	iam.identHandler, err = identhandler.New(cfg)
+	if err != nil {
+		return iam, aoserrors.Wrap(err)
+	}
+
+	systemID, err := iam.identHandler.GetSystemID()
+	if err != nil {
+		return iam, aoserrors.Wrap(err)
+	}
+
+	iam.certHandler, err = certhandler.New(systemID, cfg, iam.db)
+	if err != nil {
+		return iam, aoserrors.Wrap(err)
+	}
+
+	iam.permissionsHandler, err = permhandler.New()
+	if err != nil {
+		log.Errorf("Can't create permissions handler: %s", err)
+	}
+
+	iam.server, err = iamserver.New(cfg, iam.identHandler, iam.certHandler, iam.permissionsHandler, false)
+	if err != nil {
+		return iam, aoserrors.Wrap(err)
+	}
+
+	return iam, nil
+}
+
+func (iam *iaManager) close() {
+	if iam.db != nil {
+		iam.db.Close()
+	}
+
+	if iam.identHandler != nil {
+		iam.identHandler.Close()
+	}
+
+	if iam.certHandler != nil {
+		iam.certHandler.Close()
+	}
+
+	if iam.server != nil {
+		iam.server.Close()
+	}
 }
 
 /*******************************************************************************
@@ -135,7 +219,7 @@ func (hook *journalHook) Levels() []log.Level {
  * Main
  ******************************************************************************/
 
-func main() { // nolint:funlen
+func main() {
 	// Initialize command line flags
 	configFile := flag.String("c", "aos_iamanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)
@@ -169,53 +253,17 @@ func main() { // nolint:funlen
 
 	cfg, err := config.New(*configFile)
 	if err != nil {
-		log.Fatalf("Can't open config file: %s", err)
+		// Config is important to make CM works properly. If we can't parse the config no reason to continue.
+		// If the error is temporary CM will be restarted by systemd.
+		log.Fatalf("Can't parse config: %s", err)
 	}
 
-	// Create DB
-	dbFile := path.Join(cfg.WorkingDir, dbFileName)
-
-	db, err := database.New(dbFile)
+	iam, err := newIAManger(cfg)
 	if err != nil {
-		if errors.Is(err, database.ErrVersionMismatch) {
-			log.Warning("Unsupported database version")
-			cleanup(dbFile)
-			db, err = database.New(dbFile)
-		}
-
-		if err != nil {
-			log.Fatalf("Can't create database: %s", err)
-		}
-	}
-	defer db.Close()
-
-	identHandler, err := identhandler.New(cfg)
-	if err != nil {
-		log.Fatalf("Can't create ident handler: %s", err)
-	}
-	defer identHandler.Close()
-
-	systemID, err := identHandler.GetSystemID()
-	if err != nil {
-		log.Fatalf("Can't get system ID: %s", err)
+		log.Fatalf("Can't create IAM: %s", err)
 	}
 
-	certHandler, err := certhandler.New(systemID, cfg, db)
-	if err != nil {
-		log.Fatalf("Can't create cert handler: %s", err)
-	}
-	defer certHandler.Close()
-
-	permissionsHandler, err := permhandler.New()
-	if err != nil {
-		log.Fatalf("Can't create permissions handler: %s", err)
-	}
-
-	server, err := iamserver.New(cfg, identHandler, certHandler, permissionsHandler, false)
-	if err != nil {
-		log.Fatalf("Can't create IAM server: %s", err)
-	}
-	defer server.Close()
+	defer iam.close()
 
 	// Notify systemd
 	if _, err = daemon.SdNotify(false, daemon.SdNotifyReady); err != nil {
