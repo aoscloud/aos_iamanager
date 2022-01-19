@@ -52,6 +52,8 @@ type Handler struct {
 type IdentModule interface {
 	GetSystemID() (systemdID string, err error)
 	GetBoardModel() (boardModel string, err error)
+	GetSubjects() (subjects []string, err error)
+	SubjectsChangedChannel() (channel <-chan []string)
 	GetUsers() (users []string, err error)
 	SetUsers(users []string) (err error)
 	UsersChangedChannel() (channel <-chan []string)
@@ -132,6 +134,20 @@ func (handler *Handler) SetUsers(users []string) (err error) {
 // UsersChangedChannel returns users changed channel.
 func (handler *Handler) UsersChangedChannel() (channel <-chan []string) {
 	return handler.module.UsersChangedChannel()
+}
+
+// GetSubjects returns current subjects.
+func (handler *Handler) GetSubjects() (subjects []string, err error) {
+	if subjects, err = handler.module.GetSubjects(); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return subjects, nil
+}
+
+// SubjectsChangedChannel returns subjects changed channel.
+func (handler *Handler) SubjectsChangedChannel() (channel <-chan []string) {
+	return handler.module.SubjectsChangedChannel()
 }
 
 /*******************************************************************************
