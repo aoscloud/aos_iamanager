@@ -72,10 +72,10 @@ type testCertHandler struct {
 }
 
 type testIdentHandler struct {
-	systemID            string
-	boardModel          string
-	users               []string
-	usersChangedChannel chan []string
+	systemID               string
+	boardModel             string
+	subjects               []string
+	subjectsChangedChannel chan []string
 }
 
 /***********************************************************************************************************************
@@ -374,7 +374,7 @@ func TestGetSystemInfo(t *testing.T) {
 	}
 }
 
-func TestGetUsers(t *testing.T) {
+func TestGetSubjects(t *testing.T) {
 	identHandler := &testIdentHandler{}
 
 	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
@@ -391,18 +391,18 @@ func TestGetUsers(t *testing.T) {
 
 	defer client.close()
 
-	identHandler.users = []string{"user1", "user2", "user3"}
+	identHandler.subjects = []string{"subject1", "subject2", "subject3"}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	response, err := client.pbPublic.GetUsers(ctx, &empty.Empty{})
+	response, err := client.pbPublic.GetSubjects(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if !reflect.DeepEqual(response.Users, identHandler.users) {
-		t.Errorf("Wrong users: %v", response.Users)
+	if !reflect.DeepEqual(response.Subjects, identHandler.subjects) {
+		t.Errorf("Wrong subjects: %v", response.Subjects)
 	}
 }
 
@@ -666,8 +666,8 @@ func TestGetPermissionsServerPublic(t *testing.T) {
 	}
 }
 
-func TestUsersChanged(t *testing.T) {
-	identHandler := &testIdentHandler{usersChangedChannel: make(chan []string, 1)}
+func TestSubjectsChanged(t *testing.T) {
+	identHandler := &testIdentHandler{subjectsChangedChannel: make(chan []string, 1)}
 
 	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
 		identHandler, &testCertHandler{}, nil, true)
@@ -686,25 +686,25 @@ func TestUsersChanged(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	stream, err := client.pbPublic.SubscribeUsersChanged(ctx, &empty.Empty{})
+	stream, err := client.pbPublic.SubscribeSubjectsChanged(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
 	time.Sleep(1 * time.Second)
 
-	newUsers := []string{"newUser1", "newUser2", "newUser3"}
+	newSubjects := []string{"newSubject1", "newSubject2", "newSubject3"}
 
-	identHandler.usersChangedChannel <- newUsers
+	identHandler.subjectsChangedChannel <- newSubjects
 
-	var message *pb.Users
+	var message *pb.Subjects
 
 	if message, err = stream.Recv(); err != nil {
 		t.Fatalf("Error receiving message: %s", err)
 	}
 
-	if !reflect.DeepEqual(message.Users, newUsers) {
-		t.Errorf("Wrong users: %v", message.Users)
+	if !reflect.DeepEqual(message.Subjects, newSubjects) {
+		t.Errorf("Wrong subjects: %v", message.Subjects)
 	}
 }
 
@@ -828,6 +828,10 @@ func (handler *testIdentHandler) SetUsers(users []string) (err error) {
 	return nil
 }
 
-func (handler *testIdentHandler) UsersChangedChannel() (channel <-chan []string) {
-	return handler.usersChangedChannel
+func (handler *testIdentHandler) GetSubjects() (subjects []string, err error) {
+	return handler.subjects, nil
+}
+
+func (handler *testIdentHandler) SubjectsChangedChannel() (channel <-chan []string) {
+	return handler.subjectsChangedChannel
 }
