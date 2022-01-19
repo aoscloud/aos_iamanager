@@ -157,4 +157,4 @@ google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/emptypb
 google.golang.org/protobuf/types/known/timestamppb
-# github.com/ThalesIgnite/crypto1 v1.2.4 => github.com/xen-troops/crypto11 v1.2.4
+# github.com/ThalesIgnite/crypto1 v1.2.4 => github.com/aoscloud/crypto11 v1.2.4
