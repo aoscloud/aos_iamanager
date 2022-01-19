@@ -21,4 +21,4 @@ require (
 	google.golang.org/grpc v1.41.0
 )
 
-replace github.com/ThalesIgnite/crypto1 v1.2.4 => github.com/xen-troops/crypto11 v1.2.4
+replace github.com/ThalesIgnite/crypto1 v1.2.4 => github.com/aoscloud/crypto11 v1.2.4
