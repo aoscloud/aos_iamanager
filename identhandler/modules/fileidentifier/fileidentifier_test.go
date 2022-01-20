@@ -26,7 +26,6 @@ import (
 	"path"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/google/uuid"
@@ -91,7 +90,7 @@ func TestMain(m *testing.M) {
 func TestGetSystemID(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
 	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
-	usersFile := path.Join(tmpDir, "users.txt")
+	subjectsFile := path.Join(tmpDir, "subjects.txt")
 
 	systemID := "testSystemID"
 
@@ -103,7 +102,7 @@ func TestGetSystemID(t *testing.T) {
 		t.Fatalf("Can't write boardModel: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, subjectsFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -122,7 +121,7 @@ func TestGetSystemID(t *testing.T) {
 func TestGetBoardModel(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
 	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
-	usersFile := path.Join(tmpDir, "users.txt")
+	subjectsFile := path.Join(tmpDir, "subjects.txt")
 
 	boardModel := "testBoard:1.0"
 
@@ -130,7 +129,7 @@ func TestGetBoardModel(t *testing.T) {
 		t.Fatalf("Can't write boardModel: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, subjectsFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -146,70 +145,34 @@ func TestGetBoardModel(t *testing.T) {
 	}
 }
 
-func TestGetUsers(t *testing.T) {
+func TestGetSubjects(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
 	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
-	usersFile := path.Join(tmpDir, "users.txt")
+	subjectsFile := path.Join(tmpDir, "subjects.txt")
 
 	if err := writeID(systemIDFile, "testSystemID"); err != nil {
 		t.Fatalf("Can't write system ID: %s", err)
 	}
 
-	users := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
+	subjects := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 
-	if err := writeUsers(usersFile, users); err != nil {
-		t.Fatalf("Can't write users: %s", err)
+	if err := writeSubjects(subjectsFile, subjects); err != nil {
+		t.Fatalf("Can't write subjects: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, subjectsFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
 	defer identifier.Close()
 
-	getUsers, err := identifier.GetUsers()
+	getSubjects, err := identifier.GetSubjects()
 	if err != nil {
-		t.Fatalf("Error getting users: %s", err)
+		t.Fatalf("Error getting subjects: %s", err)
 	}
 
-	if !reflect.DeepEqual(getUsers, users) {
-		t.Errorf("Wrong users value: %v", getUsers)
-	}
-}
-
-func TestSetUsers(t *testing.T) {
-	systemIDFile := path.Join(tmpDir, "systemid.txt")
-	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
-	usersFile := path.Join(tmpDir, "users.txt")
-
-	if err := writeID(systemIDFile, "testSystemID"); err != nil {
-		t.Fatalf("Can't write system ID: %s", err)
-	}
-
-	if err := writeUsers(usersFile, []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}); err != nil {
-		t.Fatalf("Can't write users: %s", err)
-	}
-
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, usersFile))
-	if err != nil {
-		t.Fatalf("Can't create identifier: %s", err)
-	}
-	defer identifier.Close()
-
-	newUsers := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
-
-	if err := identifier.SetUsers(newUsers); err != nil {
-		t.Fatalf("Error setting users: %s", err)
-	}
-
-	select {
-	case users := <-identifier.UsersChangedChannel():
-		if !reflect.DeepEqual(newUsers, users) {
-			t.Errorf("Wrong users value: %s", users)
-		}
-
-	case <-time.After(5 * time.Second):
-		t.Error("Waiting for users changed timeout")
+	if !reflect.DeepEqual(getSubjects, subjects) {
+		t.Errorf("Wrong subjects value: %v", getSubjects)
 	}
 }
 
@@ -217,18 +180,18 @@ func TestSetUsers(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func generateConfig(systemIDPath, boardModelPath, usersPath string) (config []byte) {
+func generateConfig(systemIDPath, boardModelPath, subjectsPath string) (config []byte) {
 	type adapterConfig struct {
 		SystemIDPath   string `json:"systemIdPath"`
 		BoardModelPath string `json:"boardModelPath"`
-		UsersPath      string `json:"usersPath"`
+		SubjectsPath   string `json:"subjectsPath"`
 	}
 
 	var err error
 
 	if config, err = json.Marshal(&adapterConfig{
 		SystemIDPath:   systemIDPath,
-		BoardModelPath: boardModelPath, UsersPath: usersPath,
+		BoardModelPath: boardModelPath, SubjectsPath: subjectsPath,
 	}); err != nil {
 		log.Fatalf("Can't marshal config: %s", err)
 	}
@@ -236,8 +199,8 @@ func generateConfig(systemIDPath, boardModelPath, usersPath string) (config []by
 	return config
 }
 
-func writeUsers(usersFile string, users []string) (err error) {
-	file, err := os.Create(usersFile)
+func writeSubjects(subjectsFile string, subjects []string) (err error) {
+	file, err := os.Create(subjectsFile)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -245,7 +208,7 @@ func writeUsers(usersFile string, users []string) (err error) {
 
 	writer := bufio.NewWriter(file)
 
-	for _, claim := range users {
+	for _, claim := range subjects {
 		fmt.Fprintln(writer, claim)
 	}
 
