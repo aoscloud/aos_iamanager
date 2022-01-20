@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/ThalesIgnite/crypto11 v1.2.5
-	github.com/aoscloud/aos_common v0.0.0-20211220123623-d23b9d38e838
+	github.com/aoscloud/aos_common v0.0.0-20220120154616-6f8f3da24e74
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 	github.com/dchest/uniuri v0.0.0-20200228104902-7aecb25e1fe5
 	github.com/golang/protobuf v1.5.2
