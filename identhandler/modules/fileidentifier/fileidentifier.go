@@ -37,7 +37,7 @@ import (
  * Consts
  ******************************************************************************/
 
-const usersChangedChannelSize = 1
+const subjectsChangedChannelSize = 1
 
 /*******************************************************************************
  * Types
@@ -47,18 +47,18 @@ const usersChangedChannelSize = 1
 type Instance struct {
 	sync.Mutex
 
-	config              instanceConfig
-	usersChangedChannel chan []string
+	config                 instanceConfig
+	subjectsChangedChannel chan []string
 
 	systemID   string
 	boardModel string
-	users      []string
+	subjects   []string
 }
 
 type instanceConfig struct {
 	SystemIDPath   string `json:"systemIdPath"`
 	BoardModelPath string `json:"boardModelPath"`
-	UsersPath      string `json:"usersPath"`
+	SubjectsPath   string `json:"subjectsPath"`
 }
 
 /*******************************************************************************
@@ -79,7 +79,7 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	instance.usersChangedChannel = make(chan []string, usersChangedChannelSize)
+	instance.subjectsChangedChannel = make(chan []string, subjectsChangedChannelSize)
 
 	if instance.systemID, err = instance.readDataFromFile(instance.config.SystemIDPath); err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -89,8 +89,8 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if err = instance.readUsers(); err != nil {
-		log.Warnf("Can't read users: %s. Empty users will be used", err)
+	if err = instance.readSubjects(); err != nil {
+		log.Warnf("Can't read subjects: %s. Empty subjects will be used", err)
 	}
 
 	return instance, nil
@@ -162,6 +162,21 @@ func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
 	return instance.usersChangedChannel
 }
 
+// GetSubjects returns the subjects.
+func (instance *Instance) GetSubjects() (subjects []string, err error) {
+	instance.Lock()
+	defer instance.Unlock()
+
+	log.WithField("subjects", instance.subjects).Debug("Get subjects")
+
+	return instance.subjects, aoserrors.Wrap(err)
+}
+
+// SubjectsChangedChannel returns subjects changed channel.
+func (instance *Instance) SubjectsChangedChannel() (channel <-chan []string) {
+	return instance.subjectsChangedChannel
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -190,6 +205,24 @@ func (instance *Instance) readUsers() (err error) {
 
 	for scanner.Scan() {
 		instance.users = append(instance.users, scanner.Text())
+	}
+
+	return nil
+}
+
+func (instance *Instance) readSubjects() (err error) {
+	instance.subjects = make([]string, 0)
+
+	file, err := os.Open(instance.config.SubjectsPath)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		instance.subjects = append(instance.subjects, scanner.Text())
 	}
 
 	return nil
