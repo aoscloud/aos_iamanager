@@ -127,7 +127,9 @@ func (server *Server) Close() {
 		client.close(true)
 	}
 
-	server.httpServer.Shutdown(context.Background())
+	if err := server.httpServer.Shutdown(context.Background()); err != nil {
+		log.Errorf("Can't shutdown server: %s", err)
+	}
 }
 
 // SendMessage sends message to ws client
@@ -146,7 +148,14 @@ func (client *Client) SendMessage(messageType int, data []byte) (err error) {
 	}
 
 	if writeSocketTimeout != 0 {
-		client.connection.SetWriteDeadline(time.Now().Add(writeSocketTimeout))
+		if err = client.connection.SetWriteDeadline(time.Now().Add(writeSocketTimeout)); err != nil {
+			if err != websocket.ErrCloseSent {
+				log.Errorf("Can't set write deadline timeout: %s", err)
+				client.connection.Close()
+			}
+
+			return aoserrors.Wrap(err)
+		}
 	}
 
 	if err = client.connection.WriteMessage(messageType, data); err != nil {
@@ -179,7 +188,7 @@ func (server *Server) newClient(w http.ResponseWriter, r *http.Request) (client 
 
 	client = &Client{RemoteAddr: r.RemoteAddr, handler: server.handler}
 
-	if websocket.IsWebSocketUpgrade(r) != true {
+	if !websocket.IsWebSocketUpgrade(r) {
 		return nil, aoserrors.New("new connection is not websocket")
 	}
 
@@ -207,7 +216,7 @@ func (client *Client) close(sendCloseMessage bool) (err error) {
 		"remoteAddr": client.RemoteAddr}).Info("Close client")
 
 	if sendCloseMessage {
-		client.SendMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		_ = client.SendMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	}
 
 	return aoserrors.Wrap(client.connection.Close())

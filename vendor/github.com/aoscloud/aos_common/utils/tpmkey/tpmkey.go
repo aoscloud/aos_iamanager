@@ -20,6 +20,7 @@ package tpmkey
 import (
 	"crypto"
 	"encoding/asn1"
+	"errors"
 	"io"
 	"math/big"
 
@@ -32,8 +33,6 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
-
-const tpmOpenRetry = 3
 
 /*******************************************************************************
  * Types
@@ -146,10 +145,27 @@ func makePersistent(key *tpmKey, persistentHandle tpmutil.Handle) (err error) {
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
-	defer tpm2.FlushContext(key.device, keyHandle)
+	defer func() {
+		if flushErr := tpm2.FlushContext(key.device, keyHandle); flushErr != nil {
+			if err == nil {
+				err = aoserrors.Wrap(flushErr)
+			}
+		}
+	}()
 
 	// Clear slot
-	tpm2.EvictControl(key.device, key.password, tpm2.HandleOwner, persistentHandle, persistentHandle)
+	if err = tpm2.EvictControl(
+		key.device, key.password, tpm2.HandleOwner, persistentHandle, persistentHandle); err != nil {
+		var tpmError tpm2.HandleError
+
+		if !errors.As(err, &tpmError) {
+			return aoserrors.Wrap(err)
+		}
+
+		if tpmError.Code != tpm2.RCHandle {
+			return aoserrors.Wrap(err)
+		}
+	}
 
 	if err = tpm2.EvictControl(key.device, key.password, tpm2.HandleOwner, keyHandle, persistentHandle); err != nil {
 		return aoserrors.Wrap(err)
@@ -168,7 +184,13 @@ func sign(key tpmKey, digest []byte, scheme tpm2.SigScheme) (signature []byte, e
 			key.publicBlob, key.privateBlob); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
-		defer tpm2.FlushContext(key.device, keyHandle)
+		defer func() {
+			if flushErr := tpm2.FlushContext(key.device, keyHandle); flushErr != nil {
+				if err == nil {
+					err = aoserrors.Wrap(flushErr)
+				}
+			}
+		}()
 	} else {
 		keyHandle = key.persistentHandle
 	}
@@ -204,7 +226,13 @@ func decryptRSA(key tpmKey, msg []byte, scheme tpm2.AsymScheme, label string) (p
 			key.publicBlob, key.privateBlob); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
-		defer tpm2.FlushContext(key.device, keyHandle)
+		defer func() {
+			if flushErr := tpm2.FlushContext(key.device, keyHandle); flushErr != nil {
+				if err == nil {
+					err = aoserrors.Wrap(flushErr)
+				}
+			}
+		}()
 	} else {
 		keyHandle = key.persistentHandle
 	}
