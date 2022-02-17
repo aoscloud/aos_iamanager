@@ -18,6 +18,7 @@
 package pkcs11module
 
 import (
+	"github.com/ThalesIgnite/crypto11"
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
@@ -45,25 +46,21 @@ type pkcs11Object struct {
  * Private
  **********************************************************************************************************************/
 
-func (object *pkcs11Object) getID() (id string) {
-	return object.id
-}
-
-func (object *pkcs11Object) delete() (err error) {
+func (object *pkcs11Object) delete() error {
 	log.WithFields(log.Fields{
 		"session": object.session,
 		"handle":  object.handle,
 		"id":      object.id,
 	}).Debug("Delete object")
 
-	if err = object.ctx.DestroyObject(object.session, object.handle); err != nil {
+	if err := object.ctx.DestroyObject(object.session, object.handle); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
 	return nil
 }
 
-func findObjects(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
+func findObjects(ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle,
 	template []*pkcs11.Attribute) (objects []*pkcs11Object, err error) {
 	template = append(template, pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true))
 
@@ -96,7 +93,7 @@ func findObjects(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 			}
 
 			objects = append(objects, &pkcs11Object{
-				ctx:     ctx,
+				ctx:     &ctx.Ctx,
 				session: session,
 				handle:  handle,
 				id:      string(attributes[0].Value),
