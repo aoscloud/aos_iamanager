@@ -20,11 +20,10 @@ package pkcs11module
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/asn1"
 	"errors"
 
+	"github.com/ThalesIgnite/crypto11"
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/google/uuid"
 	"github.com/miekg/pkcs11"
 	log "github.com/sirupsen/logrus"
 )
@@ -49,110 +48,22 @@ var errCertNotFound = errors.New("certificate not found")
  * Private
  **********************************************************************************************************************/
 
-func (cert *pkcs11Certificate) getX509Certificate() (x509Cert *x509.Certificate, err error) {
+func (cert *pkcs11Certificate) getX509Certificate() (*x509.Certificate, error) {
 	attributes, err := cert.ctx.GetAttributeValue(cert.session, cert.handle,
 		[]*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_VALUE, nil)})
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if x509Cert, err = x509.ParseCertificate(attributes[0].Value); err != nil {
+	x509Cert, err := x509.ParseCertificate(attributes[0].Value)
+	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
 	return x509Cert, nil
 }
 
-func createCertificateChain(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
-	id, label string, x509Certs []*x509.Certificate) (cert *pkcs11Certificate, err error) {
-	log.WithFields(log.Fields{
-		"session": session,
-		"id":      id,
-		"label":   label,
-	}).Debug("Create certificate chain")
-
-	if len(x509Certs) == 0 {
-		return nil, aoserrors.New("empty certificate chain")
-	}
-
-	if err = updateIssuerCertificates(ctx, session, x509Certs[1:]); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if cert, err = createCertificate(ctx, session, id, label, x509Certs[0]); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	return cert, nil
-}
-
-func createCertificate(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
-	id, label string, x509Cert *x509.Certificate) (cert *pkcs11Certificate, err error) {
-	serial, err := asn1.Marshal(x509Cert.SerialNumber)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	template := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
-		pkcs11.NewAttribute(pkcs11.CKA_CERTIFICATE_TYPE, pkcs11.CKC_X_509),
-		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, x509Cert.RawSubject),
-		pkcs11.NewAttribute(pkcs11.CKA_ISSUER, x509Cert.RawIssuer),
-		pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, serial),
-		pkcs11.NewAttribute(pkcs11.CKA_VALUE, x509Cert.Raw),
-	}
-
-	if label != "" {
-		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-	}
-
-	handle, err := ctx.CreateObject(session, template)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	log.WithFields(log.Fields{
-		"session": session,
-		"id":      id,
-		"label":   label,
-		"subject": x509Cert.Subject,
-		"issuer":  x509Cert.Issuer,
-		"handle":  handle,
-	}).Debug("Create certificate")
-
-	return &pkcs11Certificate{pkcs11Object: pkcs11Object{ctx: ctx, session: session, handle: handle}}, nil
-}
-
-func updateIssuerCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
-	x509Certs []*x509.Certificate) (err error) {
-	for _, x509Cert := range x509Certs {
-		if len(x509Cert.RawSubject) == 0 {
-			return aoserrors.New("subject is nil")
-		}
-
-		if _, err = findCertificateBySubject(ctx, session, x509Cert.RawSubject); err != nil {
-			if !errors.Is(err, errCertNotFound) {
-				return aoserrors.Wrap(err)
-			}
-
-			log.WithFields(log.Fields{
-				"session": session,
-				"subject": x509Cert.Subject,
-			}).Debug("Certificate not found")
-
-			if _, err = createCertificate(ctx, session, uuid.New().String(), "", x509Cert); err != nil {
-				return aoserrors.Wrap(err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func findCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
+func findCertificates(ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle,
 	template []*pkcs11.Attribute) (certs []*pkcs11Certificate, err error) {
 	template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE))
 
@@ -177,24 +88,6 @@ func findCertificates(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
 	}
 
 	return certs, nil
-}
-
-func findCertificateBySubject(ctx *pkcs11.Ctx, session pkcs11.SessionHandle,
-	subject []byte) (cert *pkcs11Certificate, err error) {
-	template := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, subject),
-	}
-
-	certs, err := findCertificates(ctx, session, template)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if len(certs) == 0 {
-		return nil, errCertNotFound
-	}
-
-	return certs[0], nil
 }
 
 func findCertificateChain(cert *pkcs11Certificate,
@@ -277,7 +170,7 @@ func appendIfNotExist(certs []*pkcs11Certificate, cert *pkcs11Certificate) (newC
 }
 
 func checkCertificateChain(
-	ctx *pkcs11.Ctx, session pkcs11.SessionHandle) (invalidCerts []*pkcs11Certificate, err error) {
+	ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle) ([]*pkcs11Certificate, error) {
 	log.Debug("Checking certificate chain")
 
 	template := []*pkcs11.Attribute{
