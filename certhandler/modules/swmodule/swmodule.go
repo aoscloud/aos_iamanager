@@ -31,7 +31,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 
@@ -65,8 +64,7 @@ type SWModule struct {
 }
 
 type moduleConfig struct {
-	StoragePath          string   `json:"storagePath"`
-	ApplyCertHookCmdArgs []string `json:"applyCertHookCmdArgs"`
+	StoragePath string `json:"storagePath"`
 }
 
 /*******************************************************************************
@@ -307,14 +305,6 @@ func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 
 	if err = cryptutils.SaveKey(keyFileName, currentKey); err != nil {
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
-	}
-
-	if len(module.config.ApplyCertHookCmdArgs) > 0 {
-		output, err := exec.Command(module.config.ApplyCertHookCmdArgs[0],
-			module.config.ApplyCertHookCmdArgs[1:]...).CombinedOutput()
-		if err != nil {
-			return certInfo, "", aoserrors.Errorf("message: %s, err: %s", string(output), err)
-		}
 	}
 
 	certInfo.CertURL = fileToURL(certFileName)
