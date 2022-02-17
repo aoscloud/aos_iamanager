@@ -29,7 +29,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -60,10 +59,7 @@ const (
 	CKS_RW_SO_FUNCTIONS
 )
 
-const (
-	envLoginType = "CKTEEC_LOGIN_TYPE"
-	envLoginGID  = "CKTEEC_LOGIN_GID"
-)
+const envLoginType = "CKTEEC_LOGIN_TYPE"
 
 const (
 	loginTypeGroup  = "group"
@@ -79,14 +75,15 @@ const rsaKeyLength = 2048
 
 // PKCS11Module PKCS11 certificate module.
 type PKCS11Module struct {
-	certType    string
-	config      moduleConfig
-	ctx         *pkcs11.Ctx
-	session     pkcs11.SessionHandle
-	slotID      uint
-	userPIN     string
-	tokenLabel  string
-	pendingKeys *list.List
+	certType     string
+	config       moduleConfig
+	ctx          *pkcs11.Ctx
+	session      pkcs11.SessionHandle
+	slotID       uint
+	teeLoginType string
+	userPIN      string
+	tokenLabel   string
+	pendingKeys  *list.List
 }
 
 type moduleConfig struct {
@@ -95,7 +92,6 @@ type moduleConfig struct {
 	SlotIndex        *int     `json:"slotIndex"`
 	TokenLabel       string   `json:"tokenLabel"`
 	UserPINPath      string   `json:"userPinPath"`
-	TEELoginType     string   `json:"teeLoginType"`
 	UID              uint32   `json:"uid"`
 	GID              uint32   `json:"gid"`
 	ModulePathInURL  bool     `json:"modulePathInUrl"`
@@ -127,7 +123,7 @@ var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals
 func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create PKCS11 module")
 
-	pkcs11Module := &PKCS11Module{certType: certType, pendingKeys: list.New()}
+	pkcs11Module := &PKCS11Module{certType: certType, pendingKeys: list.New(), teeLoginType: os.Getenv(envLoginType)}
 
 	defer func() {
 		if err != nil {
@@ -141,8 +137,10 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		}
 	}
 
-	if (pkcs11Module.config.UserPINPath == "") == (pkcs11Module.config.TEELoginType == "") {
-		return nil, aoserrors.New("either userPinPath or teeLoginType should be used")
+	pkcs11Module.teeLoginType = os.Getenv(envLoginType)
+
+	if (pkcs11Module.config.UserPINPath == "") == (pkcs11Module.teeLoginType == "") {
+		return nil, aoserrors.Errorf("either userPinPath or %s evn should be used", envLoginType)
 	}
 
 	if err = pkcs11Module.initContext(); err != nil {
@@ -202,8 +200,8 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 
 	var soPIN, userPIN string
 
-	if module.config.TEELoginType != "" {
-		if userPIN, err = getTeeUserPIN(module.config.TEELoginType, module.config.UID, module.config.GID); err != nil {
+	if module.teeLoginType != "" {
+		if userPIN, err = getTeeUserPIN(module.teeLoginType, module.config.UID, module.config.GID); err != nil {
 			return aoserrors.Wrap(err)
 		}
 
@@ -240,7 +238,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		err = aoserrors.Wrap(module.ctx.Logout(session))
 	}()
 
-	if module.config.TEELoginType != "" {
+	if module.teeLoginType != "" {
 		log.WithFields(log.Fields{"pin": userPIN, "session": session}).Debug("Init PIN")
 	} else {
 		log.WithFields(log.Fields{"session": session}).Debug("Init PIN")
@@ -614,36 +612,6 @@ func getTeeUserPIN(loginType string, uid, gid uint32) (userPIN string, err error
 	}
 }
 
-func setTeeEnvVars(loginType string, gid uint32) (err error) {
-	switch loginType {
-	case loginTypeUser, loginTypeGroup, loginTypePublic:
-		if os.Getenv(envLoginType) != loginType {
-			log.WithFields(log.Fields{"name": envLoginType, "value": loginType}).Debug("Set environment variable")
-
-			if err = os.Setenv(envLoginType, loginType); err != nil {
-				return aoserrors.Wrap(err)
-			}
-		}
-
-		if loginType == loginTypeGroup {
-			gidStr := strconv.FormatUint(uint64(gid), 32)
-
-			log.WithFields(log.Fields{"name": envLoginGID, "value": gidStr}).Debug("Set environment variable")
-
-			if os.Getenv(envLoginGID) != gidStr {
-				if err = os.Setenv(envLoginGID, gidStr); err != nil {
-					return aoserrors.Wrap(err)
-				}
-			}
-		}
-
-	default:
-		return aoserrors.Errorf("wrong TEE identity: %s", loginType)
-	}
-
-	return nil
-}
-
 func parseURL(urlStr string) (template []*pkcs11.Attribute, err error) {
 	urlVal, err := url.Parse(urlStr)
 	if err != nil {
@@ -709,12 +677,6 @@ func (module *PKCS11Module) initContext() (err error) {
 
 	if count == 0 {
 		log.WithField("library", module.config.Library).Debug("Initialize PKCS11 library")
-
-		if module.config.TEELoginType != "" {
-			if err = setTeeEnvVars(module.config.TEELoginType, module.config.GID); err != nil {
-				return aoserrors.Wrap(err)
-			}
-		}
 
 		if err = module.ctx.Initialize(); err != nil {
 			return aoserrors.Wrap(err)
@@ -854,7 +816,7 @@ func (module *PKCS11Module) releaseSession() (err error) {
 }
 
 func (module *PKCS11Module) getUserPIN() (pin string, err error) {
-	if module.config.TEELoginType != "" {
+	if module.teeLoginType != "" {
 		return "", nil
 	}
 
