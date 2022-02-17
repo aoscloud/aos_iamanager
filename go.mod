@@ -2,6 +2,8 @@ module github.com/aoscloud/aos_iamanager
 
 go 1.14
 
+replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
+
 require (
 	github.com/ThalesIgnite/crypto11 v1.2.5
 	github.com/aoscloud/aos_common v0.0.0-20211220123623-d23b9d38e838
@@ -20,5 +22,3 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/grpc v1.41.0
 )
-
-replace github.com/ThalesIgnite/crypto1 v1.2.4 => github.com/aoscloud/crypto11 v1.2.4
