@@ -189,7 +189,7 @@ func (module *TPMModule) ValidateCertificates() (
 			continue
 		}
 
-		x509Certs, err := cryptutils.LoadCertificate(absItemPath)
+		x509Certs, err := cryptutils.LoadCertificateFromFile(absItemPath)
 		if err != nil {
 			log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
 
@@ -358,7 +358,7 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
-	if err = cryptutils.SaveCertificate(certFileName, x509Certs); err != nil {
+	if err = cryptutils.SaveCertificateToFile(certFileName, x509Certs); err != nil {
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
