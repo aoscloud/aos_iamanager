@@ -61,7 +61,7 @@ type Server struct {
 	listenerPublic            net.Listener
 	grpcServer                *grpc.Server
 	grpcServerPublic          *grpc.Server
-	subjectsChangedStreams    []pb.IAMPublicService_SubscribeSubjectsChangedServer
+	usersChangedStreams       []pb.IAMPublicService_SubscribeUsersChangedServer
 	closeChannel              chan struct{}
 	streamsWg                 sync.WaitGroup
 	finishProvisioningCmdArgs []string
@@ -85,8 +85,6 @@ type CertHandler interface {
 type IdentHandler interface {
 	GetSystemID() (systemdID string, err error)
 	GetBoardModel() (boardModel string, err error)
-	GetSubjects() (Subjects []string, err error)
-	SubjectsChangedChannel() (channel <-chan []string)
 	GetUsers() (users []string, err error)
 	SetUsers(users []string) (err error)
 	UsersChangedChannel() (channel <-chan []string)
@@ -129,7 +127,7 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		return server, aoserrors.Wrap(err)
 	}
 
-	go server.handleSubjectsChanged()
+	go server.handleUsersChanged()
 
 	return server, nil
 }
@@ -346,57 +344,6 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 	return nil
 }
 
-// GetSubjects returns subjects.
-func (server *Server) GetSubjects(context context.Context, req *empty.Empty) (rsp *pb.Subjects, err error) {
-	rsp = &pb.Subjects{}
-
-	log.Debug("Process get subjects")
-
-	if rsp.Subjects, err = server.identHandler.GetSubjects(); err != nil {
-		log.Errorf("Get subjects error: %s", err)
-
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	return rsp, nil
-}
-
-// SubscribeSubjectsChanged creates stream for subjects changed notifications.
-func (server *Server) SubscribeSubjectsChanged(message *empty.Empty,
-	stream pb.IAMPublicService_SubscribeSubjectsChangedServer) (err error) {
-	server.streamsWg.Add(1)
-
-	server.Lock()
-	server.subjectsChangedStreams = append(server.subjectsChangedStreams, stream)
-	server.Unlock()
-
-	log.Debug("Process subjects changed")
-
-	<-stream.Context().Done()
-
-	if err = stream.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
-		log.Errorf("Stream error: %s", err)
-	} else {
-		log.Debug("Stream closed")
-	}
-
-	server.Lock()
-	defer server.Unlock()
-
-	for i, item := range server.subjectsChangedStreams {
-		if stream == item {
-			server.subjectsChangedStreams[i] = server.subjectsChangedStreams[len(server.subjectsChangedStreams)-1]
-			server.subjectsChangedStreams = server.subjectsChangedStreams[:len(server.subjectsChangedStreams)-1]
-
-			break
-		}
-	}
-
-	server.streamsWg.Done()
-
-	return nil
-}
-
 // RegisterService registers new service and creates secret.
 func (server *Server) RegisterService(
 	ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
@@ -583,20 +530,20 @@ func (server *Server) closeServerPublic() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-func (server *Server) handleSubjectsChanged() {
+func (server *Server) handleUsersChanged() {
 	for {
 		select {
 		case <-server.closeChannel:
 			return
 
-		case subjects := <-server.identHandler.SubjectsChangedChannel():
+		case users := <-server.identHandler.UsersChangedChannel():
 			server.Lock()
 
-			log.WithField("subjects", subjects).Debug("Handle aubjects changed")
+			log.WithField("users", users).Debug("Handle users changed")
 
-			for _, stream := range server.subjectsChangedStreams {
-				if err := stream.Send(&pb.Subjects{Subjects: subjects}); err != nil {
-					log.Errorf("Can't send subjects: %s", err)
+			for _, stream := range server.usersChangedStreams {
+				if err := stream.Send(&pb.Users{Users: users}); err != nil {
+					log.Errorf("Can't send users: %s", err)
 				}
 			}
 
