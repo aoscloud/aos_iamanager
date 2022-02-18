@@ -27,6 +27,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"strings"
 	"sync"
@@ -60,6 +61,8 @@ var (
 	oidExtKeyUsageServerAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
 	oidExtKeyUsageClientAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 2}
 )
+
+var ErrNotExist = errors.New("certificate not exist")
 
 var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
 
@@ -305,7 +308,7 @@ func (handler *Handler) GetCertificate(
 		}
 
 		if len(certInfos) == 0 {
-			return "", "", aoserrors.New("certificate not found")
+			return "", "", aoserrors.Wrap(ErrNotExist)
 		}
 
 		var minTime time.Time
