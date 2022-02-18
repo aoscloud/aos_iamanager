@@ -153,20 +153,12 @@ func (identifier *testIdentifier) GetBoardModel() (boardModel string, err error)
 	return identifier.boardModel, nil
 }
 
-func (identifier *testIdentifier) GetUsers() (users []string, err error) {
-	return identifier.users, nil
-}
-
 func (identifier *testIdentifier) SetUsers(users []string) (err error) {
-	identifier.users = users
+	identifier.subjects = users
 
-	identifier.usersChangedChannel <- users
+	identifier.subjectsChangedChannel <- users
 
 	return nil
-}
-
-func (identifier *testIdentifier) UsersChangedChannel() (channel <-chan []string) {
-	return identifier.usersChangedChannel
 }
 
 func (identifier *testIdentifier) GetSubjects() (subjects []string, err error) {
