@@ -78,12 +78,19 @@ type moduleConfig struct {
 }
 
 /***********************************************************************************************************************
+ * Vars
+ **********************************************************************************************************************/
+
+// DefaultTPMDevice used if not specified in the config.
+// nolint:gochecknoglobals
+var DefaultTPMDevice io.ReadWriteCloser
+
+/***********************************************************************************************************************
  * Public
  **********************************************************************************************************************/
 
 // New creates ssh module instance.
-func New(certType string, configJSON json.RawMessage,
-	device io.ReadWriteCloser) (module certhandler.CertModule, err error) {
+func New(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
 	log.WithField("certType", certType).Info("Create TPM module")
 
 	tpmModule := &TPMModule{certType: certType, pendingKeys: list.New()}
@@ -94,7 +101,7 @@ func New(certType string, configJSON json.RawMessage,
 		}
 	}
 
-	if device == nil {
+	if DefaultTPMDevice == nil {
 		if tpmModule.config.Device == "" {
 			return nil, aoserrors.New("TPM device should be set")
 		}
@@ -103,7 +110,7 @@ func New(certType string, configJSON json.RawMessage,
 			return nil, aoserrors.Wrap(err)
 		}
 	} else {
-		tpmModule.device = device
+		tpmModule.device = DefaultTPMDevice
 	}
 
 	if err = os.MkdirAll(tpmModule.config.StoragePath, 0o755); err != nil {
@@ -158,7 +165,7 @@ func (module *TPMModule) ValidateCertificates() (
 			return nil, nil, nil, aoserrors.Wrap(err)
 		}
 
-		keyMap[handleToURL(handle)] = key
+		keyMap[module.handleToURL(handle)] = key
 	}
 
 	content, err := ioutil.ReadDir(module.config.StoragePath)
@@ -365,7 +372,7 @@ func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 	}
 
 	certInfo.CertURL = fileToURL(certFileName)
-	certInfo.KeyURL = handleToURL(persistentHandle)
+	certInfo.KeyURL = module.handleToURL(persistentHandle)
 	certInfo.Issuer = base64.StdEncoding.EncodeToString(x509Certs[0].RawIssuer)
 	certInfo.Serial = fmt.Sprintf("%X", x509Certs[0].SerialNumber)
 	certInfo.NotAfter = x509Certs[0].NotAfter
@@ -411,7 +418,7 @@ func (module *TPMModule) RemoveKey(keyURL, password string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	handle, err := strconv.ParseUint(key.Hostname(), 0, 32)
+	handle, err := strconv.ParseUint(key.Opaque, 0, 32)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -582,8 +589,8 @@ func fileToURL(file string) (urlStr string) {
 	return urlVal.String()
 }
 
-func handleToURL(handle tpmutil.Handle) (urlStr string) {
-	urlVal := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
+func (module *TPMModule) handleToURL(handle tpmutil.Handle) string {
+	urlVal := url.URL{Scheme: cryptutils.SchemeTPM, Host: module.config.Device, Opaque: fmt.Sprintf("0x%X", handle)}
 
 	return urlVal.String()
 }

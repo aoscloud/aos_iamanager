@@ -227,21 +227,21 @@ func TestUpdateCertificate(t *testing.T) {
 			var pkcs11Ctx *crypto11.Context
 
 			for _, certInfo := range certInfos {
-				keyVal, err := url.Parse(certInfo.KeyURL)
+				keyURL, err := url.Parse(certInfo.KeyURL)
 				if err != nil {
 					t.Fatalf("Wrong key URL: %s", certInfo.KeyURL)
 				}
 
 				var currentKey crypto.PrivateKey
 
-				switch keyVal.Scheme {
+				switch keyURL.Scheme {
 				case cryptutils.SchemeFile:
-					if currentKey, err = cryptutils.LoadKey(keyVal.Path); err != nil {
+					if currentKey, err = cryptutils.LoadKey(keyURL.Path); err != nil {
 						t.Fatalf("Can't get key: %s", err)
 					}
 
 				case cryptutils.SchemeTPM:
-					handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
+					handle, err := strconv.ParseUint(keyURL.Opaque, 0, 32)
 					if err != nil {
 						t.Fatalf("Can't parse key URL: %s", err)
 					}
@@ -251,7 +251,7 @@ func TestUpdateCertificate(t *testing.T) {
 					}
 
 				case cryptutils.SchemePKCS11:
-					opaqueValues, err := url.ParseQuery(keyVal.Opaque)
+					opaqueValues, err := url.ParseQuery(keyURL.Opaque)
 					if err != nil {
 						t.Fatalf("Can't parse opaque: %s", err)
 					}
@@ -260,7 +260,7 @@ func TestUpdateCertificate(t *testing.T) {
 						if pkcs11Ctx, err = crypto11.Configure(&crypto11.Config{
 							Path:       pkcs11LibPath,
 							TokenLabel: opaqueValues["token"][0],
-							Pin:        keyVal.Query()["pin-value"][0],
+							Pin:        keyURL.Query()["pin-value"][0],
 						}); err != nil {
 							t.Fatalf("Can't init pkcs11 context: %s", err)
 						}
@@ -275,7 +275,7 @@ func TestUpdateCertificate(t *testing.T) {
 					}
 
 				default:
-					t.Fatalf("Unsupported key scheme: %s", keyVal.Scheme)
+					t.Fatalf("Unsupported key scheme: %s", keyURL.Scheme)
 				}
 
 				switch currentKey.(type) {
@@ -822,13 +822,15 @@ func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
 		}
 	}
 
+	tpmmodule.DefaultTPMDevice = tpmSimulator
+
 	// Dictionary attack parameters
 	lockoutMaxRetries, recoveryTime, lockoutRecoveryTime := 3, 1000, 1000
 
 	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s", "lockoutMaxTry": %d,
 		"recoveryTime": %d, "lockoutRecoveryTime": %d}`, certStorage, lockoutMaxRetries, recoveryTime, lockoutRecoveryTime))
 
-	if module, err = tpmmodule.New("test", config, tpmSimulator); err != nil {
+	if module, err = tpmmodule.New("test", config); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -938,7 +940,7 @@ func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
 			return nil, aoserrors.New("wrong TPM data format")
 		}
 
-		keyURL := url.URL{Scheme: cryptutils.SchemeTPM, Host: fmt.Sprintf("0x%X", handle)}
+		keyURL := url.URL{Scheme: cryptutils.SchemeTPM, Opaque: fmt.Sprintf("0x%X", handle)}
 
 		existingURLs = append(existingURLs, keyURL.String())
 	}
