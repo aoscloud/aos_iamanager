@@ -50,7 +50,7 @@ const serverURL = "wss://localhost:443"
 
 type clientHandler struct {
 	subscriptionID string
-	subjects       []string
+	users          []string
 }
 
 /*******************************************************************************
@@ -282,41 +282,34 @@ func TestGetBoardModel(t *testing.T) {
 	}
 }
 
-func TestGetSubjects(t *testing.T) {
-	testHandler.subjects = []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
+func TestGetUsers(t *testing.T) {
+	testHandler.users = []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 
-	subjects, err := vis.GetSubjects()
+	users, err := vis.GetUsers()
 	if err != nil {
-		t.Fatalf("Error getting subjects: %s", err)
+		t.Fatalf("Error getting users: %s", err)
 	}
 
-	if !reflect.DeepEqual(subjects, testHandler.subjects) {
-		t.Errorf("Wrong subjects value: %s", subjects)
+	if !reflect.DeepEqual(users, testHandler.users) {
+		t.Errorf("Wrong users value: %s", users)
 	}
 }
 
-func TestSubjectsChanged(t *testing.T) {
-	newSubjects := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
+func TestUsersChanged(t *testing.T) {
+	newUsers := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 
-	go testHandler.SubjectsChangeNotification(newSubjects)
+	if err := vis.SetUsers(newUsers); err != nil {
+		t.Fatalf("Can't set users: %s", err)
+	}
 
 	select {
-	case subjects := <-vis.SubjectsChangedChannel():
-		if !reflect.DeepEqual(newSubjects, subjects) {
-			t.Errorf("Wrong subjects value: %s", subjects)
+	case users := <-vis.UsersChangedChannel():
+		if !reflect.DeepEqual(newUsers, users) {
+			t.Errorf("Wrong users value: %s", users)
 		}
 
 	case <-time.After(5 * time.Second):
-		t.Error("Waiting for subjects changed timeout")
-	}
-
-	subjects, err := vis.GetSubjects()
-	if err != nil {
-		t.Fatalf("Error getting subjects: %s", err)
-	}
-
-	if !reflect.DeepEqual(subjects, newSubjects) {
-		t.Errorf("Wrong subjects value: %s", subjects)
+		t.Error("Waiting for users changed timeout")
 	}
 }
 
@@ -387,8 +380,8 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.BoardIdentification.Model":
 			getRsp.Value = map[string]string{getReq.Path: "testBoardModel:1.0"}
 
-		case "Attribute.Vehicle.SubjectIdentification.Subjects":
-			getRsp.Value = map[string][]string{getReq.Path: handler.subjects}
+		case "Attribute.Vehicle.UserIdentification.Users":
+			getRsp.Value = map[string][]string{getReq.Path: handler.users}
 		}
 
 		rsp = &getRsp
@@ -413,14 +406,33 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.BoardIdentification.Model":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.Vehicle.SubjectIdentification.Subjects":
-			handler.subjects = nil
+		case "Attribute.Vehicle.UserIdentification.Users":
+			handler.users = nil
 
 			for _, claim := range setReq.Value.([]interface{}) {
-				handler.subjects = append(handler.subjects, claim.(string))
+				handler.users = append(handler.users, claim.(string))
 			}
 
-			go handler.SubjectsChangeNotification(handler.subjects)
+			if handler.subscriptionID != "" {
+				go func() {
+					message, err := json.Marshal(&visprotocol.SubscriptionNotification{
+						Action:         "subscription",
+						SubscriptionID: handler.subscriptionID,
+						Value:          map[string][]string{"Attribute.Vehicle.UserIdentification.Users": handler.users},
+					})
+					if err != nil {
+						log.Errorf("Error marshal request: %s", err)
+					}
+
+					clients := server.GetClients()
+
+					for _, client := range clients {
+						if err := client.SendMessage(websocket.TextMessage, message); err != nil {
+							log.Errorf("Error sending message: %s", err)
+						}
+					}
+				}()
+			}
 		}
 
 	default:
@@ -432,27 +444,6 @@ func (handler *clientHandler) ProcessMessage(
 	}
 
 	return response, nil
-}
-
-func (handler *clientHandler) SubjectsChangeNotification(subjects []string) {
-	if handler.subscriptionID != "" {
-		message, err := json.Marshal(&visprotocol.SubscriptionNotification{
-			Action:         "subscription",
-			SubscriptionID: handler.subscriptionID,
-			Value:          map[string][]string{"Attribute.Vehicle.SubjectIdentification.Subjects": subjects},
-		})
-		if err != nil {
-			log.Errorf("Error marshal request: %s", err)
-		}
-
-		clients := server.GetClients()
-
-		for _, client := range clients {
-			if err := client.SendMessage(websocket.TextMessage, message); err != nil {
-				log.Errorf("Error sending message: %s", err)
-			}
-		}
-	}
 }
 
 func (handler *clientHandler) ClientConnected(client *wsserver.Client) {

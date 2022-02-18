@@ -35,15 +35,15 @@ import (
  ******************************************************************************/
 
 const (
-	subjectsChangedChannelSize = 1
+	usersChangedChannelSize = 1
 )
 
 const reconnectTimeout = 10 * time.Second
 
 const (
-	vinVISPath      = "Attribute.Vehicle.VehicleIdentification.VIN"
-	boardModelPath  = "Attribute.BoardIdentification.Model"
-	subjectsVISPath = "Attribute.Vehicle.SubjectIdentification.Subjects"
+	vinVISPath     = "Attribute.Vehicle.VehicleIdentification.VIN"
+	boardModelPath = "Attribute.BoardIdentification.Model"
+	usersVISPath   = "Attribute.Vehicle.UserIdentification.Users"
 )
 
 /*******************************************************************************
@@ -54,13 +54,13 @@ const (
 type Instance struct {
 	config instanceConfig
 
-	subjectChangedChannel chan []string
+	usersChangedChannel chan []string
 
 	wsClient *wsclient.Client
 
 	vin        string
 	boardModel string
-	subjects   []string
+	users      []string
 
 	subscribeMap sync.Map
 
@@ -101,7 +101,7 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	instance.subjectChangedChannel = make(chan []string, subjectsChangedChannelSize)
+	instance.usersChangedChannel = make(chan []string, usersChangedChannelSize)
 
 	instance.wg.Add(1)
 
@@ -186,24 +186,24 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	return instance.boardModel, aoserrors.Wrap(err)
 }
 
-// GetSubjects returns the subjects claims.
-func (instance *Instance) GetSubjects() (subjects []string, err error) {
+// GetUsers returns the user claims.
+func (instance *Instance) GetUsers() (users []string, err error) {
 	instance.wg.Wait()
 
-	if instance.subjects == nil {
-		rsp, err := instance.sendGetRequest(subjectsVISPath)
+	if instance.users == nil {
+		rsp, err := instance.sendGetRequest(usersVISPath)
 		if err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 
-		if err = instance.updateSubjects(rsp.Value); err != nil {
+		if err = instance.updateUsers(rsp.Value); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 	}
 
-	log.WithField("subjects", instance.subjects).Debug("Get subjects")
+	log.WithField("users", instance.users).Debug("Get users")
 
-	return instance.subjects, aoserrors.Wrap(err)
+	return instance.users, aoserrors.Wrap(err)
 }
 
 // SetUsers sets the user claims.
@@ -217,7 +217,7 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 			Action:    visprotocol.ActionSet,
 			RequestID: wsclient.GenerateRequestID(),
 		},
-		Path:  subjectsVISPath,
+		Path:  usersVISPath,
 		Value: users,
 	}
 
@@ -228,9 +228,9 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	return nil
 }
 
-// SubjectsChangedChannel returns subjects changed channel.
-func (instance *Instance) SubjectsChangedChannel() (channel <-chan []string) {
-	return instance.subjectChangedChannel
+// UsersChangedChannel returns users changed channel.
+func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
+	return instance.usersChangedChannel
 }
 
 /*******************************************************************************
@@ -246,12 +246,12 @@ func (instance *Instance) handleConnection(url string) {
 
 		instance.subscribeMap = sync.Map{}
 
-		if err := instance.subscribe(subjectsVISPath, instance.handleSubjectsChanged); err != nil {
+		if err := instance.subscribe(usersVISPath, instance.handleUsersChanged); err != nil {
 			log.Errorf("Can't subscribe to VIS: %s", err)
 			goto reconnect
 		}
 
-		instance.subjects = nil
+		instance.users = nil
 		instance.vin = ""
 
 		instance.wg.Done()
@@ -333,47 +333,47 @@ func (instance *Instance) processSubscriptions(message []byte) (err error) {
 	return nil
 }
 
-func (instance *Instance) updateSubjects(value interface{}) (err error) {
+func (instance *Instance) updateUsers(value interface{}) (err error) {
 	instance.Lock()
 	defer instance.Unlock()
 
-	value, err = getValueByPath(subjectsVISPath, value)
+	value, err = getValueByPath(usersVISPath, value)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 
 	itfs, ok := value.([]interface{})
 	if !ok {
-		return aoserrors.New("wrong subjects type")
+		return aoserrors.New("wrong users type")
 	}
 
-	instance.subjects = make([]string, len(itfs))
+	instance.users = make([]string, len(itfs))
 
 	for i, itf := range itfs {
 		item, ok := itf.(string)
 		if !ok {
-			return aoserrors.New("wrong subjects type")
+			return aoserrors.New("wrong users type")
 		}
 
-		instance.subjects[i] = item
+		instance.users[i] = item
 	}
 
 	return nil
 }
 
-func (instance *Instance) handleSubjectsChanged(value interface{}) {
-	if err := instance.updateSubjects(value); err != nil {
-		log.Errorf("Can't set subjects: %s", err)
+func (instance *Instance) handleUsersChanged(value interface{}) {
+	if err := instance.updateUsers(value); err != nil {
+		log.Errorf("Can't set users: %s", err)
 		return
 	}
 
-	log.WithField("subjects", instance.subjects).Debug("subjects changed")
+	log.WithField("users", instance.users).Debug("Users changed")
 
-	if len(instance.subjectChangedChannel) == subjectsChangedChannelSize {
+	if len(instance.usersChangedChannel) == usersChangedChannelSize {
 		return
 	}
 
-	instance.subjectChangedChannel <- instance.subjects
+	instance.usersChangedChannel <- instance.users
 }
 
 func (instance *Instance) subscribe(path string, callback func(value interface{})) (err error) {
