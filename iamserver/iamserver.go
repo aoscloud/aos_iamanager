@@ -91,9 +91,7 @@ type IdentHandler interface {
 	GetBoardModel() (boardModel string, err error)
 	GetSubjects() (Subjects []string, err error)
 	SubjectsChangedChannel() (channel <-chan []string)
-	GetUsers() (users []string, err error)
 	SetUsers(users []string) (err error)
-	UsersChangedChannel() (channel <-chan []string)
 }
 
 // PermissionHandler interface.
@@ -302,12 +300,13 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 }
 
 // GetUsers returns users.
+// deprecated method, use GetSubjects.
 func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *pb.Users, err error) {
 	rsp = &pb.Users{}
 
 	log.Debug("Process get users")
 
-	if rsp.Users, err = server.identHandler.GetUsers(); err != nil {
+	if rsp.Users, err = server.identHandler.GetSubjects(); err != nil {
 		log.Errorf("Get users error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
@@ -329,38 +328,6 @@ func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *emp
 	}
 
 	return rsp, nil
-}
-
-// SubscribeUsersChanged creates stream for users changed notifications.
-func (server *Server) SubscribeUsersChanged(message *empty.Empty,
-	stream pb.IAMPublicService_SubscribeUsersChangedServer) (err error) {
-	server.Lock()
-	server.usersChangedStreams = append(server.usersChangedStreams, stream)
-	server.Unlock()
-
-	log.Debug("Process users changed")
-
-	<-stream.Context().Done()
-
-	if err = stream.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
-		log.Errorf("Stream error: %s", err)
-	} else {
-		log.Debug("Stream closed")
-	}
-
-	server.Lock()
-	defer server.Unlock()
-
-	for i, item := range server.usersChangedStreams {
-		if stream == item {
-			server.usersChangedStreams[i] = server.usersChangedStreams[len(server.usersChangedStreams)-1]
-			server.usersChangedStreams = server.usersChangedStreams[:len(server.usersChangedStreams)-1]
-
-			break
-		}
-	}
-
-	return nil
 }
 
 // GetSubjects returns subjects.
