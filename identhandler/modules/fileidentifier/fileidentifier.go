@@ -123,16 +123,6 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	return instance.boardModel, aoserrors.Wrap(err)
 }
 
-// GetUsers returns the user claims.
-func (instance *Instance) GetUsers() (users []string, err error) {
-	instance.Lock()
-	defer instance.Unlock()
-
-	log.WithField("users", instance.users).Debug("Get users")
-
-	return instance.users, aoserrors.Wrap(err)
-}
-
 // SetUsers sets the user claims.
 func (instance *Instance) SetUsers(users []string) (err error) {
 	instance.Lock()
@@ -140,14 +130,14 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 
 	log.WithField("users", users).Debug("Set users")
 
-	if reflect.DeepEqual(instance.users, users) {
+	if reflect.DeepEqual(instance.subjects, users) {
 		return nil
 	}
 
-	instance.users = users
+	instance.subjects = users
 
-	if len(instance.usersChangedChannel) != usersChangedChannelSize {
-		instance.usersChangedChannel <- users
+	if len(instance.subjectsChangedChannel) != subjectsChangedChannelSize {
+		instance.subjectsChangedChannel <- users
 	}
 
 	if err = instance.writeUsers(); err != nil {
@@ -155,11 +145,6 @@ func (instance *Instance) SetUsers(users []string) (err error) {
 	}
 
 	return nil
-}
-
-// UsersChangedChannel returns users changed channel.
-func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
-	return instance.usersChangedChannel
 }
 
 // GetSubjects returns the subjects.
@@ -192,24 +177,6 @@ func (instance *Instance) readDataFromFile(path string) (data string, err error)
 	return data, nil
 }
 
-func (instance *Instance) readUsers() (err error) {
-	instance.users = make([]string, 0)
-
-	file, err := os.Open(instance.config.UsersPath)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		instance.users = append(instance.users, scanner.Text())
-	}
-
-	return nil
-}
-
 func (instance *Instance) readSubjects() (err error) {
 	instance.subjects = make([]string, 0)
 
@@ -229,7 +196,7 @@ func (instance *Instance) readSubjects() (err error) {
 }
 
 func (instance *Instance) writeUsers() (err error) {
-	file, err := os.Create(instance.config.UsersPath)
+	file, err := os.Create(instance.config.SubjectsPath)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -237,7 +204,7 @@ func (instance *Instance) writeUsers() (err error) {
 
 	writer := bufio.NewWriter(file)
 
-	for _, claim := range instance.users {
+	for _, claim := range instance.subjects {
 		fmt.Fprintln(writer, claim)
 	}
 
