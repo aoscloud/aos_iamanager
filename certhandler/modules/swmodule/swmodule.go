@@ -146,7 +146,7 @@ func (module *SWModule) ValidateCertificates() (
 			continue
 		}
 
-		if key, err := cryptutils.LoadKey(absItemPath); err == nil {
+		if key, err := cryptutils.LoadPrivateKeyFromFile(absItemPath); err == nil {
 			keyMap[absItemPath] = key
 		}
 	}
@@ -167,7 +167,7 @@ func (module *SWModule) ValidateCertificates() (
 			continue
 		}
 
-		x509Certs, err := cryptutils.LoadCertificate(absItemPath)
+		x509Certs, err := cryptutils.LoadCertificateFromFile(absItemPath)
 		if err != nil {
 			if _, ok := keyMap[absItemPath]; !ok {
 				log.WithFields(log.Fields{"certType": module.certType, "file": absItemPath}).Warn("Unknown file found")
@@ -294,7 +294,7 @@ func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
-	if err = cryptutils.SaveCertificate(certFileName, x509Certs); err != nil {
+	if err = cryptutils.SaveCertificateToFile(certFileName, x509Certs); err != nil {
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
@@ -303,7 +303,7 @@ func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 
-	if err = cryptutils.SaveKey(keyFileName, currentKey); err != nil {
+	if err = cryptutils.SavePrivateKeyToFile(keyFileName, currentKey); err != nil {
 		return certhandler.CertInfo{}, "", aoserrors.Wrap(err)
 	}
 

@@ -236,7 +236,7 @@ func TestUpdateCertificate(t *testing.T) {
 
 				switch keyURL.Scheme {
 				case cryptutils.SchemeFile:
-					if currentKey, err = cryptutils.LoadKey(keyURL.Path); err != nil {
+					if currentKey, err = cryptutils.LoadPrivateKeyFromFile(keyURL.Path); err != nil {
 						t.Fatalf("Can't get key: %s", err)
 					}
 
@@ -899,12 +899,12 @@ func getExistingFileItems(itemType, storagePath string) (existingURLs []string, 
 
 		switch itemType {
 		case "cert":
-			if _, err = cryptutils.LoadCertificate(absItemPath); err != nil {
+			if _, err = cryptutils.LoadCertificateFromFile(absItemPath); err != nil {
 				continue
 			}
 
 		case keyStr:
-			if _, err = cryptutils.LoadKey(absItemPath); err != nil {
+			if _, err = cryptutils.LoadPrivateKeyFromFile(absItemPath); err != nil {
 				continue
 			}
 
