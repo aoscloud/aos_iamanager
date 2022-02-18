@@ -284,10 +284,8 @@ type GCMIVFromHSMConfig struct {
 
 // refCount counts the number of contexts using a particular P11 library. It must not be read or modified
 // without holding refCountMutex.
-var (
-	refCount      = map[string]int{}
-	refCountMutex = sync.Mutex{}
-)
+var refCount = map[string]int{}
+var refCountMutex = sync.Mutex{}
 
 // NewPKCS11Context returns PKCS11 context.
 func NewPKCS11Context(libraryPath string) (pkcs11Context *PKCS11Context, err error) {
