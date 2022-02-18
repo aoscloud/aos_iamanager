@@ -423,7 +423,7 @@ func TestSetUsers(t *testing.T) {
 
 	defer client.close()
 
-	identHandler.subjects = []string{"user1", "user2", "user3"}
+	identHandler.users = []string{"user1", "user2", "user3"}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -434,8 +434,8 @@ func TestSetUsers(t *testing.T) {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if !reflect.DeepEqual(request.Users, identHandler.subjects) {
-		t.Errorf("Wrong users: %v", identHandler.subjects)
+	if !reflect.DeepEqual(request.Users, identHandler.users) {
+		t.Errorf("Wrong users: %v", identHandler.users)
 	}
 }
 
@@ -791,11 +791,11 @@ func (handler *testIdentHandler) GetBoardModel() (boardModel string, err error) 
 }
 
 func (handler *testIdentHandler) GetUsers() (users []string, err error) {
-	return handler.subjects, nil
+	return handler.users, nil
 }
 
 func (handler *testIdentHandler) SetUsers(users []string) (err error) {
-	handler.subjects = users
+	handler.users = users
 
 	return nil
 }
