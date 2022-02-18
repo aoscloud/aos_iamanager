@@ -142,10 +142,7 @@ func (client *Client) Disconnect() (err error) {
 
 	client.isConnected = false
 
-	if e := client.connection.SetWriteDeadline(time.Now().Add(client.clientParam.WebSocketTimeout)); e != nil {
-		log.Errorf("Can't set write deadline timeout: %s", e)
-		err = e
-	}
+	client.connection.SetWriteDeadline(time.Now().Add(client.clientParam.WebSocketTimeout))
 
 	if e := client.connection.WriteMessage(websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); e != nil {
@@ -243,13 +240,7 @@ func (client *Client) SendMessage(message interface{}) (err error) {
 
 	log.WithFields(log.Fields{"client": client.name, "message": string(messageJSON)}).Debug("Send message")
 
-	if err := client.connection.SetWriteDeadline(time.Now().Add(client.clientParam.WebSocketTimeout)); err != nil {
-		log.WithFields(log.Fields{"client": client.name}).Debugf("Can't set write deadline timeout: %s", err)
-
-		client.connection.Close()
-
-		return aoserrors.Wrap(err)
-	}
+	client.connection.SetWriteDeadline(time.Now().Add(client.clientParam.WebSocketTimeout))
 
 	if err = client.connection.WriteMessage(websocket.TextMessage, messageJSON); err != nil {
 		log.WithFields(log.Fields{"client": client.name}).Debugf("Send message error: %s", err)
