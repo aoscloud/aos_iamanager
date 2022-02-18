@@ -18,8 +18,6 @@
 package tpmmodule
 
 import (
-	"encoding/json"
-
 	"github.com/aoscloud/aos_iamanager/certhandler"
 )
 
@@ -28,8 +26,5 @@ import (
  **********************************************************************************************************************/
 
 func init() {
-	certhandler.RegisterPlugin("tpmmodule",
-		func(certType string, configJSON json.RawMessage) (module certhandler.CertModule, err error) {
-			return New(certType, configJSON, nil)
-		})
+	certhandler.RegisterPlugin("tpmmodule", New)
 }
