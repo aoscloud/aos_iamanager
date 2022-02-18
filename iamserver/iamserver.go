@@ -26,13 +26,14 @@ import (
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	pb "github.com/aoscloud/aos_common/api/iamanager/v1"
+	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/aoscloud/aos_iamanager/certhandler"
 	"github.com/aoscloud/aos_iamanager/config"
 )
 
@@ -54,9 +55,11 @@ const discEncryptyonType = "diskencryption"
 type Server struct {
 	sync.Mutex
 
-	identHandler              IdentHandler
-	certHandler               CertHandler
-	permissionHandler         PermissionHandler
+	identHandler      IdentHandler
+	certHandler       CertHandler
+	permissionHandler PermissionHandler
+
+	cryptoContext             *cryptutils.CryptoContext
 	listener                  net.Listener
 	listenerPublic            net.Listener
 	grpcServer                *grpc.Server
@@ -119,6 +122,10 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		}
 	}()
 
+	if server.cryptoContext, err = cryptutils.NewCryptoContext(cfg.CACert); err != nil {
+		return server, aoserrors.Wrap(err)
+	}
+
 	if err := server.createServerProtected(cfg, insecure); err != nil {
 		return server, aoserrors.Wrap(err)
 	}
@@ -136,17 +143,23 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 func (server *Server) Close() (err error) {
 	if errCloseServerProtected := server.closeServerProtected(); errCloseServerProtected != nil {
 		if err == nil {
-			err = errCloseServerProtected
+			err = aoserrors.Wrap(errCloseServerProtected)
 		}
 	}
 
 	if errCloseServerPublic := server.closeServerPublic(); errCloseServerPublic != nil {
 		if err == nil {
-			err = errCloseServerPublic
+			err = aoserrors.Wrap(errCloseServerPublic)
 		}
 	}
 
-	return aoserrors.Wrap(err)
+	if errCryptoContext := server.cryptoContext.Close(); errCryptoContext != nil {
+		if err == nil {
+			err = aoserrors.Wrap(errCryptoContext)
+		}
+	}
+
+	return err
 }
 
 // GetCertTypes return all IAM cert types.
@@ -433,10 +446,19 @@ func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (
 	var opts []grpc.ServerOption
 
 	if !insecure {
-		tlsConfig, err := cryptutils.GetServerMutualTLSConfig(cfg.CACert, cfg.CertStorage)
+		certURL, keyURL, err := server.certHandler.GetCertificate(cfg.CertStorage, nil, "")
 		if err != nil {
-			log.Errorf("Can't get mTLS config: %s", err)
+			if !errors.Is(err, certhandler.ErrNotExist) {
+				return aoserrors.Wrap(err)
+			}
+
+			log.Errorf("Can't get TLS certificate: %s. Continue in insecure mode.", err)
 		} else {
+			tlsConfig, err := server.cryptoContext.GetServerMutualTLSConfig(certURL, keyURL)
+			if err != nil {
+				return aoserrors.Wrap(err)
+			}
+
 			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 		}
 	} else {
@@ -467,10 +489,19 @@ func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err
 	var opts []grpc.ServerOption
 
 	if !insecure {
-		tlsConfig, err := cryptutils.GetServerTLSConfig(cfg.CertStorage)
+		certURL, keyURL, err := server.certHandler.GetCertificate(cfg.CertStorage, nil, "")
 		if err != nil {
-			log.Errorf("Can't get TLS config: %s", err)
+			if !errors.Is(err, certhandler.ErrNotExist) {
+				return aoserrors.Wrap(err)
+			}
+
+			log.Errorf("Can't get public TLS certificate: %s. Continue in insecure mode.", err)
 		} else {
+			tlsConfig, err := server.cryptoContext.GetServerTLSConfig(certURL, keyURL)
+			if err != nil {
+				return aoserrors.Wrap(err)
+			}
+
 			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 		}
 	} else {

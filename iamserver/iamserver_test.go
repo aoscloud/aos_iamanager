@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	pb "github.com/aoscloud/aos_common/api/iamanager/v1"
+	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -126,7 +126,7 @@ func TestGetCertTypes(t *testing.T) {
 
 	certHandler.certTypes = []string{"test1", "test2", "test3"}
 
-	response, err := client.pbProtected.GetCertTypes(ctx, &empty.Empty{})
+	response, err := client.pbPublic.GetCertTypes(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
@@ -319,7 +319,7 @@ func TestGetCert(t *testing.T) {
 
 	request := &pb.GetCertRequest{Type: "online", Issuer: []byte("issuer"), Serial: "serial"}
 
-	response, err := client.pbProtected.GetCert(ctx, request)
+	response, err := client.pbPublic.GetCert(ctx, request)
 	if err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
