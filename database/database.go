@@ -46,9 +46,6 @@ const (
  * Vars
  ******************************************************************************/
 
-// ErrNotExist is returned when requested entry not exist in DB.
-var ErrNotExist = errors.New("entry doesn't not exist")
-
 // ErrVersionMismatch is returned when DB has unsupported DB version.
 var ErrVersionMismatch = errors.New("version mismatch")
 
@@ -147,7 +144,7 @@ func (db *Database) GetCertificate(issuer, serial string) (cert certhandler.Cert
 		return cert, nil
 	}
 
-	return cert, aoserrors.Wrap(ErrNotExist)
+	return cert, aoserrors.Wrap(certhandler.ErrNotExist)
 }
 
 // GetCertificates returns certificates of selected type.
@@ -212,10 +209,6 @@ func (db *Database) getVersion() (version uint64, err error) {
 
 	err = stmt.QueryRow().Scan(&version)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return version, aoserrors.Wrap(ErrNotExist)
-		}
-
 		return version, aoserrors.Wrap(err)
 	}
 
@@ -234,7 +227,7 @@ func (db *Database) setVersion(version uint64) (err error) {
 	}
 
 	if count == 0 {
-		return aoserrors.Wrap(ErrNotExist)
+		return aoserrors.New("row version not exist")
 	}
 
 	return nil
