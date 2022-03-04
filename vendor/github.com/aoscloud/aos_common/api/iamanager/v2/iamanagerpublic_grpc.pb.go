@@ -25,6 +25,7 @@ type IAMPublicServiceClient interface {
 	GetPermissions(ctx context.Context, in *PermissionsRequest, opts ...grpc.CallOption) (*PermissionsResponse, error)
 	GetUsers(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Users, error)
 	SubscribeUsersChanged(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (IAMPublicService_SubscribeUsersChangedClient, error)
+	GetAPIVersion(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*APIVersion, error)
 }
 
 type iAMPublicServiceClient struct {
@@ -112,6 +113,15 @@ func (x *iAMPublicServiceSubscribeUsersChangedClient) Recv() (*Users, error) {
 	return m, nil
 }
 
+func (c *iAMPublicServiceClient) GetAPIVersion(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*APIVersion, error) {
+	out := new(APIVersion)
+	err := c.cc.Invoke(ctx, "/iamanager.v2.IAMPublicService/GetAPIVersion", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IAMPublicServiceServer is the server API for IAMPublicService service.
 // All implementations must embed UnimplementedIAMPublicServiceServer
 // for forward compatibility
@@ -122,6 +132,7 @@ type IAMPublicServiceServer interface {
 	GetPermissions(context.Context, *PermissionsRequest) (*PermissionsResponse, error)
 	GetUsers(context.Context, *empty.Empty) (*Users, error)
 	SubscribeUsersChanged(*empty.Empty, IAMPublicService_SubscribeUsersChangedServer) error
+	GetAPIVersion(context.Context, *empty.Empty) (*APIVersion, error)
 	mustEmbedUnimplementedIAMPublicServiceServer()
 }
 
@@ -146,6 +157,9 @@ func (UnimplementedIAMPublicServiceServer) GetUsers(context.Context, *empty.Empt
 }
 func (UnimplementedIAMPublicServiceServer) SubscribeUsersChanged(*empty.Empty, IAMPublicService_SubscribeUsersChangedServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeUsersChanged not implemented")
+}
+func (UnimplementedIAMPublicServiceServer) GetAPIVersion(context.Context, *empty.Empty) (*APIVersion, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAPIVersion not implemented")
 }
 func (UnimplementedIAMPublicServiceServer) mustEmbedUnimplementedIAMPublicServiceServer() {}
 
@@ -271,6 +285,24 @@ func (x *iAMPublicServiceSubscribeUsersChangedServer) Send(m *Users) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _IAMPublicService_GetAPIVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(empty.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMPublicServiceServer).GetAPIVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/iamanager.v2.IAMPublicService/GetAPIVersion",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMPublicServiceServer).GetAPIVersion(ctx, req.(*empty.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IAMPublicService_ServiceDesc is the grpc.ServiceDesc for IAMPublicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -297,6 +329,10 @@ var IAMPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUsers",
 			Handler:    _IAMPublicService_GetUsers_Handler,
+		},
+		{
+			MethodName: "GetAPIVersion",
+			Handler:    _IAMPublicService_GetAPIVersion_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
