@@ -708,6 +708,34 @@ func TestUsersChanged(t *testing.T) {
 	}
 }
 
+func TestGetAPIVersion(t *testing.T) {
+	certHandler := &testCertHandler{}
+
+	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
+		&testIdentHandler{}, certHandler, nil, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %s", err)
+	}
+
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+
+	defer client.close()
+
+	response, err := client.pbPublic.GetAPIVersion(context.Background(), &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't get api version: %s", err)
+	}
+
+	if response.Version != 2 {
+		t.Errorf("Wrong api version: %v", response.Version)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
