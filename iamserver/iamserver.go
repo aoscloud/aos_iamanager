@@ -43,6 +43,8 @@ import (
 
 const discEncryptyonType = "diskencryption"
 
+const iamAPIVersion = 2
+
 /***********************************************************************************************************************
  * Vars
  **********************************************************************************************************************/
@@ -430,6 +432,11 @@ func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReques
 	}
 
 	return rsp, nil
+}
+
+// GetAPIVersion returns current iam api version.
+func (server *Server) GetAPIVersion(ctx context.Context, req *empty.Empty) (resp *pb.APIVersion, err error) {
+	return &pb.APIVersion{Version: iamAPIVersion}, nil
 }
 
 /***********************************************************************************************************************
