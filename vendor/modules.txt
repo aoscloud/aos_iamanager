@@ -1,7 +1,7 @@
 # github.com/ThalesIgnite/crypto11 v1.2.5 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 ## explicit
 github.com/ThalesIgnite/crypto11
-# github.com/aoscloud/aos_common v0.0.0-20220218172038-8cf168776e9c
+# github.com/aoscloud/aos_common v0.0.0-20220304130034-9f6bb42969b0
 ## explicit
 github.com/aoscloud/aos_common/aoserrors
 github.com/aoscloud/aos_common/api/iamanager/v2
