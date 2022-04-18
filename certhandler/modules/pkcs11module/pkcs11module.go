@@ -142,8 +142,6 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		}
 	}
 
-	pkcs11Module.teeLoginType = os.Getenv(envLoginType)
-
 	if (pkcs11Module.config.UserPINPath == "") == (pkcs11Module.teeLoginType == "") {
 		return nil, aoserrors.Errorf("either userPinPath or %s evn should be used", envLoginType)
 	}
