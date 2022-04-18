@@ -41,9 +41,9 @@ import (
 
 	"github.com/ThalesIgnite/crypto11"
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/tpmkey"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/aoscloud/aos_common/utils/testtools"
-	"github.com/aoscloud/aos_common/utils/tpmkey"
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"

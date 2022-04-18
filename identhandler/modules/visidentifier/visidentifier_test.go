@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/visprotocol"
+	"github.com/aoscloud/aos_common/api/visprotocol"
 	"github.com/aoscloud/aos_common/wsserver"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -325,7 +325,8 @@ func TestSubjectsChanged(t *testing.T) {
  ******************************************************************************/
 
 func (handler *clientHandler) ProcessMessage(
-	client *wsserver.Client, messageType int, message []byte) (response []byte, err error) {
+	client *wsserver.Client, messageType int, message []byte,
+) (response []byte, err error) {
 	var header visprotocol.MessageHeader
 
 	if err = json.Unmarshal(message, &header); err != nil {

@@ -33,8 +33,8 @@ import (
 	"strings"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/tpmkey"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
-	"github.com/aoscloud/aos_common/utils/tpmkey"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	log "github.com/sirupsen/logrus"
@@ -149,7 +149,8 @@ func (module *TPMModule) Close() (err error) {
 
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys.
 func (module *TPMModule) ValidateCertificates() (
-	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error,
+) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
 	handles, err := module.getPersistentHandles()
@@ -322,7 +323,8 @@ func (module *TPMModule) CreateKey(password, algorithm string) (key crypto.Priva
 
 // ApplyCertificate applies certificate.
 func (module *TPMModule) ApplyCertificate(x509Certs []*x509.Certificate) (
-	certInfo certhandler.CertInfo, password string, err error) {
+	certInfo certhandler.CertInfo, password string, err error,
+) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
 	var (
