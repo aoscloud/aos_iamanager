@@ -209,6 +209,10 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 
 	log.WithFields(log.Fields{"certType": module.certType, "slotID": module.slotID}).Debug("Set owner")
 
+	if module.slotID, err = module.getSlotID(); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
 	if err = module.closeCurrentContext(); err != nil {
 		return aoserrors.Wrap(err)
 	}
