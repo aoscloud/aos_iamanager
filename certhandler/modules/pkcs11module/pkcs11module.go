@@ -156,19 +156,21 @@ func New(certType string, configJSON json.RawMessage) (module certhandler.CertMo
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if err = pkcs11Module.displayInfo(pkcs11Module.slotID); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
 	owned, err := pkcs11Module.isOwned()
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
 	if owned {
+		if err = pkcs11Module.displayInfo(pkcs11Module.slotID); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
 		if err = pkcs11Module.createCurrentContext(); err != nil {
 			log.Errorf("Can't create current context: %s", err)
 		}
+	} else {
+		log.Debug("No owned token found")
 	}
 
 	return pkcs11Module, nil
