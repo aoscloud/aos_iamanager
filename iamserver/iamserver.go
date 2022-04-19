@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/api/cloudprotocol"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -96,9 +97,11 @@ type IdentHandler interface {
 
 // PermissionHandler interface.
 type PermissionHandler interface {
-	RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error)
-	UnregisterService(serviceID string)
-	GetPermissions(secret, funcServerID string) (serviceID string, permissions map[string]string, err error)
+	RegisterInstance(
+		instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string) (secret string, err error)
+	UnregisterInstance(instance cloudprotocol.InstanceIdent)
+	GetPermissions(secret, funcServerID string) (
+		instance cloudprotocol.InstanceIdent, permissions map[string]string, err error)
 }
 
 /***********************************************************************************************************************
@@ -107,7 +110,8 @@ type PermissionHandler interface {
 
 // New creates new IAM server instance.
 func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
-	permissionHandler PermissionHandler, insecure bool) (server *Server, err error) {
+	permissionHandler PermissionHandler, insecure bool,
+) (server *Server, err error) {
 	server = &Server{
 		identHandler:              identHandler,
 		certHandler:               certHandler,
@@ -226,7 +230,8 @@ func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp 
 
 // CreateKey creates private key.
 func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (
-	rsp *pb.CreateKeyResponse, err error) {
+	rsp *pb.CreateKeyResponse, err error,
+) {
 	rsp = &pb.CreateKeyResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process create key request")
@@ -245,7 +250,8 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 
 // ApplyCert applies certificate.
 func (server *Server) ApplyCert(
-	context context.Context, req *pb.ApplyCertRequest) (rsp *pb.ApplyCertResponse, err error) {
+	context context.Context, req *pb.ApplyCertRequest,
+) (rsp *pb.ApplyCertResponse, err error) {
 	rsp = &pb.ApplyCertResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process apply cert request")
@@ -378,21 +384,26 @@ func (server *Server) SubscribeSubjectsChanged(message *empty.Empty,
 	return nil
 }
 
-// RegisterService registers new service and creates secret.
-func (server *Server) RegisterService(
-	ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
-	rsp = &pb.RegisterServiceResponse{}
+// RegisterInstance registers new service and creates secret.
+func (server *Server) RegisterInstance(
+	ctx context.Context, req *pb.RegisterInstanceRequest,
+) (*pb.RegisterInstanceResponse, error) {
+	rsp := &pb.RegisterInstanceResponse{}
 
-	log.WithField("serviceID", req.ServiceId).Debug("Process register service")
+	log.WithFields(log.Fields{
+		"serviceID": req.Instance.ServiceId,
+		"subjectID": req.Instance.SubjectId,
+		"instance":  req.Instance.Instance,
+	}).Debug("Process register instance")
 
 	permissions := make(map[string]map[string]string)
 	for key, value := range req.Permissions {
 		permissions[key] = value.Permissions
 	}
 
-	secret, err := server.permissionHandler.RegisterService(req.ServiceId, permissions)
+	secret, err := server.permissionHandler.RegisterInstance(instanceIdentPBToCloudprotocol(req.Instance), permissions)
 	if err != nil {
-		log.Errorf("Register service error: %s", err)
+		log.Errorf("Register instance error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}
@@ -402,33 +413,38 @@ func (server *Server) RegisterService(
 	return rsp, nil
 }
 
-// UnregisterService unregisters service.
-func (server *Server) UnregisterService(
-	ctx context.Context, req *pb.UnregisterServiceRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+// UnregisterInstance unregisters service.
+func (server *Server) UnregisterInstance(ctx context.Context, req *pb.UnregisterInstanceRequest) (*empty.Empty, error) {
+	log.WithFields(log.Fields{
+		"serviceID": req.Instance.ServiceId,
+		"subjectID": req.Instance.SubjectId,
+		"instance":  req.Instance.Instance,
+	}).Debug("Process unregister instance")
 
-	log.WithField("serviceID", req.ServiceId).Debug("Process unregister service")
+	server.permissionHandler.UnregisterInstance(instanceIdentPBToCloudprotocol(req.Instance))
 
-	server.permissionHandler.UnregisterService(req.ServiceId)
-
-	return rsp, nil
+	return &empty.Empty{}, nil
 }
 
 // GetPermissions returns permissions by secret and functional server ID.
 func (server *Server) GetPermissions(
-	ctx context.Context, req *pb.PermissionsRequest) (rsp *pb.PermissionsResponse, err error) {
+	ctx context.Context, req *pb.PermissionsRequest,
+) (rsp *pb.PermissionsResponse, err error) {
 	rsp = &pb.PermissionsResponse{}
 
 	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")
 
-	serviceID, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
+	instance, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
 	if err != nil {
 		log.Errorf("Ger permissions error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}
 
-	rsp.ServiceId = serviceID
+	rsp.Instance = &pb.InstanceIdent{
+		ServiceId: instance.ServiceID, SubjectId: instance.SubjectID,
+		Instance: int64(instance.Instance),
+	}
 	rsp.Permissions = &pb.Permissions{Permissions: perm}
 
 	return rsp, nil
@@ -602,5 +618,11 @@ func (server *Server) handleSubjectsChanged(ctx context.Context) {
 
 			server.Unlock()
 		}
+	}
+}
+
+func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) cloudprotocol.InstanceIdent {
+	return cloudprotocol.InstanceIdent{
+		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: uint64(ident.Instance),
 	}
 }
