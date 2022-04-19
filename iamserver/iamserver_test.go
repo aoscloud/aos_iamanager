@@ -414,39 +414,6 @@ func TestGetSubjects(t *testing.T) {
 	}
 }
 
-func TestSetUsers(t *testing.T) {
-	identHandler := &testIdentHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		identHandler, &testCertHandler{}, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	identHandler.subjects = []string{"user1", "user2", "user3"}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	request := &pb.Users{Users: []string{"newUser1", "newUser2", "newUser3"}}
-
-	if _, err := client.pbProtected.SetUsers(ctx, request); err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if !reflect.DeepEqual(request.Users, identHandler.subjects) {
-		t.Errorf("Wrong users: %v", identHandler.subjects)
-	}
-}
-
 func TestInstancePermissions(t *testing.T) {
 	permHandler := testPermissionHandler{permissions: make(map[string]map[string]map[string]string)}
 
@@ -700,16 +667,6 @@ func (handler *testIdentHandler) GetSystemID() (systemID string, err error) {
 
 func (handler *testIdentHandler) GetBoardModel() (boardModel string, err error) {
 	return handler.boardModel, nil
-}
-
-func (handler *testIdentHandler) GetUsers() (users []string, err error) {
-	return handler.subjects, nil
-}
-
-func (handler *testIdentHandler) SetUsers(users []string) (err error) {
-	handler.subjects = users
-
-	return nil
 }
 
 func (handler *testIdentHandler) GetSubjects() (subjects []string, err error) {

@@ -20,10 +20,8 @@ package fileidentifier
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -123,30 +121,6 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	return instance.boardModel, aoserrors.Wrap(err)
 }
 
-// SetUsers sets the user claims.
-func (instance *Instance) SetUsers(users []string) (err error) {
-	instance.Lock()
-	defer instance.Unlock()
-
-	log.WithField("users", users).Debug("Set users")
-
-	if reflect.DeepEqual(instance.subjects, users) {
-		return nil
-	}
-
-	instance.subjects = users
-
-	if len(instance.subjectsChangedChannel) != subjectsChangedChannelSize {
-		instance.subjectsChangedChannel <- users
-	}
-
-	if err = instance.writeUsers(); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	return nil
-}
-
 // GetSubjects returns the subjects.
 func (instance *Instance) GetSubjects() (subjects []string, err error) {
 	instance.Lock()
@@ -193,20 +167,4 @@ func (instance *Instance) readSubjects() (err error) {
 	}
 
 	return nil
-}
-
-func (instance *Instance) writeUsers() (err error) {
-	file, err := os.Create(instance.config.SubjectsPath)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
-
-	for _, claim := range instance.subjects {
-		fmt.Fprintln(writer, claim)
-	}
-
-	return aoserrors.Wrap(writer.Flush())
 }

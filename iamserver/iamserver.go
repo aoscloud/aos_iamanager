@@ -93,7 +93,6 @@ type IdentHandler interface {
 	GetBoardModel() (boardModel string, err error)
 	GetSubjects() (Subjects []string, err error)
 	SubjectsChangedChannel() (channel <-chan []string)
-	SetUsers(users []string) (err error)
 }
 
 // PermissionHandler interface.
@@ -292,37 +291,6 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 
 	if rsp.BoardModel, err = server.identHandler.GetBoardModel(); err != nil {
 		log.Errorf("Get board model error: %s", err)
-
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	return rsp, nil
-}
-
-// GetUsers returns users.
-// deprecated method, use GetSubjects.
-func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *pb.Users, err error) {
-	rsp = &pb.Users{}
-
-	log.Debug("Process get users")
-
-	if rsp.Users, err = server.identHandler.GetSubjects(); err != nil {
-		log.Errorf("Get users error: %s", err)
-
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	return rsp, nil
-}
-
-// SetUsers sets users.
-func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
-
-	log.WithField("users", req.Users).Debug("Process set users")
-
-	if err = server.identHandler.SetUsers(req.Users); err != nil {
-		log.Errorf("Set users error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}
