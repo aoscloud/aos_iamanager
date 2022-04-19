@@ -23,21 +23,22 @@ import (
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/api/cloudprotocol"
 	log "github.com/sirupsen/logrus"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Consts
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 const (
 	secretLength         = 8
 	attemptsCreateSecret = 10
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type secretKey string
 
@@ -45,92 +46,92 @@ type secretKey string
 type Handler struct {
 	sync.Mutex
 
-	secrets map[secretKey]servicePermissions
+	secrets map[secretKey]instancePermissions
 }
 
-type servicePermissions struct {
-	serviceID   string
-	permissions map[string]map[string]string
+type instancePermissions struct {
+	instaneIdent cloudprotocol.InstanceIdent
+	permissions  map[string]map[string]string
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Public
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 // New returns pointer to new Handler.
 func New() (handler *Handler, err error) {
 	handler = &Handler{}
 
-	handler.secrets = make(map[secretKey]servicePermissions)
+	handler.secrets = make(map[secretKey]instancePermissions)
 
 	log.Debug("Create permission handler")
 
 	return handler, nil
 }
 
-// RegisterService adds new service into cache and creates secret.
-func (handler *Handler) RegisterService(
-	serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error) {
+// RegisterInstance adds new service instance into cache and creates secret.
+func (handler *Handler) RegisterInstance(
+	instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string,
+) (secret string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	log.WithField("serviceID", serviceID).Debug("Register service")
-
-	if secret, err := handler.findServiceID(serviceID); err == nil {
-		log.Warnf("Service %s is already registered", serviceID)
+	if secret, err := handler.getSecretForInstance(instance); err == nil {
 		return secret, nil
 	}
 
 	newSecret, err := handler.tryGenerateSecret()
 	if err != nil {
-		return "", aoserrors.Wrap(err)
+		return "", err
 	}
 
-	handler.secrets[newSecret] = servicePermissions{serviceID: serviceID, permissions: funcServerPermissions}
+	handler.secrets[newSecret] = instancePermissions{instaneIdent: instance, permissions: permissions}
 
 	return string(newSecret), nil
 }
 
-// UnregisterService deletes service with permissions from cache.
-func (handler *Handler) UnregisterService(serviceID string) {
+// UnregisterInstance deletes service instance with permissions from cache.
+func (handler *Handler) UnregisterInstance(instance cloudprotocol.InstanceIdent) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	log.WithField("serviceID", serviceID).Debug("Unregister service")
-
-	secret, err := handler.findServiceID(serviceID)
+	secret, err := handler.getSecretForInstance(instance)
 	if err != nil {
-		log.Warnf("Service %s is not registered", serviceID)
+		log.WithFields(log.Fields{
+			"serviceID": instance.ServiceID,
+			"subjectID": instance.SubjectID,
+			"instance":  instance.Instance,
+		}).Warn("Instance not registered")
+
 		return
 	}
 
 	delete(handler.secrets, secretKey(secret))
 }
 
-// GetPermissions returns service id and permissions by secret and functional server ID.
+// GetPermissions returns instance and permissions by secret and functional server ID.
 func (handler *Handler) GetPermissions(
-	secret, funcServerID string) (serviceID string, permissions map[string]string, err error) {
+	secret, funcServerID string,
+) (instance cloudprotocol.InstanceIdent, permissions map[string]string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	log.WithField("funcServerId", funcServerID).Debug("Get permissions")
-
 	funcServersPermissions, ok := handler.secrets[secretKey(secret)]
 	if !ok {
-		return "", nil, aoserrors.New("secret not found")
+		return instance, nil, aoserrors.New("secret not found")
 	}
 
 	permissions, ok = funcServersPermissions.permissions[funcServerID]
 	if !ok {
-		return "", nil, aoserrors.Errorf("permissions for functional server %s not found", funcServerID)
+		return instance, nil, aoserrors.Errorf("permissions for functional server %s not found", funcServerID)
 	}
 
-	return funcServersPermissions.serviceID, permissions, nil
+	return funcServersPermissions.instaneIdent, permissions, nil
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func (handler *Handler) tryGenerateSecret() (secret secretKey, err error) {
 	for i := 0; i < attemptsCreateSecret; i++ {
@@ -157,12 +158,12 @@ func generateSecret() (secret secretKey, err error) {
 	return secretKey(base64.StdEncoding.EncodeToString(b)), nil
 }
 
-func (handler *Handler) findServiceID(serviceID string) (secret string, err error) {
+func (handler *Handler) getSecretForInstance(instance cloudprotocol.InstanceIdent) (string, error) {
 	for key, value := range handler.secrets {
-		if value.serviceID == serviceID {
+		if value.instaneIdent == instance {
 			return string(key), nil
 		}
 	}
 
-	return "", aoserrors.Errorf("service ID %s not found", serviceID)
+	return "", aoserrors.New("instace not found")
 }
