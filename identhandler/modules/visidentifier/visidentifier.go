@@ -206,28 +206,6 @@ func (instance *Instance) GetSubjects() (subjects []string, err error) {
 	return instance.subjects, aoserrors.Wrap(err)
 }
 
-// SetUsers sets the user claims.
-func (instance *Instance) SetUsers(users []string) (err error) {
-	instance.wg.Wait()
-
-	var rsp visprotocol.SetResponse
-
-	req := visprotocol.SetRequest{
-		MessageHeader: visprotocol.MessageHeader{
-			Action:    visprotocol.ActionSet,
-			RequestID: wsclient.GenerateRequestID(),
-		},
-		Path:  subjectsVISPath,
-		Value: users,
-	}
-
-	if err = instance.wsClient.SendRequest("RequestID", req.MessageHeader.RequestID, &req, &rsp); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	return nil
-}
-
 // SubjectsChangedChannel returns subjects changed channel.
 func (instance *Instance) SubjectsChangedChannel() (channel <-chan []string) {
 	return instance.subjectChangedChannel
