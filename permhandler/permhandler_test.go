@@ -24,12 +24,13 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/aoscloud/aos_common/api/cloudprotocol"
 	"github.com/aoscloud/aos_iamanager/permhandler"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{
@@ -41,93 +42,74 @@ func init() {
 	log.SetOutput(os.Stdout)
 }
 
-func TestRegisterUnregisterService(t *testing.T) {
+func TestInstancePermissions(t *testing.T) {
 	permissionHandler, err := permhandler.New()
 	if err != nil {
-		t.Fatalf("Can't create permission handler: %s", err)
+		t.Fatalf("Can't create permission handler: %v", err)
 	}
 
-	serviceID1 := "serviceID1"
-	serviceID2 := "serviceID2"
+	var (
+		instanceIdent1        = cloudprotocol.InstanceIdent{ServiceID: "serviceID1", Instance: 1}
+		instanceIdent2        = cloudprotocol.InstanceIdent{ServiceID: "serviceID1", Instance: 2}
+		vis                   = map[string]string{"*": "rw", "test": "r"}
+		systemCore            = map[string]string{"test1.*": "rw", "test2": "r"}
+		funcServerPermissions = map[string]map[string]string{"vis": vis, "systemCore": systemCore}
+	)
 
-	funcServerPermissions := map[string]map[string]string{"vis": {"*": "rw", "test": "r"}}
-
-	secret1, err := permissionHandler.RegisterService(serviceID1, funcServerPermissions)
+	secret1, err := permissionHandler.RegisterInstance(instanceIdent1, funcServerPermissions)
 	if err != nil || secret1 == "" {
-		t.Fatalf("Can't register service: %s", err)
+		t.Fatalf("Can't register instance: %v", err)
 	}
 
-	secret2, err := permissionHandler.RegisterService(serviceID1, funcServerPermissions)
-	if err != nil || secret2 != secret1 {
-		t.Fatalf("Can't register service: %s", err)
-	}
-
-	secret3, err := permissionHandler.RegisterService(serviceID2, funcServerPermissions)
-	if err != nil || secret3 == "" {
-		t.Fatalf("Can't register service: %s", err)
-	}
-
-	permissionHandler.UnregisterService(serviceID1)
-
-	secret1, err = permissionHandler.RegisterService(serviceID1, funcServerPermissions)
-	if err != nil || secret1 == "" {
-		t.Fatalf("Can't register service: %s", err)
-	}
-}
-
-func TestGetPermissions(t *testing.T) {
-	permissionHandler, err := permhandler.New()
+	instance, perm, err := permissionHandler.GetPermissions(secret1, "vis")
 	if err != nil {
-		t.Fatalf("Can't create permission handler: %s", err)
+		t.Fatalf("Can't get permissions: %v", err)
 	}
 
-	serviceID1 := "serviceID1"
-
-	vis := map[string]string{"*": "rw", "test": "r"}
-	systemCore := map[string]string{"test1.*": "rw", "test2": "r"}
-
-	funcServerPermissions := map[string]map[string]string{"vis": vis, "systemCore": systemCore}
-
-	secret1, err := permissionHandler.RegisterService(serviceID1, funcServerPermissions)
-	if err != nil || secret1 == "" {
-		t.Fatalf("Can't register service: %s", err)
-	}
-
-	serviceID, perm, err := permissionHandler.GetPermissions(secret1, "vis")
-	if err != nil {
-		t.Fatalf("Can't get permissions: %s", err)
-	}
-
-	if serviceID != serviceID1 {
-		t.Errorf("Wrong serviceID: %s", serviceID)
+	if instanceIdent1 != instance {
+		t.Error("Wrong instance")
 	}
 
 	if !reflect.DeepEqual(perm, vis) {
 		t.Errorf("Wrong perm: %v", perm)
 	}
 
-	serviceID, perm, err = permissionHandler.GetPermissions(secret1, "systemCore")
-	if err != nil {
-		t.Fatalf("Can't get permissions: %s", err)
+	secret2, err := permissionHandler.RegisterInstance(instanceIdent2, funcServerPermissions)
+	if err != nil || secret1 == "" {
+		t.Fatalf("Can't register instance: %v", err)
 	}
 
-	if serviceID != serviceID1 {
-		t.Errorf("Wrong serviceID: %s", serviceID)
+	if secret1 == secret2 {
+		t.Error("Duplicated secret for second registration")
+	}
+
+	if instance, perm, err = permissionHandler.GetPermissions(secret2, "systemCore"); err != nil {
+		t.Fatalf("Can't get permissions: %v", err)
+	}
+
+	if instanceIdent2 != instance {
+		t.Error("Wrong instance")
 	}
 
 	if !reflect.DeepEqual(perm, systemCore) {
 		t.Errorf("Wrong perm: %v", perm)
 	}
 
-	_, _, err = permissionHandler.GetPermissions(secret1, "functionalServerID")
-	if err == nil {
+	if _, _, err = permissionHandler.GetPermissions(secret1, "functionalServerID"); err == nil {
 		t.Fatalf("Wrong perm for functional server")
 	}
 
-	permissionHandler.UnregisterService(serviceID1)
+	permissionHandler.UnregisterInstance(instanceIdent2)
 
-	_, _, err = permissionHandler.GetPermissions(secret1, "systemCore")
-	if err == nil {
-		t.Fatalf("Getting permissions after the service has been deleted")
+	if _, _, err = permissionHandler.GetPermissions(secret1, "systemCore"); err != nil {
+		t.Fatalf("Can't get permissions: %v", err)
 	}
+
+	permissionHandler.UnregisterInstance(instanceIdent1)
+
+	if _, _, err = permissionHandler.GetPermissions(secret1, "systemCore"); err == nil {
+		t.Fatalf("Getting permissions after the instance has been deleted")
+	}
+
+	permissionHandler.UnregisterInstance(instanceIdent2)
 }
