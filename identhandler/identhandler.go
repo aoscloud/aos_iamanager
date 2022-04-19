@@ -54,7 +54,6 @@ type IdentModule interface {
 	GetBoardModel() (boardModel string, err error)
 	GetSubjects() (subjects []string, err error)
 	SubjectsChangedChannel() (channel <-chan []string)
-	SetUsers(users []string) (err error)
 	Close() (err error)
 }
 
@@ -113,11 +112,6 @@ func (handler *Handler) GetBoardModel() (boardModel string, err error) {
 	}
 
 	return boardModel, nil
-}
-
-// SetUsers set current users.
-func (handler *Handler) SetUsers(users []string) (err error) {
-	return aoserrors.Wrap(handler.module.SetUsers(users))
 }
 
 // GetSubjects returns current subjects.
