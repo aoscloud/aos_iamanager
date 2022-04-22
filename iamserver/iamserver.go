@@ -67,12 +67,11 @@ type Server struct {
 	grpcServer                *grpc.Server
 	grpcServerPublic          *grpc.Server
 	usersChangedStreams       []pb.IAMPublicService_SubscribeUsersChangedServer
-	closeChannel              chan struct{}
-	streamsWg                 sync.WaitGroup
 	finishProvisioningCmdArgs []string
 	diskEncryptCmdArgs        []string
 	pb.UnimplementedIAMProtectedServiceServer
 	pb.UnimplementedIAMPublicServiceServer
+	cancelFunction context.CancelFunc
 }
 
 // CertHandler interface.
@@ -113,7 +112,6 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		identHandler:              identHandler,
 		certHandler:               certHandler,
 		permissionHandler:         permissionHandler,
-		closeChannel:              make(chan struct{}, 1),
 		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs,
 		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs,
 	}
@@ -136,7 +134,11 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		return server, aoserrors.Wrap(err)
 	}
 
-	go server.handleUsersChanged()
+	ctx, cancelFunction := context.WithCancel(context.Background())
+
+	server.cancelFunction = cancelFunction
+
+	go server.handleUsersChanged(ctx)
 
 	return server, nil
 }
@@ -159,6 +161,10 @@ func (server *Server) Close() (err error) {
 		if err == nil {
 			err = aoserrors.Wrap(errCryptoContext)
 		}
+	}
+
+	if server.cancelFunction != nil {
+		server.cancelFunction()
 	}
 
 	return err
@@ -326,8 +332,6 @@ func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *emp
 // SubscribeUsersChanged creates stream for users changed notifications.
 func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 	stream pb.IAMPublicService_SubscribeUsersChangedServer) (err error) {
-	server.streamsWg.Add(1)
-
 	server.Lock()
 	server.usersChangedStreams = append(server.usersChangedStreams, stream)
 	server.Unlock()
@@ -353,8 +357,6 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 			break
 		}
 	}
-
-	server.streamsWg.Done()
 
 	return nil
 }
@@ -543,10 +545,6 @@ func (server *Server) closeServerProtected() (err error) {
 		}
 	}
 
-	server.closeChannel <- struct{}{}
-
-	server.streamsWg.Wait()
-
 	return aoserrors.Wrap(err)
 }
 
@@ -568,10 +566,10 @@ func (server *Server) closeServerPublic() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-func (server *Server) handleUsersChanged() {
+func (server *Server) handleUsersChanged(ctx context.Context) {
 	for {
 		select {
-		case <-server.closeChannel:
+		case <-ctx.Done():
 			return
 
 		case users := <-server.identHandler.UsersChangedChannel():
