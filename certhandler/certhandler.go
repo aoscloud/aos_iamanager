@@ -207,14 +207,14 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 	handler.Lock()
 	defer handler.Unlock()
 
-	key, err := handler.createPrivateKey(certType, password)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return nil, aoserrors.Errorf("module %s not found", certType)
+	}
+
+	key, err := handler.createPrivateKey(descriptor, certType, password)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
 	csrData, err := createCSR(handler.systemID,
@@ -231,65 +231,13 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 	handler.Lock()
 	defer handler.Unlock()
 
-	x509Certs, err := cryptutils.PEMToX509Cert(cert)
-	if err != nil {
-		return "", aoserrors.Wrap(err)
-	}
-
-	if err = checkX509CertificateChan(x509Certs); err != nil {
-		return "", aoserrors.Wrap(err)
-	}
-
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
 		return "", aoserrors.Errorf("module %s not found", certType)
 	}
 
-	certInfo, password, err := descriptor.module.ApplyCertificate(x509Certs)
-	if err != nil {
+	if certURL, err = handler.applyCertificate(descriptor, certType, cert); err != nil {
 		return "", aoserrors.Wrap(err)
-	}
-
-	certURL = certInfo.CertURL
-
-	if err = handler.storage.AddCertificate(certType, certInfo); err != nil {
-		return "", aoserrors.Wrap(err)
-	}
-
-	certs, err := handler.storage.GetCertificates(certType)
-	if err != nil {
-		log.Errorf("Can' get certificates: %s", err)
-	}
-
-	for len(certs) > descriptor.config.MaxItems && descriptor.config.MaxItems != 0 {
-		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certificates",
-			len(certs), descriptor.config.MaxItems)
-
-		var (
-			minTime  time.Time
-			minIndex int
-		)
-
-		for i, cert := range certs {
-			if minTime.IsZero() || cert.NotAfter.Before(minTime) {
-				minTime = cert.NotAfter
-				minIndex = i
-			}
-		}
-
-		if err = descriptor.module.RemoveCertificate(certs[minIndex].CertURL, password); err != nil {
-			return "", aoserrors.Wrap(err)
-		}
-
-		if err = descriptor.module.RemoveKey(certs[minIndex].KeyURL, password); err != nil {
-			return "", aoserrors.Wrap(err)
-		}
-
-		if err = handler.storage.RemoveCertificate(certType, certs[minIndex].CertURL); err != nil {
-			return "", aoserrors.Wrap(err)
-		}
-
-		certs = append(certs[:minIndex], certs[minIndex+1:]...)
 	}
 
 	return certURL, nil
@@ -337,7 +285,12 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 	handler.Lock()
 	defer handler.Unlock()
 
-	key, err := handler.createPrivateKey(certType, password)
+	descriptor, ok := handler.moduleDescriptors[certType]
+	if !ok {
+		return aoserrors.Errorf("module %s not found", certType)
+	}
+
+	key, err := handler.createPrivateKey(descriptor, certType, password)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -360,18 +313,8 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 		return aoserrors.Wrap(err)
 	}
 
-	descriptor, ok := handler.moduleDescriptors[certType]
-	if !ok {
-		return aoserrors.Errorf("module %s not found", certType)
-	}
-
-	x509Certs, err := cryptutils.PEMToX509Cert(
-		pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert}))
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	if _, _, err = descriptor.module.ApplyCertificate(x509Certs); err != nil {
+	if _, err = handler.applyCertificate(descriptor, certType,
+		pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert})); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -561,12 +504,8 @@ func (handler *Handler) syncStorage() (err error) {
 	return nil
 }
 
-func (handler *Handler) createPrivateKey(certType, password string) (key crypto.PrivateKey, err error) {
-	descriptor, ok := handler.moduleDescriptors[certType]
-	if !ok {
-		return nil, aoserrors.Errorf("module %s not found", certType)
-	}
-
+func (handler *Handler) createPrivateKey(
+	descriptor moduleDescriptor, certType, password string) (key crypto.PrivateKey, err error) {
 	for _, certURL := range descriptor.invalidCerts {
 		log.WithFields(log.Fields{"certType": certType, "URL": certURL}).Warn("Remove invalid certificate")
 
@@ -593,4 +532,65 @@ func (handler *Handler) createPrivateKey(certType, password string) (key crypto.
 	}
 
 	return key, nil
+}
+
+func (handler *Handler) applyCertificate(
+	descriptor moduleDescriptor, certType string, cert []byte) (certURL string, err error) {
+	x509Certs, err := cryptutils.PEMToX509Cert(cert)
+	if err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	if err = checkX509CertificateChan(x509Certs); err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	certInfo, password, err := descriptor.module.ApplyCertificate(x509Certs)
+	if err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	certURL = certInfo.CertURL
+
+	if err = handler.storage.AddCertificate(certType, certInfo); err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	certs, err := handler.storage.GetCertificates(certType)
+	if err != nil {
+		log.Errorf("Can' get certificates: %s", err)
+	}
+
+	for len(certs) > descriptor.config.MaxItems && descriptor.config.MaxItems != 0 {
+		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certificates",
+			len(certs), descriptor.config.MaxItems)
+
+		var (
+			minTime  time.Time
+			minIndex int
+		)
+
+		for i, cert := range certs {
+			if minTime.IsZero() || cert.NotAfter.Before(minTime) {
+				minTime = cert.NotAfter
+				minIndex = i
+			}
+		}
+
+		if err = descriptor.module.RemoveCertificate(certs[minIndex].CertURL, password); err != nil {
+			return "", aoserrors.Wrap(err)
+		}
+
+		if err = descriptor.module.RemoveKey(certs[minIndex].KeyURL, password); err != nil {
+			return "", aoserrors.Wrap(err)
+		}
+
+		if err = handler.storage.RemoveCertificate(certType, certs[minIndex].CertURL); err != nil {
+			return "", aoserrors.Wrap(err)
+		}
+
+		certs = append(certs[:minIndex], certs[minIndex+1:]...)
+	}
+
+	return certURL, nil
 }
