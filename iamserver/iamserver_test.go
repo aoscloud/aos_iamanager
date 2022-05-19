@@ -581,7 +581,7 @@ func TestGetAPIVersion(t *testing.T) {
 		t.Fatalf("Can't get api version: %s", err)
 	}
 
-	if response.Version != 2 {
+	if response.Version != 3 {
 		t.Errorf("Wrong api version: %v", response.Version)
 	}
 }
