@@ -44,7 +44,7 @@ import (
 
 const discEncryptyonType = "diskencryption"
 
-const iamAPIVersion = 2
+const iamAPIVersion = 3
 
 /***********************************************************************************************************************
  * Vars
