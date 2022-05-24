@@ -385,10 +385,10 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			getRsp.Value = map[string]string{getReq.Path: "VIN1234567890"}
 
-		case "Attribute.BoardIdentification.Model":
+		case "Attribute.Aos.BoardModel":
 			getRsp.Value = map[string]string{getReq.Path: "testBoardModel:1.0"}
 
-		case "Attribute.Vehicle.SubjectIdentification.Subjects":
+		case "Attribute.Aos.Subjects":
 			getRsp.Value = map[string][]string{getReq.Path: handler.subjects}
 		}
 
@@ -411,10 +411,10 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.BoardIdentification.Model":
+		case "Attribute.Aos.BoardModel":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.Vehicle.SubjectIdentification.Subjects":
+		case "Attribute.Aos.Subjects":
 			handler.subjects = nil
 
 			for _, claim := range setReq.Value.([]interface{}) {
@@ -440,7 +440,7 @@ func (handler *clientHandler) SubjectsChangeNotification(subjects []string) {
 		message, err := json.Marshal(&visprotocol.SubscriptionNotification{
 			Action:         "subscription",
 			SubscriptionID: handler.subscriptionID,
-			Value:          map[string][]string{"Attribute.Vehicle.SubjectIdentification.Subjects": subjects},
+			Value:          map[string][]string{"Attribute.Aos.Subjects": subjects},
 		})
 		if err != nil {
 			log.Errorf("Error marshal request: %s", err)
