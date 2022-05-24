@@ -42,8 +42,8 @@ const reconnectTimeout = 10 * time.Second
 
 const (
 	vinVISPath      = "Attribute.Vehicle.VehicleIdentification.VIN"
-	boardModelPath  = "Attribute.BoardIdentification.Model"
-	subjectsVISPath = "Attribute.Vehicle.SubjectIdentification.Subjects"
+	boardModelPath  = "Attribute.Aos.BoardModel"
+	subjectsVISPath = "Attribute.Aos.Subjects"
 )
 
 /*******************************************************************************
