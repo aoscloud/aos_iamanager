@@ -597,19 +597,28 @@ func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 		t.Fatalf("Failed to get TPM capabilities: %v", err)
 	}
 
-	maxRetries, recoveryTime, lockoutRecovery := caps[0].(tpm2.TaggedProperty).Value,
-		caps[1].(tpm2.TaggedProperty).Value, caps[2].(tpm2.TaggedProperty).Value
-
-	if maxRetries == 0 {
-		t.Error("maxTries is 0")
+	if element, ok := caps[0].(tpm2.TaggedProperty); ok {
+		if element.Value == 0 {
+			t.Error("maxTries is 0")
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 
-	if recoveryTime == 0 {
-		t.Error("recoveryTime is 0")
+	if element, ok := caps[1].(tpm2.TaggedProperty); ok {
+		if element.Value == 0 {
+			t.Error("recoveryTime is 0")
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 
-	if lockoutRecovery == 0 {
-		t.Error("lockoutRecovery is 0")
+	if element, ok := caps[2].(tpm2.TaggedProperty); ok {
+		if element.Value == 0 {
+			t.Error("lockoutRecovery is 0")
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 }
 
@@ -673,8 +682,12 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 		t.Fatalf("Failed to get capabilities: %v", err)
 	}
 
-	if caps[0].(tpm2.TaggedProperty).Value != 1 {
-		t.Errorf("Got %d, expected 1", caps[0].(tpm2.TaggedProperty).Value)
+	if element, ok := caps[0].(tpm2.TaggedProperty); ok {
+		if element.Value != 1 {
+			t.Errorf("Got %d, expected 1", element.Value)
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 }
 
