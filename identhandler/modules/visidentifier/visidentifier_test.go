@@ -417,8 +417,15 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Aos.Subjects":
 			handler.subjects = nil
 
-			for _, claim := range setReq.Value.([]interface{}) {
-				handler.subjects = append(handler.subjects, claim.(string))
+			subjects, ok := setReq.Value.([]interface{})
+			if !ok {
+				return nil, aoserrors.New("incorrect type for subjects")
+			}
+
+			for _, subjectElement := range subjects {
+				if subject, ok := subjectElement.(string); ok {
+					handler.subjects = append(handler.subjects, subject)
+				}
 			}
 
 			go handler.SubjectsChangeNotification(handler.subjects)
