@@ -245,7 +245,8 @@ func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL 
 
 // GetCertificate returns certificate info.
 func (handler *Handler) GetCertificate(
-	certType string, issuer []byte, serial string) (certURL, keyURL string, err error) {
+	certType string, issuer []byte, serial string,
+) (certURL, keyURL string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -374,7 +375,8 @@ func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
 }
 
 func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (
-	csr []byte, err error) {
+	csr []byte, err error,
+) {
 	template := &x509.CertificateRequest{
 		Subject:  pkix.Name{CommonName: systemID},
 		DNSNames: alternativeNames,
@@ -505,7 +507,8 @@ func (handler *Handler) syncStorage() (err error) {
 }
 
 func (handler *Handler) createPrivateKey(
-	descriptor moduleDescriptor, certType, password string) (key crypto.PrivateKey, err error) {
+	descriptor moduleDescriptor, certType, password string,
+) (key crypto.PrivateKey, err error) {
 	for _, certURL := range descriptor.invalidCerts {
 		log.WithFields(log.Fields{"certType": certType, "URL": certURL}).Warn("Remove invalid certificate")
 
@@ -535,7 +538,8 @@ func (handler *Handler) createPrivateKey(
 }
 
 func (handler *Handler) applyCertificate(
-	descriptor moduleDescriptor, certType string, cert []byte) (certURL string, err error) {
+	descriptor moduleDescriptor, certType string, cert []byte,
+) (certURL string, err error) {
 	x509Certs, err := cryptutils.PEMToX509Cert(cert)
 	if err != nil {
 		return "", aoserrors.Wrap(err)

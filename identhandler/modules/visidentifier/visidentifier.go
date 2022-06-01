@@ -296,11 +296,21 @@ func (instance *Instance) processSubscriptions(message []byte) (err error) {
 	subscriptionFound := false
 
 	instance.subscribeMap.Range(func(key, value interface{}) bool {
-		if key.(string) == notification.SubscriptionID {
-			subscriptionFound = true
-			value.(func(interface{}))(notification.Value)
-			return false
+		subjectID, ok := key.(string)
+		if !ok {
+			return true
 		}
+
+		if subjectID == notification.SubscriptionID {
+			subscriptionFound = true
+
+			if notifyFunc, ok := value.(func(interface{})); ok {
+				notifyFunc(notification.Value)
+
+				return false
+			}
+		}
+
 		return true
 	})
 

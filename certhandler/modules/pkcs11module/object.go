@@ -61,7 +61,8 @@ func (object *pkcs11Object) delete() error {
 }
 
 func findObjects(ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle,
-	template []*pkcs11.Attribute) (objects []*pkcs11Object, err error) {
+	template []*pkcs11.Attribute,
+) (objects []*pkcs11Object, err error) {
 	template = append(template, pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true))
 
 	if err = ctx.FindObjectsInit(session, template); err != nil {

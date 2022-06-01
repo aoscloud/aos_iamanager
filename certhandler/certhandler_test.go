@@ -108,7 +108,8 @@ func TestMain(m *testing.M) {
 	modules = make(map[string]*testModule)
 
 	certhandler.RegisterPlugin("testmodule", func(certType string,
-		configJSON json.RawMessage) (module certhandler.CertModule, err error) {
+		configJSON json.RawMessage,
+	) (module certhandler.CertModule, err error) {
 		certModule := &testModule{data: &moduleData{}}
 
 		modules[certType] = certModule
@@ -454,7 +455,8 @@ func TestCreateSelfSignedCert(t *testing.T) {
  **********************************************************************************************************************/
 
 func (module *testModule) ValidateCertificates() (
-	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error,
+) {
 	return moduleValidInfos, nil, nil, nil
 }
 
@@ -479,7 +481,8 @@ func (module *testModule) CreateKey(password, algorithm string) (key crypto.Priv
 }
 
 func (module *testModule) ApplyCertificate(
-	certs []*x509.Certificate) (certInfo certhandler.CertInfo, password string, err error) {
+	certs []*x509.Certificate,
+) (certInfo certhandler.CertInfo, password string, err error) {
 	return module.data.certInfo, "", nil
 }
 

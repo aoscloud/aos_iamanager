@@ -64,7 +64,8 @@ func (cert *pkcs11Certificate) getX509Certificate() (*x509.Certificate, error) {
 }
 
 func findCertificates(ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle,
-	template []*pkcs11.Attribute) (certs []*pkcs11Certificate, err error) {
+	template []*pkcs11.Attribute,
+) (certs []*pkcs11Certificate, err error) {
 	template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE))
 
 	objects, err := findObjects(ctx, session, template)
@@ -91,7 +92,8 @@ func findCertificates(ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle,
 }
 
 func findCertificateChain(cert *pkcs11Certificate,
-	chainCerts []*pkcs11Certificate) (certs []*pkcs11Certificate, err error) {
+	chainCerts []*pkcs11Certificate,
+) (certs []*pkcs11Certificate, err error) {
 	if len(cert.issuer) == 0 || bytes.Equal(cert.issuer, cert.subject) {
 		return nil, nil
 	}
@@ -170,7 +172,8 @@ func appendIfNotExist(certs []*pkcs11Certificate, cert *pkcs11Certificate) (newC
 }
 
 func checkCertificateChain(
-	ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle) ([]*pkcs11Certificate, error) {
+	ctx *crypto11.PKCS11Context, session pkcs11.SessionHandle,
+) ([]*pkcs11Certificate, error) {
 	log.Debug("Checking certificate chain")
 
 	template := []*pkcs11.Attribute{

@@ -127,7 +127,8 @@ func (module *SWModule) Clear() (err error) {
 
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys.
 func (module *SWModule) ValidateCertificates() (
-	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error,
+) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Validate certificates")
 
 	keyMap := make(map[string]crypto.PrivateKey)
@@ -258,7 +259,8 @@ func (module *SWModule) CreateKey(password, algorithm string) (key crypto.Privat
 
 // ApplyCertificate applies certificate.
 func (module *SWModule) ApplyCertificate(x509Certs []*x509.Certificate) (
-	certInfo certhandler.CertInfo, password string, err error) {
+	certInfo certhandler.CertInfo, password string, err error,
+) {
 	log.WithFields(log.Fields{"certType": module.certType}).Debug("Apply certificate")
 
 	var (
