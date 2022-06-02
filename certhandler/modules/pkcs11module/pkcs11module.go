@@ -683,19 +683,14 @@ func parseURL(urlStr string) (template []*pkcs11.Attribute, err error) {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	opaqueValues, err := url.ParseQuery(urlVal.Opaque)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
+	_, _, label, id, _ := cryptutils.ParsePKCS11Url(urlVal) // nolint:dogsled
+
+	if id != "" {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
 	}
 
-	for key, value := range opaqueValues {
-		switch key {
-		case "id":
-			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, value[0]))
-
-		case "object":
-			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, value[0]))
-		}
+	if label != "" {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
 	}
 
 	return template, nil

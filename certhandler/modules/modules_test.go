@@ -251,22 +251,19 @@ func TestUpdateCertificate(t *testing.T) {
 					}
 
 				case cryptutils.SchemePKCS11:
-					opaqueValues, err := url.ParseQuery(keyURL.Opaque)
-					if err != nil {
-						t.Fatalf("Can't parse opaque: %s", err)
-					}
+					_, token, _, id, userPin := cryptutils.ParsePKCS11Url(keyURL)
 
 					if pkcs11Ctx == nil {
 						if pkcs11Ctx, err = crypto11.Configure(&crypto11.Config{
 							Path:       pkcs11LibPath,
-							TokenLabel: opaqueValues["token"][0],
-							Pin:        keyURL.Query()["pin-value"][0],
+							TokenLabel: token,
+							Pin:        userPin,
 						}); err != nil {
 							t.Fatalf("Can't init pkcs11 context: %s", err)
 						}
 					}
 
-					if currentKey, err = pkcs11Ctx.FindKeyPair([]byte(opaqueValues["id"][0]), nil); err != nil {
+					if currentKey, err = pkcs11Ctx.FindKeyPair([]byte(id), nil); err != nil {
 						t.Fatalf("Can't find key: %s", err)
 					}
 
@@ -1081,15 +1078,9 @@ func checkLocationURLs(t *testing.T, location, itemType string, expectedURLs []s
 		}
 
 	case cryptutils.SchemePKCS11:
-		opaqueValues, err := url.ParseQuery(locationURL.Opaque)
-		if err != nil {
-			t.Fatalf("Can't parse opaque: %s", err)
-		}
+		_, token, label, _, userPin := cryptutils.ParsePKCS11Url(locationURL)
 
-		if existingURLs, err = getExistingPKCS11Items(
-			opaqueValues["token"][0],
-			locationURL.Query()["pin-value"][0],
-			opaqueValues["object"][0], itemType); err != nil {
+		if existingURLs, err = getExistingPKCS11Items(token, userPin, label, itemType); err != nil {
 			t.Fatalf("Can't get existing file items: %s", err)
 		}
 
