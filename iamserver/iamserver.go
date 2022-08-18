@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/api/cloudprotocol"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -43,7 +44,7 @@ import (
 
 const discEncryptyonType = "diskencryption"
 
-const iamAPIVersion = 2
+const iamAPIVersion = 3
 
 /***********************************************************************************************************************
  * Vars
@@ -66,7 +67,7 @@ type Server struct {
 	listenerPublic            net.Listener
 	grpcServer                *grpc.Server
 	grpcServerPublic          *grpc.Server
-	usersChangedStreams       []pb.IAMPublicService_SubscribeUsersChangedServer
+	subjectsChangedStreams    []pb.IAMPublicService_SubscribeSubjectsChangedServer
 	finishProvisioningCmdArgs []string
 	diskEncryptCmdArgs        []string
 	pb.UnimplementedIAMProtectedServiceServer
@@ -89,16 +90,17 @@ type CertHandler interface {
 type IdentHandler interface {
 	GetSystemID() (systemdID string, err error)
 	GetBoardModel() (boardModel string, err error)
-	GetUsers() (users []string, err error)
-	SetUsers(users []string) (err error)
-	UsersChangedChannel() (channel <-chan []string)
+	GetSubjects() (Subjects []string, err error)
+	SubjectsChangedChannel() (channel <-chan []string)
 }
 
 // PermissionHandler interface.
 type PermissionHandler interface {
-	RegisterService(serviceID string, funcServerPermissions map[string]map[string]string) (secret string, err error)
-	UnregisterService(serviceID string)
-	GetPermissions(secret, funcServerID string) (serviceID string, permissions map[string]string, err error)
+	RegisterInstance(
+		instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string) (secret string, err error)
+	UnregisterInstance(instance cloudprotocol.InstanceIdent)
+	GetPermissions(secret, funcServerID string) (
+		instance cloudprotocol.InstanceIdent, permissions map[string]string, err error)
 }
 
 /***********************************************************************************************************************
@@ -107,7 +109,8 @@ type PermissionHandler interface {
 
 // New creates new IAM server instance.
 func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
-	permissionHandler PermissionHandler, insecure bool) (server *Server, err error) {
+	permissionHandler PermissionHandler, insecure bool,
+) (server *Server, err error) {
 	server = &Server{
 		identHandler:              identHandler,
 		certHandler:               certHandler,
@@ -138,7 +141,7 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 
 	server.cancelFunction = cancelFunction
 
-	go server.handleUsersChanged(ctx)
+	go server.handleSubjectsChanged(ctx)
 
 	return server, nil
 }
@@ -226,7 +229,8 @@ func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp 
 
 // CreateKey creates private key.
 func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (
-	rsp *pb.CreateKeyResponse, err error) {
+	rsp *pb.CreateKeyResponse, err error,
+) {
 	rsp = &pb.CreateKeyResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process create key request")
@@ -245,7 +249,8 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 
 // ApplyCert applies certificate.
 func (server *Server) ApplyCert(
-	context context.Context, req *pb.ApplyCertRequest) (rsp *pb.ApplyCertResponse, err error) {
+	context context.Context, req *pb.ApplyCertRequest,
+) (rsp *pb.ApplyCertResponse, err error) {
 	rsp = &pb.ApplyCertResponse{Type: req.Type}
 
 	log.WithField("type", req.Type).Debug("Process apply cert request")
@@ -299,29 +304,14 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 	return rsp, nil
 }
 
-// GetUsers returns users.
-func (server *Server) GetUsers(context context.Context, req *empty.Empty) (rsp *pb.Users, err error) {
-	rsp = &pb.Users{}
+// GetSubjects returns subjects.
+func (server *Server) GetSubjects(context context.Context, req *empty.Empty) (rsp *pb.Subjects, err error) {
+	rsp = &pb.Subjects{}
 
-	log.Debug("Process get users")
+	log.Debug("Process get subjects")
 
-	if rsp.Users, err = server.identHandler.GetUsers(); err != nil {
-		log.Errorf("Get users error: %s", err)
-
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	return rsp, nil
-}
-
-// SetUsers sets users.
-func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
-
-	log.WithField("users", req.Users).Debug("Process set users")
-
-	if err = server.identHandler.SetUsers(req.Users); err != nil {
-		log.Errorf("Set users error: %s", err)
+	if rsp.Subjects, err = server.identHandler.GetSubjects(); err != nil {
+		log.Errorf("Get subjects error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}
@@ -329,14 +319,15 @@ func (server *Server) SetUsers(context context.Context, req *pb.Users) (rsp *emp
 	return rsp, nil
 }
 
-// SubscribeUsersChanged creates stream for users changed notifications.
-func (server *Server) SubscribeUsersChanged(message *empty.Empty,
-	stream pb.IAMPublicService_SubscribeUsersChangedServer) (err error) {
+// SubscribeSubjectsChanged creates stream for subjects changed notifications.
+func (server *Server) SubscribeSubjectsChanged(message *empty.Empty,
+	stream pb.IAMPublicService_SubscribeSubjectsChangedServer,
+) (err error) {
 	server.Lock()
-	server.usersChangedStreams = append(server.usersChangedStreams, stream)
+	server.subjectsChangedStreams = append(server.subjectsChangedStreams, stream)
 	server.Unlock()
 
-	log.Debug("Process users changed")
+	log.Debug("Process subjects changed")
 
 	<-stream.Context().Done()
 
@@ -349,10 +340,10 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 	server.Lock()
 	defer server.Unlock()
 
-	for i, item := range server.usersChangedStreams {
+	for i, item := range server.subjectsChangedStreams {
 		if stream == item {
-			server.usersChangedStreams[i] = server.usersChangedStreams[len(server.usersChangedStreams)-1]
-			server.usersChangedStreams = server.usersChangedStreams[:len(server.usersChangedStreams)-1]
+			server.subjectsChangedStreams[i] = server.subjectsChangedStreams[len(server.subjectsChangedStreams)-1]
+			server.subjectsChangedStreams = server.subjectsChangedStreams[:len(server.subjectsChangedStreams)-1]
 
 			break
 		}
@@ -361,21 +352,26 @@ func (server *Server) SubscribeUsersChanged(message *empty.Empty,
 	return nil
 }
 
-// RegisterService registers new service and creates secret.
-func (server *Server) RegisterService(
-	ctx context.Context, req *pb.RegisterServiceRequest) (rsp *pb.RegisterServiceResponse, err error) {
-	rsp = &pb.RegisterServiceResponse{}
+// RegisterInstance registers new service and creates secret.
+func (server *Server) RegisterInstance(
+	ctx context.Context, req *pb.RegisterInstanceRequest,
+) (*pb.RegisterInstanceResponse, error) {
+	rsp := &pb.RegisterInstanceResponse{}
 
-	log.WithField("serviceID", req.ServiceId).Debug("Process register service")
+	log.WithFields(log.Fields{
+		"serviceID": req.Instance.ServiceId,
+		"subjectID": req.Instance.SubjectId,
+		"instance":  req.Instance.Instance,
+	}).Debug("Process register instance")
 
 	permissions := make(map[string]map[string]string)
 	for key, value := range req.Permissions {
 		permissions[key] = value.Permissions
 	}
 
-	secret, err := server.permissionHandler.RegisterService(req.ServiceId, permissions)
+	secret, err := server.permissionHandler.RegisterInstance(instanceIdentPBToCloudprotocol(req.Instance), permissions)
 	if err != nil {
-		log.Errorf("Register service error: %s", err)
+		log.Errorf("Register instance error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}
@@ -385,33 +381,38 @@ func (server *Server) RegisterService(
 	return rsp, nil
 }
 
-// UnregisterService unregisters service.
-func (server *Server) UnregisterService(
-	ctx context.Context, req *pb.UnregisterServiceRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+// UnregisterInstance unregisters service.
+func (server *Server) UnregisterInstance(ctx context.Context, req *pb.UnregisterInstanceRequest) (*empty.Empty, error) {
+	log.WithFields(log.Fields{
+		"serviceID": req.Instance.ServiceId,
+		"subjectID": req.Instance.SubjectId,
+		"instance":  req.Instance.Instance,
+	}).Debug("Process unregister instance")
 
-	log.WithField("serviceID", req.ServiceId).Debug("Process unregister service")
+	server.permissionHandler.UnregisterInstance(instanceIdentPBToCloudprotocol(req.Instance))
 
-	server.permissionHandler.UnregisterService(req.ServiceId)
-
-	return rsp, nil
+	return &empty.Empty{}, nil
 }
 
 // GetPermissions returns permissions by secret and functional server ID.
 func (server *Server) GetPermissions(
-	ctx context.Context, req *pb.PermissionsRequest) (rsp *pb.PermissionsResponse, err error) {
+	ctx context.Context, req *pb.PermissionsRequest,
+) (rsp *pb.PermissionsResponse, err error) {
 	rsp = &pb.PermissionsResponse{}
 
 	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")
 
-	serviceID, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
+	instance, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
 	if err != nil {
 		log.Errorf("Ger permissions error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}
 
-	rsp.ServiceId = serviceID
+	rsp.Instance = &pb.InstanceIdent{
+		ServiceId: instance.ServiceID, SubjectId: instance.SubjectID,
+		Instance: int64(instance.Instance),
+	}
 	rsp.Permissions = &pb.Permissions{Permissions: perm}
 
 	return rsp, nil
@@ -566,24 +567,30 @@ func (server *Server) closeServerPublic() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-func (server *Server) handleUsersChanged(ctx context.Context) {
+func (server *Server) handleSubjectsChanged(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
-		case users := <-server.identHandler.UsersChangedChannel():
+		case subjects := <-server.identHandler.SubjectsChangedChannel():
 			server.Lock()
 
-			log.WithField("users", users).Debug("Handle users changed")
+			log.WithField("subjects", subjects).Debug("Handle subjects changed")
 
-			for _, stream := range server.usersChangedStreams {
-				if err := stream.Send(&pb.Users{Users: users}); err != nil {
-					log.Errorf("Can't send users: %s", err)
+			for _, stream := range server.subjectsChangedStreams {
+				if err := stream.Send(&pb.Subjects{Subjects: subjects}); err != nil {
+					log.Errorf("Can't send subjects: %s", err)
 				}
 			}
 
 			server.Unlock()
 		}
+	}
+}
+
+func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) cloudprotocol.InstanceIdent {
+	return cloudprotocol.InstanceIdent{
+		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: uint64(ident.Instance),
 	}
 }

@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/visprotocol"
+	"github.com/aoscloud/aos_common/api/visprotocol"
 	"github.com/aoscloud/aos_common/wsserver"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -50,7 +50,7 @@ const serverURL = "wss://localhost:443"
 
 type clientHandler struct {
 	subscriptionID string
-	users          []string
+	subjects       []string
 }
 
 /*******************************************************************************
@@ -282,34 +282,41 @@ func TestGetBoardModel(t *testing.T) {
 	}
 }
 
-func TestGetUsers(t *testing.T) {
-	testHandler.users = []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
+func TestGetSubjects(t *testing.T) {
+	testHandler.subjects = []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 
-	users, err := vis.GetUsers()
+	subjects, err := vis.GetSubjects()
 	if err != nil {
-		t.Fatalf("Error getting users: %s", err)
+		t.Fatalf("Error getting subjects: %s", err)
 	}
 
-	if !reflect.DeepEqual(users, testHandler.users) {
-		t.Errorf("Wrong users value: %s", users)
+	if !reflect.DeepEqual(subjects, testHandler.subjects) {
+		t.Errorf("Wrong subjects value: %s", subjects)
 	}
 }
 
-func TestUsersChanged(t *testing.T) {
-	newUsers := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
+func TestSubjectsChanged(t *testing.T) {
+	newSubjects := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 
-	if err := vis.SetUsers(newUsers); err != nil {
-		t.Fatalf("Can't set users: %s", err)
-	}
+	go testHandler.SubjectsChangeNotification(newSubjects)
 
 	select {
-	case users := <-vis.UsersChangedChannel():
-		if !reflect.DeepEqual(newUsers, users) {
-			t.Errorf("Wrong users value: %s", users)
+	case subjects := <-vis.SubjectsChangedChannel():
+		if !reflect.DeepEqual(newSubjects, subjects) {
+			t.Errorf("Wrong subjects value: %s", subjects)
 		}
 
 	case <-time.After(5 * time.Second):
-		t.Error("Waiting for users changed timeout")
+		t.Error("Waiting for subjects changed timeout")
+	}
+
+	subjects, err := vis.GetSubjects()
+	if err != nil {
+		t.Fatalf("Error getting subjects: %s", err)
+	}
+
+	if !reflect.DeepEqual(subjects, newSubjects) {
+		t.Errorf("Wrong subjects value: %s", subjects)
 	}
 }
 
@@ -318,7 +325,8 @@ func TestUsersChanged(t *testing.T) {
  ******************************************************************************/
 
 func (handler *clientHandler) ProcessMessage(
-	client *wsserver.Client, messageType int, message []byte) (response []byte, err error) {
+	client *wsserver.Client, messageType int, message []byte,
+) (response []byte, err error) {
 	var header visprotocol.MessageHeader
 
 	if err = json.Unmarshal(message, &header); err != nil {
@@ -377,11 +385,11 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			getRsp.Value = map[string]string{getReq.Path: "VIN1234567890"}
 
-		case "Attribute.BoardIdentification.Model":
+		case "Attribute.Aos.BoardModel":
 			getRsp.Value = map[string]string{getReq.Path: "testBoardModel:1.0"}
 
-		case "Attribute.Vehicle.UserIdentification.Users":
-			getRsp.Value = map[string][]string{getReq.Path: handler.users}
+		case "Attribute.Aos.Subjects":
+			getRsp.Value = map[string][]string{getReq.Path: handler.subjects}
 		}
 
 		rsp = &getRsp
@@ -403,36 +411,24 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.BoardIdentification.Model":
+		case "Attribute.Aos.BoardModel":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.Vehicle.UserIdentification.Users":
-			handler.users = nil
+		case "Attribute.Aos.Subjects":
+			handler.subjects = nil
 
-			for _, claim := range setReq.Value.([]interface{}) {
-				handler.users = append(handler.users, claim.(string))
+			subjects, ok := setReq.Value.([]interface{})
+			if !ok {
+				return nil, aoserrors.New("incorrect type for subjects")
 			}
 
-			if handler.subscriptionID != "" {
-				go func() {
-					message, err := json.Marshal(&visprotocol.SubscriptionNotification{
-						Action:         "subscription",
-						SubscriptionID: handler.subscriptionID,
-						Value:          map[string][]string{"Attribute.Vehicle.UserIdentification.Users": handler.users},
-					})
-					if err != nil {
-						log.Errorf("Error marshal request: %s", err)
-					}
-
-					clients := server.GetClients()
-
-					for _, client := range clients {
-						if err := client.SendMessage(websocket.TextMessage, message); err != nil {
-							log.Errorf("Error sending message: %s", err)
-						}
-					}
-				}()
+			for _, subjectElement := range subjects {
+				if subject, ok := subjectElement.(string); ok {
+					handler.subjects = append(handler.subjects, subject)
+				}
 			}
+
+			go handler.SubjectsChangeNotification(handler.subjects)
 		}
 
 	default:
@@ -444,6 +440,27 @@ func (handler *clientHandler) ProcessMessage(
 	}
 
 	return response, nil
+}
+
+func (handler *clientHandler) SubjectsChangeNotification(subjects []string) {
+	if handler.subscriptionID != "" {
+		message, err := json.Marshal(&visprotocol.SubscriptionNotification{
+			Action:         "subscription",
+			SubscriptionID: handler.subscriptionID,
+			Value:          map[string][]string{"Attribute.Aos.Subjects": subjects},
+		})
+		if err != nil {
+			log.Errorf("Error marshal request: %s", err)
+		}
+
+		clients := server.GetClients()
+
+		for _, client := range clients {
+			if err := client.SendMessage(websocket.TextMessage, message); err != nil {
+				log.Errorf("Error sending message: %s", err)
+			}
+		}
+	}
 }
 
 func (handler *clientHandler) ClientConnected(client *wsserver.Client) {

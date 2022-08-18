@@ -52,9 +52,8 @@ type Handler struct {
 type IdentModule interface {
 	GetSystemID() (systemdID string, err error)
 	GetBoardModel() (boardModel string, err error)
-	GetUsers() (users []string, err error)
-	SetUsers(users []string) (err error)
-	UsersChangedChannel() (channel <-chan []string)
+	GetSubjects() (subjects []string, err error)
+	SubjectsChangedChannel() (channel <-chan []string)
 	Close() (err error)
 }
 
@@ -115,23 +114,18 @@ func (handler *Handler) GetBoardModel() (boardModel string, err error) {
 	return boardModel, nil
 }
 
-// GetUsers returns current users.
-func (handler *Handler) GetUsers() (users []string, err error) {
-	if users, err = handler.module.GetUsers(); err != nil {
+// GetSubjects returns current subjects.
+func (handler *Handler) GetSubjects() (subjects []string, err error) {
+	if subjects, err = handler.module.GetSubjects(); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	return users, nil
+	return subjects, nil
 }
 
-// SetUsers set current users.
-func (handler *Handler) SetUsers(users []string) (err error) {
-	return aoserrors.Wrap(handler.module.SetUsers(users))
-}
-
-// UsersChangedChannel returns users changed channel.
-func (handler *Handler) UsersChangedChannel() (channel <-chan []string) {
-	return handler.module.UsersChangedChannel()
+// SubjectsChangedChannel returns subjects changed channel.
+func (handler *Handler) SubjectsChangedChannel() (channel <-chan []string) {
+	return handler.module.SubjectsChangedChannel()
 }
 
 /*******************************************************************************

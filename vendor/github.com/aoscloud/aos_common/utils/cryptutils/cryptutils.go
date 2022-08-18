@@ -38,7 +38,7 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/utils/tpmkey"
+	"github.com/aoscloud/aos_common/tpmkey"
 )
 
 /***********************************************************************************************************************
@@ -180,7 +180,8 @@ func (cryptoContext *CryptoContext) LoadCertificateByURL(certURLStr string) ([]*
 
 // LoadPrivateKeyByURL loads private key by URL.
 func (cryptoContext *CryptoContext) LoadPrivateKeyByURL(keyURLStr string) (privKey crypto.PrivateKey,
-	supportPKCS1v15SessionKey bool, err error) {
+	supportPKCS1v15SessionKey bool, err error,
+) {
 	keyURL, err := url.Parse(keyURLStr)
 	if err != nil {
 		return nil, false, aoserrors.Wrap(err)
@@ -450,50 +451,8 @@ func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) error {
 	return nil
 }
 
-/***********************************************************************************************************************
- * Private
- **********************************************************************************************************************/
-
-func getCaCertPool(rootCaFilePath string) (*x509.CertPool, error) {
-	pemCA, err := ioutil.ReadFile(rootCaFilePath)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	caCertPool := x509.NewCertPool()
-
-	if !caCertPool.AppendCertsFromPEM(pemCA) {
-		return nil, aoserrors.New("failed to add CA's certificate")
-	}
-
-	return caCertPool, nil
-}
-
-func getRawCertificate(certs []*x509.Certificate) [][]byte {
-	rawCerts := make([][]byte, 0, len(certs))
-
-	for _, cert := range certs {
-		rawCerts = append(rawCerts, cert.Raw)
-	}
-
-	return rawCerts
-}
-
-func (cryptoContext *CryptoContext) getTLSCertificate(certURLStr, keyURLStr string) (tls.Certificate, error) {
-	certs, err := cryptoContext.LoadCertificateByURL(certURLStr)
-	if err != nil {
-		return tls.Certificate{}, aoserrors.Wrap(err)
-	}
-
-	key, _, err := cryptoContext.LoadPrivateKeyByURL(keyURLStr)
-	if err != nil {
-		return tls.Certificate{}, aoserrors.Wrap(err)
-	}
-
-	return tls.Certificate{Certificate: getRawCertificate(certs), PrivateKey: key}, nil
-}
-
-func parsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin string) {
+// ParsePKCS11Url extracts library, token, label, id, user pin from pkcs url.
+func ParsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin string) {
 	opaqueValues := make(map[string]string)
 
 	for _, field := range strings.Split(pkcs11Url.Opaque, ";") {
@@ -537,6 +496,49 @@ func parsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin stri
 	return library, token, label, id, userPin
 }
 
+/***********************************************************************************************************************
+ * Private
+ **********************************************************************************************************************/
+
+func getCaCertPool(rootCaFilePath string) (*x509.CertPool, error) {
+	pemCA, err := ioutil.ReadFile(rootCaFilePath)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	caCertPool := x509.NewCertPool()
+
+	if !caCertPool.AppendCertsFromPEM(pemCA) {
+		return nil, aoserrors.New("failed to add CA's certificate")
+	}
+
+	return caCertPool, nil
+}
+
+func getRawCertificate(certs []*x509.Certificate) [][]byte {
+	rawCerts := make([][]byte, 0, len(certs))
+
+	for _, cert := range certs {
+		rawCerts = append(rawCerts, cert.Raw)
+	}
+
+	return rawCerts
+}
+
+func (cryptoContext *CryptoContext) getTLSCertificate(certURLStr, keyURLStr string) (tls.Certificate, error) {
+	certs, err := cryptoContext.LoadCertificateByURL(certURLStr)
+	if err != nil {
+		return tls.Certificate{}, aoserrors.Wrap(err)
+	}
+
+	key, _, err := cryptoContext.LoadPrivateKeyByURL(keyURLStr)
+	if err != nil {
+		return tls.Certificate{}, aoserrors.Wrap(err)
+	}
+
+	return tls.Certificate{Certificate: getRawCertificate(certs), PrivateKey: key}, nil
+}
+
 func (cryptoContext *CryptoContext) getPKCS11Context(library, token, userPin string) (*crypto11.Context, error) {
 	cryptoContext.Lock()
 	defer cryptoContext.Unlock()
@@ -568,7 +570,7 @@ func (cryptoContext *CryptoContext) getPKCS11Context(library, token, userPin str
 }
 
 func (cryptoContext *CryptoContext) loadCertificateFromPKCS11(certURL *url.URL) ([]*x509.Certificate, error) {
-	library, token, label, id, userPin := parsePKCS11Url(certURL)
+	library, token, label, id, userPin := ParsePKCS11Url(certURL)
 
 	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
 	if err != nil {
@@ -632,7 +634,7 @@ func (cryptoContext *CryptoContext) loadPrivateKeyFromTPM(keyURL *url.URL) (cryp
 }
 
 func (cryptoContext *CryptoContext) loadPrivateKeyFromPKCS11(keyURL *url.URL) (crypto.PrivateKey, error) {
-	library, token, label, id, userPin := parsePKCS11Url(keyURL)
+	library, token, label, id, userPin := ParsePKCS11Url(keyURL)
 
 	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
 	if err != nil {

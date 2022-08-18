@@ -332,7 +332,8 @@ func (module *PKCS11Module) Clear() error {
 
 // ValidateCertificates returns list of valid pairs, invalid certificates and invalid keys.
 func (module *PKCS11Module) ValidateCertificates() (
-	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error) {
+	validInfos []certhandler.CertInfo, invalidCerts, invalidKeys []string, err error,
+) {
 	module.Lock()
 	defer module.Unlock()
 
@@ -456,7 +457,8 @@ func (module *PKCS11Module) CreateKey(password, algorithm string) (key crypto.Pr
 
 // ApplyCertificate applies certificate.
 func (module *PKCS11Module) ApplyCertificate(x509Certs []*x509.Certificate) (
-	certInfo certhandler.CertInfo, password string, err error) {
+	certInfo certhandler.CertInfo, password string, err error,
+) {
 	module.Lock()
 	defer module.Unlock()
 
@@ -681,19 +683,14 @@ func parseURL(urlStr string) (template []*pkcs11.Attribute, err error) {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	opaqueValues, err := url.ParseQuery(urlVal.Opaque)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
+	_, _, label, id, _ := cryptutils.ParsePKCS11Url(urlVal) // nolint:dogsled
+
+	if id != "" {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
 	}
 
-	for key, value := range opaqueValues {
-		switch key {
-		case "id":
-			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, value[0]))
-
-		case "object":
-			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, value[0]))
-		}
+	if label != "" {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
 	}
 
 	return template, nil
@@ -949,7 +946,8 @@ func (module *PKCS11Module) getInvaidPkcsURLs(objects []*pkcs11Object, warnMsg s
 }
 
 func (module *PKCS11Module) getValidInfo(privKeyObjs, pubKeyObjs,
-	certObjs *[]*pkcs11Object) (validInfos []certhandler.CertInfo) {
+	certObjs *[]*pkcs11Object,
+) (validInfos []certhandler.CertInfo) {
 	k := 0
 
 	for i, privKeyObj := range *privKeyObjs {

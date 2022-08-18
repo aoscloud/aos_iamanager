@@ -20,10 +20,8 @@ package fileidentifier
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -37,7 +35,7 @@ import (
  * Consts
  ******************************************************************************/
 
-const usersChangedChannelSize = 1
+const subjectsChangedChannelSize = 1
 
 /*******************************************************************************
  * Types
@@ -47,18 +45,18 @@ const usersChangedChannelSize = 1
 type Instance struct {
 	sync.Mutex
 
-	config              instanceConfig
-	usersChangedChannel chan []string
+	config                 instanceConfig
+	subjectsChangedChannel chan []string
 
 	systemID   string
 	boardModel string
-	users      []string
+	subjects   []string
 }
 
 type instanceConfig struct {
 	SystemIDPath   string `json:"systemIdPath"`
 	BoardModelPath string `json:"boardModelPath"`
-	UsersPath      string `json:"usersPath"`
+	SubjectsPath   string `json:"subjectsPath"`
 }
 
 /*******************************************************************************
@@ -79,7 +77,7 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	instance.usersChangedChannel = make(chan []string, usersChangedChannelSize)
+	instance.subjectsChangedChannel = make(chan []string, subjectsChangedChannelSize)
 
 	if instance.systemID, err = instance.readDataFromFile(instance.config.SystemIDPath); err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -89,8 +87,8 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if err = instance.readUsers(); err != nil {
-		log.Warnf("Can't read users: %s. Empty users will be used", err)
+	if err = instance.readSubjects(); err != nil {
+		log.Warnf("Can't read subjects: %s. Empty subjects will be used", err)
 	}
 
 	return instance, nil
@@ -123,43 +121,19 @@ func (instance *Instance) GetBoardModel() (boardModel string, err error) {
 	return instance.boardModel, aoserrors.Wrap(err)
 }
 
-// GetUsers returns the user claims.
-func (instance *Instance) GetUsers() (users []string, err error) {
+// GetSubjects returns the subjects.
+func (instance *Instance) GetSubjects() (subjects []string, err error) {
 	instance.Lock()
 	defer instance.Unlock()
 
-	log.WithField("users", instance.users).Debug("Get users")
+	log.WithField("subjects", instance.subjects).Debug("Get subjects")
 
-	return instance.users, aoserrors.Wrap(err)
+	return instance.subjects, aoserrors.Wrap(err)
 }
 
-// SetUsers sets the user claims.
-func (instance *Instance) SetUsers(users []string) (err error) {
-	instance.Lock()
-	defer instance.Unlock()
-
-	log.WithField("users", users).Debug("Set users")
-
-	if reflect.DeepEqual(instance.users, users) {
-		return nil
-	}
-
-	instance.users = users
-
-	if len(instance.usersChangedChannel) != usersChangedChannelSize {
-		instance.usersChangedChannel <- users
-	}
-
-	if err = instance.writeUsers(); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	return nil
-}
-
-// UsersChangedChannel returns users changed channel.
-func (instance *Instance) UsersChangedChannel() (channel <-chan []string) {
-	return instance.usersChangedChannel
+// SubjectsChangedChannel returns subjects changed channel.
+func (instance *Instance) SubjectsChangedChannel() (channel <-chan []string) {
+	return instance.subjectsChangedChannel
 }
 
 /*******************************************************************************
@@ -177,10 +151,10 @@ func (instance *Instance) readDataFromFile(path string) (data string, err error)
 	return data, nil
 }
 
-func (instance *Instance) readUsers() (err error) {
-	instance.users = make([]string, 0)
+func (instance *Instance) readSubjects() (err error) {
+	instance.subjects = make([]string, 0)
 
-	file, err := os.Open(instance.config.UsersPath)
+	file, err := os.Open(instance.config.SubjectsPath)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -189,24 +163,8 @@ func (instance *Instance) readUsers() (err error) {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		instance.users = append(instance.users, scanner.Text())
+		instance.subjects = append(instance.subjects, scanner.Text())
 	}
 
 	return nil
-}
-
-func (instance *Instance) writeUsers() (err error) {
-	file, err := os.Create(instance.config.UsersPath)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
-
-	for _, claim := range instance.users {
-		fmt.Fprintln(writer, claim)
-	}
-
-	return aoserrors.Wrap(writer.Flush())
 }

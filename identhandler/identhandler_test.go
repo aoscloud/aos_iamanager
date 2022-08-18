@@ -35,17 +35,17 @@ import (
  ******************************************************************************/
 
 type testIdentifier struct {
-	systemID            string
-	boardModel          string
-	users               []string
-	usersChangedChannel chan []string
+	systemID               string
+	boardModel             string
+	subjects               []string
+	subjectsChangedChannel chan []string
 }
 
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
-var identifier = &testIdentifier{usersChangedChannel: make(chan []string, 1)}
+var identifier = &testIdentifier{subjectsChangedChannel: make(chan []string, 1)}
 
 /*******************************************************************************
  * Init
@@ -109,35 +109,31 @@ func TestIdentifier(t *testing.T) {
 		t.Errorf("Wrong system ID: %s", boardModel)
 	}
 
-	identifier.users = []string{"user1", "user2", "user3"}
+	identifier.subjects = []string{"subject1", "subject2", "subject3"}
 
-	users, err := handler.GetUsers()
+	subjects, err := handler.GetSubjects()
 	if err != nil {
-		t.Fatalf("Can't get users: %s", err)
+		t.Fatalf("Can't get subject: %s", err)
 	}
 
-	if !reflect.DeepEqual(users, identifier.users) {
-		t.Errorf("Wrong users: %v", users)
+	if !reflect.DeepEqual(subjects, identifier.subjects) {
+		t.Errorf("Wrong subject: %v", subjects)
 	}
 
-	newUsers := []string{"newUser1", "newUser2", "newUser3"}
+	newSubjects := []string{"newSubject1", "newSubject2", "newSubject3"}
 
-	if err = handler.SetUsers(newUsers); err != nil {
-		t.Fatalf("Can't set users: %s", users)
-	}
-
-	if !reflect.DeepEqual(identifier.users, newUsers) {
-		t.Errorf("Wrong users: %v", users)
+	if err = identifier.ChangeSubjects(newSubjects); err != nil {
+		t.Fatalf("Can't set subjects: %s", newSubjects)
 	}
 
 	select {
-	case users := <-handler.UsersChangedChannel():
-		if !reflect.DeepEqual(users, newUsers) {
-			t.Errorf("Wrong users: %v", users)
+	case subjects := <-handler.SubjectsChangedChannel():
+		if !reflect.DeepEqual(subjects, newSubjects) {
+			t.Errorf("Wrong subjects: %v", subjects)
 		}
 
 	case <-time.After(5 * time.Second):
-		t.Error("Wait users changed timeout")
+		t.Error("Wait subjects changed timeout")
 	}
 }
 
@@ -157,20 +153,20 @@ func (identifier *testIdentifier) GetBoardModel() (boardModel string, err error)
 	return identifier.boardModel, nil
 }
 
-func (identifier *testIdentifier) GetUsers() (users []string, err error) {
-	return identifier.users, nil
+func (identifier *testIdentifier) GetSubjects() (subjects []string, err error) {
+	return identifier.subjects, nil
 }
 
-func (identifier *testIdentifier) SetUsers(users []string) (err error) {
-	identifier.users = users
+func (identifier *testIdentifier) ChangeSubjects(subjects []string) (err error) {
+	identifier.subjects = subjects
 
-	identifier.usersChangedChannel <- users
+	identifier.subjectsChangedChannel <- subjects
 
 	return nil
 }
 
-func (identifier *testIdentifier) UsersChangedChannel() (channel <-chan []string) {
-	return identifier.usersChangedChannel
+func (identifier *testIdentifier) SubjectsChangedChannel() (channel <-chan []string) {
+	return identifier.subjectsChangedChannel
 }
 
 func (identifier *testIdentifier) Close() (err error) {

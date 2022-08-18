@@ -41,9 +41,9 @@ import (
 
 	"github.com/ThalesIgnite/crypto11"
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/tpmkey"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/aoscloud/aos_common/utils/testtools"
-	"github.com/aoscloud/aos_common/utils/tpmkey"
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -251,22 +251,19 @@ func TestUpdateCertificate(t *testing.T) {
 					}
 
 				case cryptutils.SchemePKCS11:
-					opaqueValues, err := url.ParseQuery(keyURL.Opaque)
-					if err != nil {
-						t.Fatalf("Can't parse opaque: %s", err)
-					}
+					_, token, _, id, userPin := cryptutils.ParsePKCS11Url(keyURL)
 
 					if pkcs11Ctx == nil {
 						if pkcs11Ctx, err = crypto11.Configure(&crypto11.Config{
 							Path:       pkcs11LibPath,
-							TokenLabel: opaqueValues["token"][0],
-							Pin:        keyURL.Query()["pin-value"][0],
+							TokenLabel: token,
+							Pin:        userPin,
 						}); err != nil {
 							t.Fatalf("Can't init pkcs11 context: %s", err)
 						}
 					}
 
-					if currentKey, err = pkcs11Ctx.FindKeyPair([]byte(opaqueValues["id"][0]), nil); err != nil {
+					if currentKey, err = pkcs11Ctx.FindKeyPair([]byte(id), nil); err != nil {
 						t.Fatalf("Can't find key: %s", err)
 					}
 
@@ -597,19 +594,28 @@ func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 		t.Fatalf("Failed to get TPM capabilities: %v", err)
 	}
 
-	maxRetries, recoveryTime, lockoutRecovery := caps[0].(tpm2.TaggedProperty).Value,
-		caps[1].(tpm2.TaggedProperty).Value, caps[2].(tpm2.TaggedProperty).Value
-
-	if maxRetries == 0 {
-		t.Error("maxTries is 0")
+	if element, ok := caps[0].(tpm2.TaggedProperty); ok {
+		if element.Value == 0 {
+			t.Error("maxTries is 0")
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 
-	if recoveryTime == 0 {
-		t.Error("recoveryTime is 0")
+	if element, ok := caps[1].(tpm2.TaggedProperty); ok {
+		if element.Value == 0 {
+			t.Error("recoveryTime is 0")
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 
-	if lockoutRecovery == 0 {
-		t.Error("lockoutRecovery is 0")
+	if element, ok := caps[2].(tpm2.TaggedProperty); ok {
+		if element.Value == 0 {
+			t.Error("lockoutRecovery is 0")
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 }
 
@@ -673,8 +679,12 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 		t.Fatalf("Failed to get capabilities: %v", err)
 	}
 
-	if caps[0].(tpm2.TaggedProperty).Value != 1 {
-		t.Errorf("Got %d, expected 1", caps[0].(tpm2.TaggedProperty).Value)
+	if element, ok := caps[0].(tpm2.TaggedProperty); ok {
+		if element.Value != 1 {
+			t.Errorf("Got %d, expected 1", element.Value)
+		}
+	} else {
+		t.Error("Incorrect element type")
 	}
 }
 
@@ -1068,15 +1078,9 @@ func checkLocationURLs(t *testing.T, location, itemType string, expectedURLs []s
 		}
 
 	case cryptutils.SchemePKCS11:
-		opaqueValues, err := url.ParseQuery(locationURL.Opaque)
-		if err != nil {
-			t.Fatalf("Can't parse opaque: %s", err)
-		}
+		_, token, label, _, userPin := cryptutils.ParsePKCS11Url(locationURL)
 
-		if existingURLs, err = getExistingPKCS11Items(
-			opaqueValues["token"][0],
-			locationURL.Query()["pin-value"][0],
-			opaqueValues["object"][0], itemType); err != nil {
+		if existingURLs, err = getExistingPKCS11Items(token, userPin, label, itemType); err != nil {
 			t.Fatalf("Can't get existing file items: %s", err)
 		}
 
