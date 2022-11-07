@@ -31,18 +31,30 @@ import (
 
 // Config instance.
 type Config struct {
-	ServerURL                 string         `json:"serverUrl"`
-	ServerPublicURL           string         `json:"serverPublicUrl"`
+	PublicServerURL           string         `json:"publicServerUrl"`
+	ProtectedServerURL        string         `json:"protectedServerUrl"`
+	NodeID                    string         `json:"nodeId"`
 	CACert                    string         `json:"caCert"`
 	CertStorage               string         `json:"certStorage"`
 	WorkingDir                string         `json:"workingDir"`
 	CertModules               []ModuleConfig `json:"certModules"`
 	FinishProvisioningCmdArgs []string       `json:"finishProvisioningCmdArgs"`
 	DiskEncryptionCmdArgs     []string       `json:"diskEncryptionCmdArgs"`
-	Identifier                struct {
-		Plugin string          `json:"plugin"`
-		Params json.RawMessage `json:"params"`
-	} `json:"identifier"`
+	EnablePermissionsHandler  bool           `json:"enablePermissionsHandler"`
+	Identifier                Identifier     `json:"identifier"`
+	RemoteIAMs                []RemoteIAM    `json:"remoteIams"`
+}
+
+// Identifier identifier plugin parameters.
+type Identifier struct {
+	Plugin string          `json:"plugin"`
+	Params json.RawMessage `json:"params"`
+}
+
+// RemoteIAM remote IAM parameters.
+type RemoteIAM struct {
+	NodeID string `json:"nodeId"`
+	URL    string `json:"url"`
 }
 
 // ModuleConfig module configuration.
