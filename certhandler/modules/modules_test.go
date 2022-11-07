@@ -282,7 +282,7 @@ func TestUpdateCertificate(t *testing.T) {
 					t.Fatalf("Key %s doesn't support required interface", certInfo.KeyURL)
 				}
 
-				// Check descryption
+				// Check decryption
 
 				if decrypter, ok := currentKey.(crypto.Decrypter); ok {
 					originMessage := []byte("This is origin message")
