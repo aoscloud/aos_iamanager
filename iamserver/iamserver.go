@@ -19,6 +19,7 @@ package iamserver
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"net"
@@ -27,14 +28,13 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/api/cloudprotocol"
-	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
+	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/aoscloud/aos_iamanager/certhandler"
 	"github.com/aoscloud/aos_iamanager/config"
 )
 
@@ -42,9 +42,9 @@ import (
  * Consts
  **********************************************************************************************************************/
 
-const discEncryptyonType = "diskencryption"
+const discEncryptionType = "diskencryption"
 
-const iamAPIVersion = 3
+const iamAPIVersion = 4
 
 /***********************************************************************************************************************
  * Vars
@@ -57,32 +57,38 @@ const iamAPIVersion = 3
 // Server IAM server instance.
 type Server struct {
 	sync.Mutex
+	pb.UnimplementedIAMPublicServiceServer
+	pb.UnimplementedIAMPublicIdentityServiceServer
+	pb.UnimplementedIAMPublicPermissionsServiceServer
+	pb.UnimplementedIAMProvisioningServiceServer
+	pb.UnimplementedIAMCertificateServiceServer
+	pb.UnimplementedIAMPermissionsServiceServer
 
 	identHandler      IdentHandler
 	certHandler       CertHandler
 	permissionHandler PermissionHandler
 
 	cryptoContext             *cryptutils.CryptoContext
-	listener                  net.Listener
-	listenerPublic            net.Listener
-	grpcServer                *grpc.Server
-	grpcServerPublic          *grpc.Server
-	subjectsChangedStreams    []pb.IAMPublicService_SubscribeSubjectsChangedServer
+	publicListener            net.Listener
+	protectedListener         net.Listener
+	grpcPublicServer          *grpc.Server
+	grpcProtectedServer       *grpc.Server
+	subjectsChangedStreams    []pb.IAMPublicIdentityService_SubscribeSubjectsChangedServer
+	nodeID                    string
 	finishProvisioningCmdArgs []string
 	diskEncryptCmdArgs        []string
-	pb.UnimplementedIAMProtectedServiceServer
-	pb.UnimplementedIAMPublicServiceServer
+
 	cancelFunction context.CancelFunc
 }
 
 // CertHandler interface.
 type CertHandler interface {
-	GetCertTypes() (certTypes []string)
-	SetOwner(certType, password string) (err error)
-	Clear(certType string) (err error)
+	GetCertTypes() []string
+	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
+	SetOwner(certType, password string) error
+	Clear(certType string) error
 	CreateKey(certType, password string) (csr []byte, err error)
 	ApplyCertificate(certType string, cert []byte) (certURL string, err error)
-	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
 	CreateSelfSignedCert(certType, password string) (err error)
 }
 
@@ -108,13 +114,14 @@ type PermissionHandler interface {
  **********************************************************************************************************************/
 
 // New creates new IAM server instance.
-func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
-	permissionHandler PermissionHandler, insecure bool,
+func New(cfg *config.Config, certHandler CertHandler, identHandler IdentHandler,
+	permissionHandler PermissionHandler, provisioningMode bool,
 ) (server *Server, err error) {
 	server = &Server{
 		identHandler:              identHandler,
 		certHandler:               certHandler,
 		permissionHandler:         permissionHandler,
+		nodeID:                    cfg.NodeID,
 		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs,
 		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs,
 	}
@@ -125,44 +132,56 @@ func New(cfg *config.Config, identHandler IdentHandler, certHandler CertHandler,
 		}
 	}()
 
-	if server.cryptoContext, err = cryptutils.NewCryptoContext(cfg.CACert); err != nil {
-		return server, aoserrors.Wrap(err)
+	var publicOpts, protectedOpts []grpc.ServerOption
+
+	if !provisioningMode {
+		tlsConfig, mtlsConfig, err := server.getTLSConfigs(cfg.CACert, cfg.CertStorage)
+		if err != nil {
+			return server, err
+		}
+
+		publicOpts = append(publicOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		protectedOpts = append(protectedOpts, grpc.Creds(credentials.NewTLS(mtlsConfig)))
 	}
 
-	if err := server.createServerProtected(cfg, insecure); err != nil {
-		return server, aoserrors.Wrap(err)
+	if err = server.createPublicServer(cfg.PublicServerURL, publicOpts...); err != nil {
+		return server, err
 	}
 
-	if err := server.createServerPublic(cfg, insecure); err != nil {
-		return server, aoserrors.Wrap(err)
+	if err = server.createProtectedServer(cfg.ProtectedServerURL, provisioningMode, protectedOpts...); err != nil {
+		return server, err
 	}
 
 	ctx, cancelFunction := context.WithCancel(context.Background())
 
 	server.cancelFunction = cancelFunction
 
-	go server.handleSubjectsChanged(ctx)
+	if identHandler != nil {
+		go server.handleSubjectsChanged(ctx)
+	}
 
 	return server, nil
 }
 
 // Close closes IAM server instance.
 func (server *Server) Close() (err error) {
-	if errCloseServerProtected := server.closeServerProtected(); errCloseServerProtected != nil {
+	if errCloseServerProtected := server.closeProtectedServer(); errCloseServerProtected != nil {
 		if err == nil {
 			err = aoserrors.Wrap(errCloseServerProtected)
 		}
 	}
 
-	if errCloseServerPublic := server.closeServerPublic(); errCloseServerPublic != nil {
+	if errCloseServerPublic := server.closePublicServer(); errCloseServerPublic != nil {
 		if err == nil {
 			err = aoserrors.Wrap(errCloseServerPublic)
 		}
 	}
 
-	if errCryptoContext := server.cryptoContext.Close(); errCryptoContext != nil {
-		if err == nil {
-			err = aoserrors.Wrap(errCryptoContext)
+	if server.cryptoContext != nil {
+		if errCryptoContext := server.cryptoContext.Close(); errCryptoContext != nil {
+			if err == nil {
+				err = aoserrors.Wrap(errCryptoContext)
+			}
 		}
 	}
 
@@ -173,58 +192,18 @@ func (server *Server) Close() (err error) {
 	return err
 }
 
-// GetCertTypes return all IAM cert types.
-func (server *Server) GetCertTypes(context context.Context, req *empty.Empty) (rsp *pb.CertTypes, err error) {
-	rsp = &pb.CertTypes{Types: server.certHandler.GetCertTypes()}
+// GetAPIVersion returns current iam api version.
+func (server *Server) GetAPIVersion(ctx context.Context, req *empty.Empty) (*pb.APIVersion, error) {
+	log.Debug("Process get API version")
 
-	log.WithField("types", rsp.Types).Debug("Process get cert types")
-
-	return rsp, nil
+	return &pb.APIVersion{Version: iamAPIVersion}, nil
 }
 
-// FinishProvisioning notifies IAM that provisioning is finished.
-func (server *Server) FinishProvisioning(context context.Context, req *empty.Empty) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+// GetNodeID returns current iam api version.
+func (server *Server) GetNodeID(ctx context.Context, req *empty.Empty) (*pb.NodeID, error) {
+	log.Debug("Process get node ID")
 
-	if len(server.finishProvisioningCmdArgs) > 0 {
-		output, err := exec.Command(
-			server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
-		if err != nil {
-			return rsp, aoserrors.Errorf("message: %s, err: %s", string(output), err)
-		}
-	}
-
-	return rsp, nil
-}
-
-// SetOwner makes IAM owner of secure storage.
-func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
-
-	log.WithField("type", req.Type).Debug("Process set owner request")
-
-	if err = server.certHandler.SetOwner(req.Type, req.Password); err != nil {
-		log.Errorf("Set owner error: %s", err)
-
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	return rsp, nil
-}
-
-// Clear clears certificates and keys storages.
-func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
-
-	log.WithField("type", req.Type).Debug("Process clear request")
-
-	if err = server.certHandler.Clear(req.Type); err != nil {
-		log.Errorf("Clear error: %s", err)
-
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	return rsp, nil
+	return &pb.NodeID{NodeId: server.nodeID}, nil
 }
 
 // CreateKey creates private key.
@@ -321,7 +300,7 @@ func (server *Server) GetSubjects(context context.Context, req *empty.Empty) (rs
 
 // SubscribeSubjectsChanged creates stream for subjects changed notifications.
 func (server *Server) SubscribeSubjectsChanged(message *empty.Empty,
-	stream pb.IAMPublicService_SubscribeSubjectsChangedServer,
+	stream pb.IAMPublicIdentityService_SubscribeSubjectsChangedServer,
 ) (err error) {
 	server.Lock()
 	server.subjectsChangedStreams = append(server.subjectsChangedStreams, stream)
@@ -411,9 +390,63 @@ func (server *Server) GetPermissions(
 
 	rsp.Instance = &pb.InstanceIdent{
 		ServiceId: instance.ServiceID, SubjectId: instance.SubjectID,
-		Instance: int64(instance.Instance),
+		Instance: instance.Instance,
 	}
 	rsp.Permissions = &pb.Permissions{Permissions: perm}
+
+	return rsp, nil
+}
+
+// GetAllNodeIDs returns all known node IDs.
+func (server *Server) GetAllNodeIDs(context context.Context,
+	req *empty.Empty,
+) (rsp *pb.NodesID, err error) {
+	rsp = &pb.NodesID{}
+
+	log.Debug("Process get all node IDs")
+
+	rsp.Ids = append(rsp.Ids, server.nodeID)
+
+	return rsp, nil
+}
+
+// GetCertTypes returns all IAM cert types.
+func (server *Server) GetCertTypes(context context.Context,
+	req *pb.GetCertTypesRequest,
+) (rsp *pb.CertTypes, err error) {
+	rsp = &pb.CertTypes{Types: server.certHandler.GetCertTypes()}
+
+	log.WithField("types", rsp.Types).Debug("Process get cert types")
+
+	return rsp, nil
+}
+
+// SetOwner makes IAM owner of secure storage.
+func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest) (rsp *empty.Empty, err error) {
+	rsp = &empty.Empty{}
+
+	log.WithField("type", req.Type).Debug("Process set owner request")
+
+	if err = server.certHandler.SetOwner(req.Type, req.Password); err != nil {
+		log.Errorf("Set owner error: %s", err)
+
+		return rsp, aoserrors.Wrap(err)
+	}
+
+	return rsp, nil
+}
+
+// Clear clears certificates and keys storages.
+func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp *empty.Empty, err error) {
+	rsp = &empty.Empty{}
+
+	log.WithField("type", req.Type).Debug("Process clear request")
+
+	if err = server.certHandler.Clear(req.Type); err != nil {
+		log.Errorf("Clear error: %s", err)
+
+		return rsp, aoserrors.Wrap(err)
+	}
 
 	return rsp, nil
 }
@@ -422,7 +455,7 @@ func (server *Server) GetPermissions(
 func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskRequest) (rsp *empty.Empty, err error) {
 	rsp = &empty.Empty{}
 
-	if err := server.certHandler.CreateSelfSignedCert(discEncryptyonType, req.Password); err != nil {
+	if err := server.certHandler.CreateSelfSignedCert(discEncryptionType, req.Password); err != nil {
 		log.Error("Can't generate self signed certificate: ", err)
 		return rsp, aoserrors.Wrap(err)
 	}
@@ -437,93 +470,59 @@ func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReques
 	return rsp, nil
 }
 
-// GetAPIVersion returns current iam api version.
-func (server *Server) GetAPIVersion(ctx context.Context, req *empty.Empty) (resp *pb.APIVersion, err error) {
-	return &pb.APIVersion{Version: iamAPIVersion}, nil
+// FinishProvisioning notifies IAM that provisioning is finished.
+func (server *Server) FinishProvisioning(context context.Context, req *empty.Empty) (rsp *empty.Empty, err error) {
+	rsp = &empty.Empty{}
+
+	if len(server.finishProvisioningCmdArgs) > 0 {
+		output, err := exec.Command(
+			server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
+		if err != nil {
+			return rsp, aoserrors.Errorf("message: %s, err: %s", string(output), err)
+		}
+	}
+
+	return rsp, nil
 }
 
 /***********************************************************************************************************************
  * Private
  **********************************************************************************************************************/
 
-func (server *Server) createServerProtected(cfg *config.Config, insecure bool) (err error) {
-	log.WithField("url", cfg.ServerURL).Debug("Create IAM protected server")
-
-	if server.listener, err = net.Listen("tcp", cfg.ServerURL); err != nil {
-		return aoserrors.Wrap(err)
+func (server *Server) getTLSConfigs(caCert, certStorage string) (tlsConfig, mtlsConfig *tls.Config, err error) {
+	if server.cryptoContext, err = cryptutils.NewCryptoContext(caCert); err != nil {
+		return nil, nil, aoserrors.Wrap(err)
 	}
 
-	var opts []grpc.ServerOption
-
-	if !insecure {
-		certURL, keyURL, err := server.certHandler.GetCertificate(cfg.CertStorage, nil, "")
-		if err != nil {
-			if !errors.Is(err, certhandler.ErrNotExist) {
-				return aoserrors.Wrap(err)
-			}
-
-			log.Errorf("Can't get TLS certificate: %s. Continue in insecure mode.", err)
-		} else {
-			tlsConfig, err := server.cryptoContext.GetServerMutualTLSConfig(certURL, keyURL)
-			if err != nil {
-				return aoserrors.Wrap(err)
-			}
-
-			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
-		}
-	} else {
-		log.Warnf("IAM server uses insecure connection")
+	certURL, keyURL, err := server.certHandler.GetCertificate(certStorage, nil, "")
+	if err != nil {
+		return nil, nil, aoserrors.Wrap(err)
 	}
 
-	server.grpcServer = grpc.NewServer(opts...)
+	if tlsConfig, err = server.cryptoContext.GetServerTLSConfig(certURL, keyURL); err != nil {
+		return nil, nil, aoserrors.Wrap(err)
+	}
 
-	pb.RegisterIAMProtectedServiceServer(server.grpcServer, server)
-	pb.RegisterIAMPublicServiceServer(server.grpcServer, server)
+	if mtlsConfig, err = server.cryptoContext.GetServerMutualTLSConfig(certURL, keyURL); err != nil {
+		return nil, nil, aoserrors.Wrap(err)
+	}
 
-	go func() {
-		if err := server.grpcServer.Serve(server.listener); err != nil {
-			log.Errorf("Can't serve grpc server: %s", err)
-		}
-	}()
-
-	return nil
+	return tlsConfig, mtlsConfig, nil
 }
 
-func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err error) {
-	log.WithField("url", cfg.ServerPublicURL).Debug("Create IAM public server")
+func (server *Server) createPublicServer(url string, opts ...grpc.ServerOption) (err error) {
+	log.WithField("url", url).Debug("Create IAM public server")
 
-	if server.listenerPublic, err = net.Listen("tcp", cfg.ServerPublicURL); err != nil {
+	if server.publicListener, err = net.Listen("tcp", url); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	var opts []grpc.ServerOption
+	server.grpcPublicServer = grpc.NewServer(opts...)
 
-	if !insecure {
-		certURL, keyURL, err := server.certHandler.GetCertificate(cfg.CertStorage, nil, "")
-		if err != nil {
-			if !errors.Is(err, certhandler.ErrNotExist) {
-				return aoserrors.Wrap(err)
-			}
-
-			log.Errorf("Can't get public TLS certificate: %s. Continue in insecure mode.", err)
-		} else {
-			tlsConfig, err := server.cryptoContext.GetServerTLSConfig(certURL, keyURL)
-			if err != nil {
-				return aoserrors.Wrap(err)
-			}
-
-			opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
-		}
-	} else {
-		log.Warnf("IAM public server uses insecure connection")
-	}
-
-	server.grpcServerPublic = grpc.NewServer(opts...)
-
-	pb.RegisterIAMPublicServiceServer(server.grpcServerPublic, server)
+	server.registerPublicServices(server.grpcPublicServer)
 
 	go func() {
-		if err := server.grpcServerPublic.Serve(server.listenerPublic); err != nil {
+		if err := server.grpcPublicServer.Serve(server.publicListener); err != nil {
 			log.Errorf("Can't serve public grpc server: %s", err)
 		}
 	}()
@@ -531,15 +530,36 @@ func (server *Server) createServerPublic(cfg *config.Config, insecure bool) (err
 	return nil
 }
 
-func (server *Server) closeServerProtected() (err error) {
-	log.Debug("Close IAM protected server")
+func (server *Server) createProtectedServer(url string, provisioningMode bool, opts ...grpc.ServerOption) (err error) {
+	log.WithField("url", url).Debug("Create IAM protected server")
 
-	if server.grpcServer != nil {
-		server.grpcServer.Stop()
+	if server.protectedListener, err = net.Listen("tcp", url); err != nil {
+		return aoserrors.Wrap(err)
 	}
 
-	if server.listener != nil {
-		if listenerErr := server.listener.Close(); listenerErr != nil {
+	server.grpcProtectedServer = grpc.NewServer(opts...)
+
+	server.registerPublicServices(server.grpcProtectedServer)
+	server.registerProtectedServices(server.grpcProtectedServer, provisioningMode)
+
+	go func() {
+		if err := server.grpcProtectedServer.Serve(server.protectedListener); err != nil {
+			log.Errorf("Can't serve grpc server: %s", err)
+		}
+	}()
+
+	return nil
+}
+
+func (server *Server) closePublicServer() (err error) {
+	log.Debug("Close IAM public server")
+
+	if server.grpcPublicServer != nil {
+		server.grpcPublicServer.Stop()
+	}
+
+	if server.publicListener != nil {
+		if listenerErr := server.publicListener.Close(); listenerErr != nil {
 			if err == nil {
 				err = listenerErr
 			}
@@ -549,15 +569,15 @@ func (server *Server) closeServerProtected() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-func (server *Server) closeServerPublic() (err error) {
-	log.Debug("Close IAM public server")
+func (server *Server) closeProtectedServer() (err error) {
+	log.Debug("Close IAM protected server")
 
-	if server.grpcServerPublic != nil {
-		server.grpcServerPublic.Stop()
+	if server.grpcProtectedServer != nil {
+		server.grpcProtectedServer.Stop()
 	}
 
-	if server.listenerPublic != nil {
-		if listenerErr := server.listenerPublic.Close(); listenerErr != nil {
+	if server.protectedListener != nil {
+		if listenerErr := server.protectedListener.Close(); listenerErr != nil {
 			if err == nil {
 				err = listenerErr
 			}
@@ -592,5 +612,29 @@ func (server *Server) handleSubjectsChanged(ctx context.Context) {
 func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) cloudprotocol.InstanceIdent {
 	return cloudprotocol.InstanceIdent{
 		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: uint64(ident.Instance),
+	}
+}
+
+func (server *Server) registerPublicServices(registrar grpc.ServiceRegistrar) {
+	pb.RegisterIAMPublicServiceServer(registrar, server)
+
+	if server.identHandler != nil {
+		pb.RegisterIAMPublicIdentityServiceServer(registrar, server)
+	}
+
+	if server.permissionHandler != nil {
+		pb.RegisterIAMPublicPermissionsServiceServer(registrar, server)
+	}
+}
+
+func (server *Server) registerProtectedServices(registrar grpc.ServiceRegistrar, provisioningMode bool) {
+	pb.RegisterIAMCertificateServiceServer(registrar, server)
+
+	if provisioningMode {
+		pb.RegisterIAMProvisioningServiceServer(registrar, server)
+	}
+
+	if server.permissionHandler != nil {
+		pb.RegisterIAMPermissionsServiceServer(registrar, server)
 	}
 }
