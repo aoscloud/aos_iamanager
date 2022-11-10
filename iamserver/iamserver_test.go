@@ -28,12 +28,11 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/api/cloudprotocol"
-	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
+	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/aoscloud/aos_iamanager/config"
 	"github.com/aoscloud/aos_iamanager/iamserver"
@@ -44,13 +43,8 @@ import (
  **********************************************************************************************************************/
 
 const (
-	serverURL       = "localhost:8088"
-	serverPublicURL = "localhost:8089"
-)
-
-const (
-	certURLStr = "certURL"
-	keyURLStr  = "keyURL"
+	publicServerURL    = "localhost:8088"
+	protectedServerURL = "localhost:8089"
 )
 
 /***********************************************************************************************************************
@@ -58,10 +52,7 @@ const (
  **********************************************************************************************************************/
 
 type testClient struct {
-	connection       *grpc.ClientConn
-	connectionPublic *grpc.ClientConn
-	pbProtected      pb.IAMProtectedServiceClient
-	pbPublic         pb.IAMPublicServiceClient
+	connection *grpc.ClientConn
 }
 
 type testCertHandler struct {
@@ -82,9 +73,10 @@ type testIdentHandler struct {
 
 type testPermissionHandler struct {
 	permissions               map[string]map[string]map[string]string
-	currentInstance           cloudprotocol.InstanceIdent
-	registerError             error
+	currentSecret             string
+	currentRegisterInstance   cloudprotocol.InstanceIdent
 	currentUnregisterInstance cloudprotocol.InstanceIdent
+	registerError             error
 }
 
 /***********************************************************************************************************************
@@ -113,433 +105,140 @@ func init() {
  * Tests
  **********************************************************************************************************************/
 
-func TestGetCertTypes(t *testing.T) {
+func TestPublicService(t *testing.T) {
 	certHandler := &testCertHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, certHandler, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	certHandler.certTypes = []string{"test1", "test2", "test3"}
-
-	response, err := client.pbPublic.GetCertTypes(ctx, &empty.Empty{})
-	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if !reflect.DeepEqual(certHandler.certTypes, response.Types) {
-		t.Errorf("Wrong cert types: %v", response.Types)
-	}
-}
-
-func TestFinishProvisioning(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "iam_")
-	if err != nil {
-		log.Fatalf("Error creating temporary dir: %s", err)
-	}
-
-	defer os.RemoveAll(tmpDir)
-
-	finishFile := path.Join(tmpDir, "finish.sh")
 
 	server, err := iamserver.New(&config.Config{
-		ServerURL:                 serverURL,
-		ServerPublicURL:           serverPublicURL,
-		FinishProvisioningCmdArgs: []string{"touch", finishFile},
-	}, &testIdentHandler{}, &testCertHandler{}, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	if _, err = client.pbProtected.FinishProvisioning(ctx, &empty.Empty{}); err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if _, err = os.Stat(finishFile); err != nil {
-		t.Errorf("Finish file error: %s", err)
-	}
-}
-
-func TestSetOwner(t *testing.T) {
-	certHandler := &testCertHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, certHandler, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	password := "password"
-
-	setOwnerReq := &pb.SetOwnerRequest{Type: "online", Password: password}
-
-	if _, err = client.pbProtected.SetOwner(ctx, setOwnerReq); err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if certHandler.password != password {
-		t.Errorf("Wrong password: %s", certHandler.password)
-	}
-
-	clearReq := &pb.ClearRequest{Type: "online"}
-
-	if _, err = client.pbProtected.Clear(ctx, clearReq); err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if certHandler.password != "" {
-		t.Errorf("Wrong password: %s", certHandler.password)
-	}
-}
-
-func TestCreateKey(t *testing.T) {
-	certHandler := &testCertHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, certHandler, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	certHandler.csr = []byte("this is csr")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	request := &pb.CreateKeyRequest{Type: "online"}
-
-	response, err := client.pbProtected.CreateKey(ctx, request)
-	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if response.Type != request.Type {
-		t.Errorf("Wrong response type: %s", response.Type)
-	}
-
-	if response.Csr != string(certHandler.csr) {
-		t.Errorf("Wrong CSR value: %s", response.Csr)
-	}
-}
-
-func TestApplyCert(t *testing.T) {
-	certHandler := &testCertHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, certHandler, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	certHandler.certURL = certURLStr
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	request := &pb.ApplyCertRequest{Type: "online"}
-
-	response, err := client.pbProtected.ApplyCert(ctx, request)
-	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if response.Type != request.Type {
-		t.Errorf("Wrong response type: %s", response.Type)
-	}
-
-	if response.CertUrl != certHandler.certURL {
-		t.Errorf("Wrong cert URL: %s", response.CertUrl)
-	}
-}
-
-func TestGetCert(t *testing.T) {
-	certHandler := &testCertHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, certHandler, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	certHandler.certURL = certURLStr
-	certHandler.keyURL = keyURLStr
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	request := &pb.GetCertRequest{Type: "online", Issuer: []byte("issuer"), Serial: "serial"}
-
-	response, err := client.pbPublic.GetCert(ctx, request)
-	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if response.Type != request.Type {
-		t.Errorf("Wrong response type: %s", response.Type)
-	}
-
-	if response.CertUrl != certURLStr {
-		t.Errorf("Wrong cert URL: %s", response.CertUrl)
-	}
-
-	if response.KeyUrl != keyURLStr {
-		t.Errorf("Wrong key URL: %s", response.KeyUrl)
-	}
-}
-
-func TestGetSystemInfo(t *testing.T) {
-	identHandler := &testIdentHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		identHandler, &testCertHandler{}, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	identHandler.systemID = "testSystemID"
-	identHandler.boardModel = "testBoardModel:1.0"
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	response, err := client.pbPublic.GetSystemInfo(ctx, &empty.Empty{})
-	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if response.SystemId != identHandler.systemID {
-		t.Errorf("Wrong systemd ID: %s", response.SystemId)
-	}
-
-	if response.BoardModel != identHandler.boardModel {
-		t.Errorf("Wrong board model: %s", response.BoardModel)
-	}
-}
-
-func TestGetSubjects(t *testing.T) {
-	identHandler := &testIdentHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		identHandler, &testCertHandler{}, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	identHandler.subjects = []string{"subject1", "subject2", "subject3"}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	response, err := client.pbPublic.GetSubjects(ctx, &empty.Empty{})
-	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
-	}
-
-	if !reflect.DeepEqual(response.Subjects, identHandler.subjects) {
-		t.Errorf("Wrong subjects: %v", response.Subjects)
-	}
-}
-
-func TestInstancePermissions(t *testing.T) {
-	permHandler := testPermissionHandler{permissions: make(map[string]map[string]map[string]string)}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, &testCertHandler{}, &permHandler, true)
+		PublicServerURL:    publicServerURL,
+		ProtectedServerURL: protectedServerURL,
+		NodeID:             "testNode",
+	},
+		certHandler, nil, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %v", err)
 	}
 	defer server.Close()
 
-	client, err := newTestClient(serverURL)
+	client, err := newTestClient(publicServerURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %v", err)
 	}
 
 	defer client.close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	var (
-		testServiceID       = "serviceID1"
-		expectedPermissions = map[string]map[string]string{
-			"vis": {"*": "rw", "test": "r"},
-		}
-		funServerID     = "vis"
-		setPBPermission = &pb.Permissions{Permissions: map[string]string{"*": "rw", "test": "r"}}
-	)
-
-	req := &pb.RegisterInstanceRequest{
-		Instance:    &pb.InstanceIdent{ServiceId: testServiceID, SubjectId: "s1", Instance: 2},
-		Permissions: map[string]*pb.Permissions{funServerID: setPBPermission},
-	}
-
-	resp, err := client.pbProtected.RegisterInstance(ctx, req)
-	if err != nil {
-		t.Fatalf("Can't request instance: %v", err)
-	}
-
-	if receivesPermission, ok := permHandler.permissions[resp.Secret]; ok {
-		if !reflect.DeepEqual(receivesPermission, expectedPermissions) {
-			t.Error("Incorrect requested permissions")
-		}
-	} else {
-		t.Error("Permission is not received")
-	}
-
-	if resp.Secret == "" {
-		t.Fatal("Incorrect secret")
-	}
-
-	getPBPermissions, err := client.pbPublic.GetPermissions(ctx,
-		&pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: funServerID})
-	if err != nil {
-		t.Fatalf("Can't send get permission request: %v", err)
-	}
-
-	if !proto.Equal(getPBPermissions.Permissions, setPBPermission) {
-		t.Error("Incorrect permission")
-	}
-
-	clientPublic, err := newTestClientPublic(serverPublicURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
-
-	if getPBPermissions, err = clientPublic.pbPublic.GetPermissions(ctx,
-		&pb.PermissionsRequest{Secret: resp.Secret, FunctionalServerId: funServerID}); err != nil {
-		t.Fatalf("Can't send get permission request to public url: %v", err)
-	}
-
-	if !proto.Equal(getPBPermissions.Permissions, setPBPermission) {
-		t.Error("Incorrect permission")
-	}
-
-	if _, err := client.pbPublic.GetPermissions(ctx,
-		&pb.PermissionsRequest{Secret: "noSecret", FunctionalServerId: funServerID}); err == nil {
-		t.Error("Should be error")
-	}
-
-	expectedUnregisterInstance := cloudprotocol.InstanceIdent{ServiceID: testServiceID, SubjectID: "s1", Instance: 2}
-
-	if _, err := client.pbProtected.UnregisterInstance(ctx,
-		&pb.UnregisterInstanceRequest{Instance: &pb.InstanceIdent{
-			ServiceId: testServiceID, SubjectId: "s1", Instance: 2,
-		}}); err != nil {
-		t.Fatalf("Can't send unregister instance: %v", err)
-	}
-
-	if permHandler.currentUnregisterInstance != expectedUnregisterInstance {
-		t.Error("Receive incorrect unregister instance")
-	}
-
-	permHandler.registerError = aoserrors.New("some error")
-
-	if _, err := client.pbProtected.RegisterInstance(ctx, req); err == nil {
-		t.Error("Should be error")
-	}
-}
-
-func TestSubjectsChanged(t *testing.T) {
-	identHandler := &testIdentHandler{subjectsChangedChannel: make(chan []string, 1)}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		identHandler, &testCertHandler{}, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
-	defer server.Close()
-
-	client, err := newTestClient(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
-	}
-
-	defer client.close()
+	publicService := pb.NewIAMPublicServiceClient(client.connection)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	stream, err := client.pbPublic.SubscribeSubjectsChanged(ctx, &empty.Empty{})
+	// GetAPIVersion
+
+	apiResponse, err := publicService.GetAPIVersion(ctx, &empty.Empty{})
 	if err != nil {
-		t.Fatalf("Can't send request: %s", err)
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if apiResponse.Version != 3 {
+		t.Errorf("Wrong API version received: %d", apiResponse.Version)
+	}
+
+	// GetNodeID
+
+	nodeResponse, err := publicService.GetNodeID(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if nodeResponse.NodeId != "testNode" {
+		t.Errorf("Wrong node ID received: %s", nodeResponse.NodeId)
+	}
+
+	// GetCert
+
+	certHandler.certURL = "certURL"
+	certHandler.keyURL = "keyURL"
+
+	certRequest := &pb.GetCertRequest{Type: "online", Issuer: []byte("issuer"), Serial: "serial"}
+
+	certResponse, err := publicService.GetCert(ctx, certRequest)
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if certResponse.Type != certRequest.Type {
+		t.Errorf("Wrong response type: %s", certResponse.Type)
+	}
+
+	if certResponse.CertUrl != certHandler.certURL {
+		t.Errorf("Wrong cert URL: %s", certResponse.CertUrl)
+	}
+
+	if certResponse.KeyUrl != certHandler.keyURL {
+		t.Errorf("Wrong key URL: %s", certResponse.KeyUrl)
+	}
+}
+
+func TestPublicIdentityService(t *testing.T) {
+	identHandler := &testIdentHandler{subjectsChangedChannel: make(chan []string, 1)}
+
+	server, err := iamserver.New(&config.Config{
+		PublicServerURL:    publicServerURL,
+		ProtectedServerURL: protectedServerURL,
+	},
+		&testCertHandler{}, identHandler, nil, nil, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %v", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(publicServerURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %v", err)
+	}
+
+	defer client.close()
+
+	identityService := pb.NewIAMPublicIdentityServiceClient(client.connection)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// GetSystemInfo
+
+	identHandler.systemID = "testSystemID"
+	identHandler.boardModel = "testBoardModel:1.0"
+
+	systemResponse, err := identityService.GetSystemInfo(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if systemResponse.SystemId != identHandler.systemID {
+		t.Errorf("Wrong systemd ID: %s", systemResponse.SystemId)
+	}
+
+	if systemResponse.BoardModel != identHandler.boardModel {
+		t.Errorf("Wrong board model: %s", systemResponse.BoardModel)
+	}
+
+	// GetSubjects
+
+	identHandler.subjects = []string{"subject1", "subject2", "subject3"}
+
+	subjectsResponse, err := identityService.GetSubjects(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if !reflect.DeepEqual(subjectsResponse.Subjects, identHandler.subjects) {
+		t.Errorf("Wrong subjects: %v", subjectsResponse.Subjects)
+	}
+
+	// SubscribeSubjectsChanged
+
+	stream, err := identityService.SubscribeSubjectsChanged(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -550,40 +249,284 @@ func TestSubjectsChanged(t *testing.T) {
 
 	var message *pb.Subjects
 
-	if message, err = stream.Recv(); err != nil {
-		t.Fatalf("Error receiving message: %s", err)
+	subjectsNotification, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("Error receiving message: %v", err)
 	}
 
-	if !reflect.DeepEqual(message.Subjects, newSubjects) {
+	if !reflect.DeepEqual(subjectsNotification.Subjects, newSubjects) {
 		t.Errorf("Wrong subjects: %v", message.Subjects)
 	}
 }
 
-func TestGetAPIVersion(t *testing.T) {
-	certHandler := &testCertHandler{}
-
-	server, err := iamserver.New(&config.Config{ServerURL: serverURL, ServerPublicURL: serverPublicURL},
-		&testIdentHandler{}, certHandler, nil, true)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
+func TestPermissionsService(t *testing.T) {
+	permissionHandler := &testPermissionHandler{
+		permissions: make(map[string]map[string]map[string]string),
 	}
 
+	server, err := iamserver.New(&config.Config{
+		PublicServerURL:    publicServerURL,
+		ProtectedServerURL: protectedServerURL,
+	},
+		&testCertHandler{}, nil, permissionHandler, nil, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %v", err)
+	}
 	defer server.Close()
 
-	client, err := newTestClient(serverURL)
+	client, err := newTestClient(protectedServerURL)
 	if err != nil {
-		t.Fatalf("Can't create test client: %s", err)
+		t.Fatalf("Can't create test client: %v", err)
 	}
 
 	defer client.close()
 
-	response, err := client.pbPublic.GetAPIVersion(context.Background(), &empty.Empty{})
-	if err != nil {
-		t.Fatalf("Can't get api version: %s", err)
+	permissionsService := pb.NewIAMPermissionsServiceClient(client.connection)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	registerRequest := &pb.RegisterInstanceRequest{
+		Instance:    &pb.InstanceIdent{ServiceId: "testService", SubjectId: "testSubject", Instance: 2},
+		Permissions: map[string]*pb.Permissions{"testServer": {Permissions: map[string]string{"*": "rw", "test": "r"}}},
 	}
 
-	if response.Version != 3 {
-		t.Errorf("Wrong api version: %v", response.Version)
+	// RegisterInstance
+
+	registerResponse, err := permissionsService.RegisterInstance(ctx, registerRequest)
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	receivedPermissions, ok := permissionHandler.permissions[registerResponse.Secret]
+	if !ok {
+		t.Error("Permission is not received")
+	}
+
+	if !reflect.DeepEqual(receivedPermissions["testServer"], registerRequest.Permissions["testServer"].Permissions) {
+		t.Errorf("Incorrect requested permissions: %v", receivedPermissions["testServer"])
+	}
+
+	if registerResponse.Secret != permissionHandler.currentSecret {
+		t.Errorf("Incorrect secret: %v", registerResponse.Secret)
+	}
+
+	// GetPermissions
+
+	publicPermissionsService := pb.NewIAMPublicPermissionsServiceClient(client.connection)
+
+	permissionsResponse, err := publicPermissionsService.GetPermissions(ctx,
+		&pb.PermissionsRequest{Secret: registerResponse.Secret, FunctionalServerId: "testServer"})
+	if err != nil {
+		t.Fatalf("Can't send get permission request: %v", err)
+	}
+
+	if !reflect.DeepEqual(permissionsResponse.Permissions.Permissions,
+		registerRequest.Permissions["testServer"].Permissions) {
+		t.Errorf("Incorrect requested permissions: %v", permissionsResponse.Permissions.Permissions)
+	}
+
+	if permissionsResponse.Instance.String() != registerRequest.Instance.String() {
+		t.Errorf("Incorrect instance ident: %v", permissionsResponse.Instance.String())
+	}
+
+	// UnregisterInstance
+
+	unregisterRequest := &pb.UnregisterInstanceRequest{
+		Instance: &pb.InstanceIdent{ServiceId: "testService", SubjectId: "testSubject", Instance: 1},
+	}
+
+	if _, err := permissionsService.UnregisterInstance(ctx, unregisterRequest); err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	expectedInstanceIdent := cloudprotocol.InstanceIdent{
+		ServiceID: unregisterRequest.Instance.ServiceId,
+		SubjectID: unregisterRequest.Instance.SubjectId,
+		Instance:  unregisterRequest.Instance.Instance,
+	}
+
+	if permissionHandler.currentUnregisterInstance != expectedInstanceIdent {
+		t.Errorf("Incorrect instance ident: %v", permissionHandler.currentUnregisterInstance)
+	}
+
+	// RegisterInstance error
+
+	permissionHandler.registerError = aoserrors.New("some error")
+
+	if _, err := permissionsService.RegisterInstance(ctx, registerRequest); err == nil {
+		t.Error("Error expected")
+	}
+}
+
+func TestProvisioningService(t *testing.T) {
+	certHandler := &testCertHandler{}
+
+	tmpDir, err := ioutil.TempDir("", "iam_")
+	if err != nil {
+		log.Fatalf("Error creating temporary dir: %v", err)
+	}
+
+	defer os.RemoveAll(tmpDir)
+
+	encryptDiskFile := path.Join(tmpDir, "encrypt.sh")
+	finishProvisioningFile := path.Join(tmpDir, "finish.sh")
+
+	server, err := iamserver.New(&config.Config{
+		PublicServerURL:           publicServerURL,
+		ProtectedServerURL:        protectedServerURL,
+		NodeID:                    "testNode",
+		DiskEncryptionCmdArgs:     []string{"touch", encryptDiskFile},
+		FinishProvisioningCmdArgs: []string{"touch", finishProvisioningFile},
+	},
+		certHandler, nil, nil, nil, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %v", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(protectedServerURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %v", err)
+	}
+
+	defer client.close()
+
+	provisioningService := pb.NewIAMProvisioningServiceClient(client.connection)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// GetAllNodeIDs
+
+	nodeIDsResponse, err := provisioningService.GetAllNodeIDs(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if !reflect.DeepEqual(nodeIDsResponse.Ids, []string{"testNode"}) {
+		t.Errorf("Wrong node ID's: %v", nodeIDsResponse.Ids)
+	}
+
+	// GetCertTypes
+
+	certHandler.certTypes = []string{"test1", "test2", "test3"}
+
+	certTypesResponse, err := provisioningService.GetCertTypes(ctx, &pb.GetCertTypesRequest{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if !reflect.DeepEqual(certTypesResponse.Types, certHandler.certTypes) {
+		t.Errorf("Wrong nide ID's: %v", nodeIDsResponse.Ids)
+	}
+
+	// SetOwner
+
+	password := "password"
+
+	setOwnerReq := &pb.SetOwnerRequest{Type: "online", Password: password}
+
+	if _, err = provisioningService.SetOwner(ctx, setOwnerReq); err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if certHandler.password != password {
+		t.Errorf("Wrong password: %s", certHandler.password)
+	}
+
+	// Clear
+
+	clearReq := &pb.ClearRequest{Type: "online"}
+
+	if _, err = provisioningService.Clear(ctx, clearReq); err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if certHandler.password != "" {
+		t.Errorf("Wrong password: %s", certHandler.password)
+	}
+
+	// EncryptDisk
+
+	if _, err = provisioningService.EncryptDisk(ctx, &pb.EncryptDiskRequest{Password: password}); err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if _, err = os.Stat(encryptDiskFile); err != nil {
+		t.Errorf("Encrypt disk file error: %v", err)
+	}
+
+	// FinishProvisioning
+
+	if _, err = provisioningService.FinishProvisioning(ctx, &empty.Empty{}); err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if _, err = os.Stat(finishProvisioningFile); err != nil {
+		t.Errorf("Finish provisioning file error: %v", err)
+	}
+}
+
+func TestCertificateService(t *testing.T) {
+	certHandler := &testCertHandler{}
+
+	server, err := iamserver.New(&config.Config{
+		PublicServerURL:    publicServerURL,
+		ProtectedServerURL: protectedServerURL,
+	},
+		certHandler, nil, nil, nil, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %v", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(protectedServerURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %v", err)
+	}
+
+	defer client.close()
+
+	certificateService := pb.NewIAMCertificateServiceClient(client.connection)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// CreateKey
+
+	certHandler.csr = []byte("this is csr")
+
+	createKeyRequest := &pb.CreateKeyRequest{Type: "online"}
+
+	createKeyResponse, err := certificateService.CreateKey(ctx, createKeyRequest)
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if createKeyResponse.Type != createKeyRequest.Type {
+		t.Errorf("Wrong response type: %s", createKeyResponse.Type)
+	}
+
+	if createKeyResponse.Csr != string(certHandler.csr) {
+		t.Errorf("Wrong CSR value: %s", createKeyResponse.Csr)
+	}
+
+	// ApplyCertificate
+
+	certificateRequest := &pb.ApplyCertRequest{Type: "online"}
+
+	certificateResponse, err := certificateService.ApplyCert(ctx, certificateRequest)
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	if certificateResponse.Type != certificateRequest.Type {
+		t.Errorf("Wrong response type: %s", certificateResponse.Type)
+	}
+
+	if certificateResponse.CertUrl != certHandler.certURL {
+		t.Errorf("Wrong cert URL: %s", certificateResponse.CertUrl)
 	}
 }
 
@@ -591,7 +534,7 @@ func TestGetAPIVersion(t *testing.T) {
  * Private
  **********************************************************************************************************************/
 
-func newTestClient(url string) (client *testClient, err error) { // nolint:unparam // param added for future purposes
+func newTestClient(url string) (client *testClient, err error) {
 	client = &testClient{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -601,25 +544,6 @@ func newTestClient(url string) (client *testClient, err error) { // nolint:unpar
 		ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
-
-	client.pbProtected = pb.NewIAMProtectedServiceClient(client.connection)
-	client.pbPublic = pb.NewIAMPublicServiceClient(client.connection)
-
-	return client, nil
-}
-
-func newTestClientPublic(url string) (client *testClient, err error) {
-	client = &testClient{}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if client.connectionPublic, err = grpc.DialContext(
-		ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	client.pbPublic = pb.NewIAMPublicServiceClient(client.connectionPublic)
 
 	return client, nil
 }
@@ -680,37 +604,36 @@ func (handler *testIdentHandler) SubjectsChangedChannel() (channel <-chan []stri
 	return handler.subjectsChangedChannel
 }
 
-func (permission *testPermissionHandler) RegisterInstance(
+func (handler *testPermissionHandler) RegisterInstance(
 	instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string,
 ) (secret string, err error) {
-	if permission.registerError != nil {
-		return "", permission.registerError
+	if handler.registerError != nil {
+		return "", handler.registerError
 	}
 
-	secret = time.Now().String()
+	handler.currentSecret = time.Now().String()
+	handler.permissions[handler.currentSecret] = permissions
+	handler.currentRegisterInstance = instance
 
-	permission.permissions[secret] = permissions
-	permission.currentInstance = instance
-
-	return secret, nil
+	return handler.currentSecret, nil
 }
 
-func (permission *testPermissionHandler) UnregisterInstance(instance cloudprotocol.InstanceIdent) {
-	permission.currentUnregisterInstance = instance
+func (handler *testPermissionHandler) UnregisterInstance(instance cloudprotocol.InstanceIdent) {
+	handler.currentUnregisterInstance = instance
 }
 
-func (permission *testPermissionHandler) GetPermissions(
+func (handler *testPermissionHandler) GetPermissions(
 	secret, funcServerID string,
 ) (cloudprotocol.InstanceIdent, map[string]string, error) {
-	allPermissions, ok := permission.permissions[secret]
+	allPermissions, ok := handler.permissions[secret]
 	if !ok {
-		return permission.currentInstance, nil, aoserrors.New("no permissions")
+		return handler.currentRegisterInstance, nil, aoserrors.New("no permissions")
 	}
 
 	permissions, ok := allPermissions[funcServerID]
 	if !ok {
-		return permission.currentInstance, nil, aoserrors.New("no permissions")
+		return handler.currentRegisterInstance, nil, aoserrors.New("no permissions")
 	}
 
-	return permission.currentInstance, permissions, nil
+	return handler.currentRegisterInstance, permissions, nil
 }
