@@ -64,11 +64,12 @@ type Server struct {
 	pb.UnimplementedIAMCertificateServiceServer
 	pb.UnimplementedIAMPermissionsServiceServer
 
-	identHandler      IdentHandler
+	cryptoContext     *cryptutils.CryptoContext
 	certHandler       CertHandler
+	identHandler      IdentHandler
 	permissionHandler PermissionHandler
+	remoteIAMsHandler RemoteIAMsHandler
 
-	cryptoContext             *cryptutils.CryptoContext
 	publicListener            net.Listener
 	protectedListener         net.Listener
 	grpcPublicServer          *grpc.Server
@@ -81,13 +82,25 @@ type Server struct {
 	cancelFunction context.CancelFunc
 }
 
+// RemoteIAMsHandler remote IAM's handler.
+type RemoteIAMsHandler interface {
+	GetRemoteNodes() []string
+	GetCertTypes(nodeID string) ([]string, error)
+	SetOwner(nodeID, certType, password string) error
+	Clear(nodeID, certType string) error
+	CreateKey(nodeID, certType, subject, password string) (csr []byte, err error)
+	ApplyCertificate(nodeID, certType string, cert []byte) (certURL string, err error)
+	EncryptDisk(nodeID, password string) error
+	FinishProvisioning(nodeID string) error
+}
+
 // CertHandler interface.
 type CertHandler interface {
 	GetCertTypes() []string
 	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
 	SetOwner(certType, password string) error
 	Clear(certType string) error
-	CreateKey(certType, password string) (csr []byte, err error)
+	CreateKey(certType, subject, password string) (csr []byte, err error)
 	ApplyCertificate(certType string, cert []byte) (certURL string, err error)
 	CreateSelfSignedCert(certType, password string) (err error)
 }
@@ -114,13 +127,16 @@ type PermissionHandler interface {
  **********************************************************************************************************************/
 
 // New creates new IAM server instance.
-func New(cfg *config.Config, certHandler CertHandler, identHandler IdentHandler,
-	permissionHandler PermissionHandler, provisioningMode bool,
+func New(
+	cfg *config.Config, cryptoContext *cryptutils.CryptoContext, certHandler CertHandler, identHandler IdentHandler,
+	permissionHandler PermissionHandler, remoteIAMsHandler RemoteIAMsHandler, provisioningMode bool,
 ) (server *Server, err error) {
 	server = &Server{
+		cryptoContext:             cryptoContext,
 		identHandler:              identHandler,
 		certHandler:               certHandler,
 		permissionHandler:         permissionHandler,
+		remoteIAMsHandler:         remoteIAMsHandler,
 		nodeID:                    cfg.NodeID,
 		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs,
 		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs,
@@ -135,7 +151,7 @@ func New(cfg *config.Config, certHandler CertHandler, identHandler IdentHandler,
 	var publicOpts, protectedOpts []grpc.ServerOption
 
 	if !provisioningMode {
-		tlsConfig, mtlsConfig, err := server.getTLSConfigs(cfg.CACert, cfg.CertStorage)
+		tlsConfig, mtlsConfig, err := server.getTLSConfigs(cfg.CertStorage)
 		if err != nil {
 			return server, err
 		}
@@ -177,14 +193,6 @@ func (server *Server) Close() (err error) {
 		}
 	}
 
-	if server.cryptoContext != nil {
-		if errCryptoContext := server.cryptoContext.Close(); errCryptoContext != nil {
-			if err == nil {
-				err = aoserrors.Wrap(errCryptoContext)
-			}
-		}
-	}
-
 	if server.cancelFunction != nil {
 		server.cancelFunction()
 	}
@@ -210,37 +218,73 @@ func (server *Server) GetNodeID(ctx context.Context, req *empty.Empty) (*pb.Node
 func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyRequest) (
 	rsp *pb.CreateKeyResponse, err error,
 ) {
-	rsp = &pb.CreateKeyResponse{Type: req.Type}
+	log.WithFields(log.Fields{
+		"type": req.Type, "nodeID": req.NodeId, "subject": req.Subject,
+	}).Debug("Process create key request")
 
-	log.WithField("type", req.Type).Debug("Process create key request")
+	var (
+		csr     []byte
+		subject = req.Subject
+	)
 
-	csr, err := server.certHandler.CreateKey(req.Type, req.Password)
-	if err != nil {
-		log.Errorf("Create key error: %s", err)
+	rsp = &pb.CreateKeyResponse{NodeId: req.NodeId, Type: req.Type}
 
-		return rsp, aoserrors.Wrap(err)
+	defer func() {
+		if err != nil {
+			log.Errorf("Create key error: %v", err)
+		}
+	}()
+
+	if subject == "" && server.identHandler == nil {
+		return rsp, aoserrors.New("subject can't be empty")
+	}
+
+	if subject == "" && server.identHandler != nil {
+		if subject, err = server.identHandler.GetSystemID(); err != nil {
+			return rsp, aoserrors.Wrap(err)
+		}
+	}
+
+	switch {
+	case req.NodeId == server.nodeID || req.NodeId == "":
+		csr, err = server.certHandler.CreateKey(req.Type, subject, req.Password)
+
+	case server.remoteIAMsHandler != nil:
+		csr, err = server.remoteIAMsHandler.CreateKey(req.NodeId, req.Type, subject, req.Password)
+
+	default:
+		err = aoserrors.New("unknown node ID")
 	}
 
 	rsp.Csr = string(csr)
 
-	return rsp, nil
+	return rsp, err
 }
 
 // ApplyCert applies certificate.
 func (server *Server) ApplyCert(
 	context context.Context, req *pb.ApplyCertRequest,
 ) (rsp *pb.ApplyCertResponse, err error) {
-	rsp = &pb.ApplyCertResponse{Type: req.Type}
+	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process apply cert request")
 
-	log.WithField("type", req.Type).Debug("Process apply cert request")
+	var certURL string
 
-	if rsp.CertUrl, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert)); err != nil {
-		log.Errorf("Apply certificate error: %s", err)
+	switch {
+	case req.NodeId == server.nodeID || req.NodeId == "":
+		certURL, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert))
 
-		return rsp, aoserrors.Wrap(err)
+	case server.remoteIAMsHandler != nil:
+		certURL, err = server.remoteIAMsHandler.ApplyCertificate(req.NodeId, req.Type, []byte(req.Cert))
+
+	default:
+		err = aoserrors.New("unknown node ID")
 	}
 
-	return rsp, nil
+	if err != nil {
+		log.Errorf("Apply certificate error: %v", err)
+	}
+
+	return &pb.ApplyCertResponse{NodeId: req.NodeId, Type: req.Type, CertUrl: certURL}, nil
 }
 
 // GetCert returns certificate URI by issuer.
@@ -407,6 +451,21 @@ func (server *Server) GetAllNodeIDs(context context.Context,
 
 	rsp.Ids = append(rsp.Ids, server.nodeID)
 
+	if server.remoteIAMsHandler == nil {
+		return rsp, nil
+	}
+
+remoteIAMsLoop:
+	for _, remoteID := range server.remoteIAMsHandler.GetRemoteNodes() {
+		for _, id := range rsp.Ids {
+			if remoteID == id {
+				continue remoteIAMsLoop
+			}
+		}
+
+		rsp.Ids = append(rsp.Ids, remoteID)
+	}
+
 	return rsp, nil
 }
 
@@ -414,86 +473,137 @@ func (server *Server) GetAllNodeIDs(context context.Context,
 func (server *Server) GetCertTypes(context context.Context,
 	req *pb.GetCertTypesRequest,
 ) (rsp *pb.CertTypes, err error) {
-	rsp = &pb.CertTypes{Types: server.certHandler.GetCertTypes()}
+	log.WithField("nodeID", req.NodeId).Debug("Process get cert types")
 
-	log.WithField("types", rsp.Types).Debug("Process get cert types")
+	var certTypes []string
 
-	return rsp, nil
+	switch {
+	case req.NodeId == server.nodeID || req.NodeId == "":
+		certTypes = server.certHandler.GetCertTypes()
+
+	case server.remoteIAMsHandler != nil:
+		certTypes, err = server.remoteIAMsHandler.GetCertTypes(req.NodeId)
+
+	default:
+		err = aoserrors.New("unknown node ID")
+	}
+
+	if err != nil {
+		log.Errorf("Get certificate types error: %v", err)
+	}
+
+	return &pb.CertTypes{Types: certTypes}, err
 }
 
 // SetOwner makes IAM owner of secure storage.
 func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process set owner request")
 
-	log.WithField("type", req.Type).Debug("Process set owner request")
+	switch {
+	case req.NodeId == server.nodeID || req.NodeId == "":
+		err = server.certHandler.SetOwner(req.Type, req.Password)
 
-	if err = server.certHandler.SetOwner(req.Type, req.Password); err != nil {
-		log.Errorf("Set owner error: %s", err)
+	case server.remoteIAMsHandler != nil:
+		err = server.remoteIAMsHandler.SetOwner(req.NodeId, req.Type, req.Password)
 
-		return rsp, aoserrors.Wrap(err)
+	default:
+		err = aoserrors.New("unknown node ID")
 	}
 
-	return rsp, nil
+	if err != nil {
+		log.Errorf("Set owner error: %v", err)
+	}
+
+	return &empty.Empty{}, err
 }
 
 // Clear clears certificates and keys storages.
 func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process clear request")
 
-	log.WithField("type", req.Type).Debug("Process clear request")
+	switch {
+	case req.NodeId == server.nodeID || req.NodeId == "":
+		err = server.certHandler.Clear(req.Type)
 
-	if err = server.certHandler.Clear(req.Type); err != nil {
-		log.Errorf("Clear error: %s", err)
+	case server.remoteIAMsHandler != nil:
+		err = server.remoteIAMsHandler.Clear(req.NodeId, req.Type)
 
-		return rsp, aoserrors.Wrap(err)
+	default:
+		err = aoserrors.New("unknown node ID")
 	}
 
-	return rsp, nil
+	if err != nil {
+		log.Errorf("Clear error: %v", err)
+	}
+
+	return &empty.Empty{}, err
 }
 
 // EncryptDisk perform disk encryption.
 func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskRequest) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+	log.WithFields(log.Fields{"nodeID": req.NodeId}).Debug("Process encrypt disk request")
 
-	if err := server.certHandler.CreateSelfSignedCert(discEncryptionType, req.Password); err != nil {
-		log.Error("Can't generate self signed certificate: ", err)
-		return rsp, aoserrors.Wrap(err)
-	}
-
-	if len(server.diskEncryptCmdArgs) > 0 {
-		output, err := exec.Command(server.diskEncryptCmdArgs[0], server.diskEncryptCmdArgs[1:]...).CombinedOutput()
-		if err != nil {
-			return rsp, aoserrors.Errorf("Can't encrypt disk: %s, err: %s", string(output), err)
+	switch {
+	case req.NodeId == server.nodeID || req.NodeId == "":
+		if err = server.certHandler.CreateSelfSignedCert(discEncryptionType, req.Password); err != nil {
+			break
 		}
+
+		if len(server.diskEncryptCmdArgs) == 0 {
+			break
+		}
+
+		output, cmdErr := exec.Command(server.diskEncryptCmdArgs[0], server.diskEncryptCmdArgs[1:]...).CombinedOutput()
+		if cmdErr != nil {
+			err = aoserrors.Errorf("message: %s, err: %s", string(output), err)
+		}
+
+	case server.remoteIAMsHandler != nil:
+		err = server.remoteIAMsHandler.EncryptDisk(req.NodeId, req.Password)
+
+	default:
+		err = aoserrors.New("unknown node ID")
 	}
 
-	return rsp, nil
+	if err != nil {
+		log.Errorf("Encrypt disk error: %v", err)
+	}
+
+	return &empty.Empty{}, err
 }
 
 // FinishProvisioning notifies IAM that provisioning is finished.
 func (server *Server) FinishProvisioning(context context.Context, req *empty.Empty) (rsp *empty.Empty, err error) {
-	rsp = &empty.Empty{}
+	log.Debug("Process finish provisioning request")
 
 	if len(server.finishProvisioningCmdArgs) > 0 {
-		output, err := exec.Command(
+		output, execErr := exec.Command(
 			server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
-		if err != nil {
-			return rsp, aoserrors.Errorf("message: %s, err: %s", string(output), err)
+		if execErr != nil && err == nil {
+			err = aoserrors.Errorf("message: %s, err: %s", string(output), err)
 		}
 	}
 
-	return rsp, nil
+	if server.remoteIAMsHandler != nil {
+		for _, nodeID := range server.remoteIAMsHandler.GetRemoteNodes() {
+			if nodeErr := server.remoteIAMsHandler.FinishProvisioning(nodeID); nodeErr != nil && err == nil {
+				err = nodeErr
+			}
+		}
+	}
+
+	if err != nil {
+		log.Errorf("Finish provisioning error: %v", err)
+	}
+
+	return &empty.Empty{}, err
 }
 
 /***********************************************************************************************************************
  * Private
  **********************************************************************************************************************/
 
-func (server *Server) getTLSConfigs(caCert, certStorage string) (tlsConfig, mtlsConfig *tls.Config, err error) {
-	if server.cryptoContext, err = cryptutils.NewCryptoContext(caCert); err != nil {
-		return nil, nil, aoserrors.Wrap(err)
-	}
-
+func (server *Server) getTLSConfigs(certStorage string) (tlsConfig, mtlsConfig *tls.Config, err error) {
 	certURL, keyURL, err := server.certHandler.GetCertificate(certStorage, nil, "")
 	if err != nil {
 		return nil, nil, aoserrors.Wrap(err)
@@ -611,7 +721,7 @@ func (server *Server) handleSubjectsChanged(ctx context.Context) {
 
 func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) cloudprotocol.InstanceIdent {
 	return cloudprotocol.InstanceIdent{
-		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: uint64(ident.Instance),
+		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: ident.Instance,
 	}
 }
 
