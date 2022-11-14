@@ -74,7 +74,6 @@ var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
 type Handler struct {
 	sync.Mutex
 
-	systemID          string
 	storage           CertStorage
 	moduleDescriptors map[string]moduleDescriptor
 }
@@ -131,8 +130,8 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 }
 
 // New returns pointer to new Handler.
-func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
-	handler = &Handler{systemID: systemID, moduleDescriptors: make(map[string]moduleDescriptor), storage: storage}
+func New(cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
+	handler = &Handler{moduleDescriptors: make(map[string]moduleDescriptor), storage: storage}
 
 	log.Debug("Create certificate handler")
 
@@ -203,7 +202,7 @@ func (handler *Handler) Clear(certType string) (err error) {
 }
 
 // CreateKey creates key pair.
-func (handler *Handler) CreateKey(certType, password string) (csr []byte, err error) {
+func (handler *Handler) CreateKey(certType, subject, password string) (csr []byte, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -217,8 +216,7 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 		return nil, aoserrors.Wrap(err)
 	}
 
-	csrData, err := createCSR(handler.systemID,
-		descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
+	csrData, err := createCSR(subject, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -374,11 +372,11 @@ func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
 	}
 }
 
-func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (
+func createCSR(subject string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (
 	csr []byte, err error,
 ) {
 	template := &x509.CertificateRequest{
-		Subject:  pkix.Name{CommonName: systemID},
+		Subject:  pkix.Name{CommonName: subject},
 		DNSNames: alternativeNames,
 	}
 

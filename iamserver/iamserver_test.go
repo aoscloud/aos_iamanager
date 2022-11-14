@@ -19,10 +19,12 @@ package iamserver_test
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/aoscloud/aos_common/api/cloudprotocol"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -57,6 +60,7 @@ type testClient struct {
 
 type testCertHandler struct {
 	certTypes []string
+	subject   string
 	csr       []byte
 	certURL   string
 	keyURL    string
@@ -79,9 +83,24 @@ type testPermissionHandler struct {
 	registerError             error
 }
 
+type testRemoteIAMsHandler struct {
+	nodesCertTypes       map[string][]string
+	password             string
+	subject              string
+	csr                  []byte
+	certURL              string
+	diskEncrypted        map[string]bool
+	provisioningFinished map[string]bool
+}
+
 /***********************************************************************************************************************
  * Vars
  **********************************************************************************************************************/
+
+var (
+	errNodeNotFound     = errors.New("node not found")
+	errCertTypeNotFound = errors.New("cert type not found")
+)
 
 /***********************************************************************************************************************
  * Init
@@ -113,7 +132,7 @@ func TestPublicService(t *testing.T) {
 		ProtectedServerURL: protectedServerURL,
 		NodeID:             "testNode",
 	},
-		certHandler, nil, nil, nil, true)
+		nil, certHandler, nil, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %v", err)
 	}
@@ -185,7 +204,7 @@ func TestPublicIdentityService(t *testing.T) {
 		PublicServerURL:    publicServerURL,
 		ProtectedServerURL: protectedServerURL,
 	},
-		&testCertHandler{}, identHandler, nil, nil, true)
+		nil, &testCertHandler{}, identHandler, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %v", err)
 	}
@@ -268,7 +287,7 @@ func TestPermissionsService(t *testing.T) {
 		PublicServerURL:    publicServerURL,
 		ProtectedServerURL: protectedServerURL,
 	},
-		&testCertHandler{}, nil, permissionHandler, nil, true)
+		nil, &testCertHandler{}, nil, permissionHandler, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %v", err)
 	}
@@ -379,7 +398,7 @@ func TestProvisioningService(t *testing.T) {
 		DiskEncryptionCmdArgs:     []string{"touch", encryptDiskFile},
 		FinishProvisioningCmdArgs: []string{"touch", finishProvisioningFile},
 	},
-		certHandler, nil, nil, nil, true)
+		nil, certHandler, nil, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %v", err)
 	}
@@ -475,7 +494,7 @@ func TestCertificateService(t *testing.T) {
 		PublicServerURL:    publicServerURL,
 		ProtectedServerURL: protectedServerURL,
 	},
-		certHandler, nil, nil, nil, true)
+		nil, certHandler, &testIdentHandler{systemID: "testSystem"}, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create test server: %v", err)
 	}
@@ -530,6 +549,233 @@ func TestCertificateService(t *testing.T) {
 	}
 }
 
+func TestRemoteIAMs(t *testing.T) {
+	certHandler := &testCertHandler{}
+	remoteIAMsHandler := &testRemoteIAMsHandler{}
+
+	server, err := iamserver.New(&config.Config{
+		PublicServerURL:    publicServerURL,
+		ProtectedServerURL: protectedServerURL,
+		NodeID:             "testNode",
+	},
+		nil, certHandler, nil, nil, remoteIAMsHandler, true)
+	if err != nil {
+		t.Fatalf("Can't create test server: %v", err)
+	}
+	defer server.Close()
+
+	client, err := newTestClient(protectedServerURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %v", err)
+	}
+
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	certHandler.certTypes = []string{"certType1", "certType2"}
+
+	remoteIAMsHandler.nodesCertTypes = map[string][]string{
+		"node1": {"certType3", "certType4"},
+		"node2": {"certType5", "certType6"},
+		"node3": {"certType7", "certType8"},
+	}
+
+	// GetRemoteNodes
+
+	provisioningService := pb.NewIAMProvisioningServiceClient(client.connection)
+	certificateService := pb.NewIAMCertificateServiceClient(client.connection)
+
+	nodeIDsResponse, err := provisioningService.GetAllNodeIDs(ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	expectedNodes := []string{"testNode"}
+
+	for node := range remoteIAMsHandler.nodesCertTypes {
+		expectedNodes = append(expectedNodes, node)
+	}
+
+	sort.Strings(expectedNodes)
+	sort.Strings(nodeIDsResponse.Ids)
+
+	if !reflect.DeepEqual(nodeIDsResponse.Ids, expectedNodes) {
+		t.Errorf("Wrong node IDs: %v", nodeIDsResponse.Ids)
+	}
+
+	// GetCertTypes
+
+	expectedCertTypes := make(map[string][]string)
+
+	expectedCertTypes["testNode"] = certHandler.certTypes
+
+	for key, value := range remoteIAMsHandler.nodesCertTypes {
+		expectedCertTypes[key] = value
+	}
+
+	for _, node := range expectedNodes {
+		certTypesResponse, err := provisioningService.GetCertTypes(ctx, &pb.GetCertTypesRequest{NodeId: node})
+		if err != nil {
+			t.Fatalf("Can't send request: %v", err)
+		}
+
+		if !reflect.DeepEqual(expectedCertTypes[node], certTypesResponse.Types) {
+			t.Errorf("Wrong cert types: %v, node: %s", certTypesResponse.Types, node)
+		}
+
+		// Clear
+
+		for _, certType := range certTypesResponse.Types {
+			if node == "testNode" {
+				certHandler.password = uuid.New().String()
+			} else {
+				remoteIAMsHandler.password = uuid.New().String()
+			}
+
+			if _, err := provisioningService.Clear(ctx, &pb.ClearRequest{NodeId: node, Type: certType}); err != nil {
+				t.Fatalf("Can't send request: %v", err)
+			}
+
+			if node == "testNode" {
+				if certHandler.password != "" {
+					t.Errorf("Wrong cert storage password: %s", certHandler.password)
+				}
+			} else {
+				if remoteIAMsHandler.password != "" {
+					t.Errorf("Wrong cert storage password: %s", remoteIAMsHandler.password)
+				}
+			}
+		}
+
+		// SetOwner
+
+		for _, certType := range certTypesResponse.Types {
+			password := uuid.New().String()
+
+			if _, err := provisioningService.SetOwner(ctx, &pb.SetOwnerRequest{
+				NodeId: node, Type: certType, Password: password,
+			}); err != nil {
+				t.Fatalf("Can't send request: %v", err)
+			}
+
+			if node == "testNode" {
+				if certHandler.password != password {
+					t.Errorf("Wrong cert storage password: %s", certHandler.password)
+				}
+			} else {
+				if remoteIAMsHandler.password != password {
+					t.Errorf("Wrong cert storage password: %s", remoteIAMsHandler.password)
+				}
+			}
+		}
+
+		// CreateKey
+
+		for _, certType := range certTypesResponse.Types {
+			csr := uuid.New().String()
+			subject := uuid.New().String()
+
+			if node == "testNode" {
+				certHandler.csr = []byte(csr)
+			} else {
+				remoteIAMsHandler.csr = []byte(csr)
+			}
+
+			keyResponse, err := certificateService.CreateKey(
+				ctx, &pb.CreateKeyRequest{NodeId: node, Subject: subject, Type: certType})
+			if err != nil {
+				t.Fatalf("Can't send request: %v", err)
+			}
+
+			if node == "testNode" {
+				if certHandler.subject != subject {
+					t.Errorf("Wrong subject: %s", certHandler.subject)
+				}
+			} else {
+				if remoteIAMsHandler.subject != subject {
+					t.Errorf("Wrong subject: %s", remoteIAMsHandler.subject)
+				}
+			}
+
+			if keyResponse.Csr != csr {
+				t.Errorf("Wrong CSR: %s", err)
+			}
+		}
+
+		// ApplyCertificate
+
+		for _, certType := range certTypesResponse.Types {
+			certURL := uuid.New().String()
+
+			if node == "testNode" {
+				certHandler.certURL = certURL
+			} else {
+				remoteIAMsHandler.certURL = certURL
+			}
+
+			certResponse, err := certificateService.ApplyCert(
+				ctx, &pb.ApplyCertRequest{NodeId: node, Type: certType, Cert: "certificate"})
+			if err != nil {
+				t.Fatalf("Can't send request: %v", err)
+			}
+
+			if node == "testNode" {
+				if certHandler.certURL != certResponse.CertUrl {
+					t.Errorf("Wrong cert URL: %s", certHandler.certURL)
+				}
+			} else {
+				if remoteIAMsHandler.certURL != certResponse.CertUrl {
+					t.Errorf("Wrong cert URL: %s", remoteIAMsHandler.certURL)
+				}
+			}
+		}
+
+		// EncryptDisk
+
+		password := uuid.New().String()
+
+		remoteIAMsHandler.diskEncrypted = make(map[string]bool)
+
+		if _, err := provisioningService.EncryptDisk(ctx, &pb.EncryptDiskRequest{
+			NodeId: node, Password: password,
+		}); err != nil {
+			t.Fatalf("Can't send request: %v", err)
+		}
+
+		if node == "testNode" {
+			continue
+		}
+
+		if remoteIAMsHandler.password != password {
+			t.Errorf("Wrong password: %s", remoteIAMsHandler.password)
+		}
+
+		if !remoteIAMsHandler.diskEncrypted[node] {
+			t.Errorf("Disk on node %s not encrypted", node)
+		}
+	}
+
+	// FinishProvisioning
+
+	remoteIAMsHandler.provisioningFinished = make(map[string]bool)
+
+	if _, err := provisioningService.FinishProvisioning(ctx, &empty.Empty{}); err != nil {
+		t.Fatalf("Can't send request: %v", err)
+	}
+
+	for _, node := range expectedNodes {
+		if node == "testNode" {
+			continue
+		}
+
+		if !remoteIAMsHandler.provisioningFinished[node] {
+			t.Errorf("Provisioning on node %s not finished", node)
+		}
+	}
+}
+
 /***********************************************************************************************************************
  * Private
  **********************************************************************************************************************/
@@ -570,7 +816,9 @@ func (handler *testCertHandler) Clear(certType string) (err error) {
 	return nil
 }
 
-func (handler *testCertHandler) CreateKey(certType, password string) (csr []byte, err error) {
+func (handler *testCertHandler) CreateKey(certType, subject, password string) (csr []byte, err error) {
+	handler.subject = subject
+
 	return handler.csr, handler.err
 }
 
@@ -636,4 +884,104 @@ func (handler *testPermissionHandler) GetPermissions(
 	}
 
 	return handler.currentRegisterInstance, permissions, nil
+}
+
+func (handler *testRemoteIAMsHandler) GetRemoteNodes() []string {
+	nodes := make([]string, 0, len(handler.nodesCertTypes))
+
+	for node := range handler.nodesCertTypes {
+		nodes = append(nodes, node)
+	}
+
+	return nodes
+}
+
+func (handler *testRemoteIAMsHandler) GetCertTypes(nodeID string) ([]string, error) {
+	certTypes, ok := handler.nodesCertTypes[nodeID]
+	if !ok {
+		return nil, errNodeNotFound
+	}
+
+	return certTypes, nil
+}
+
+func (handler *testRemoteIAMsHandler) SetOwner(nodeID, certType, password string) error {
+	certTypes, ok := handler.nodesCertTypes[nodeID]
+	if !ok {
+		return errNodeNotFound
+	}
+
+	for _, existingCertType := range certTypes {
+		if existingCertType == certType {
+			handler.password = password
+
+			return nil
+		}
+	}
+
+	return errCertTypeNotFound
+}
+
+func (handler *testRemoteIAMsHandler) Clear(nodeID, certType string) error {
+	certTypes, ok := handler.nodesCertTypes[nodeID]
+	if !ok {
+		return errNodeNotFound
+	}
+
+	for _, existingCertType := range certTypes {
+		if existingCertType == certType {
+			handler.password = ""
+
+			return nil
+		}
+	}
+
+	return errCertTypeNotFound
+}
+
+func (handler *testRemoteIAMsHandler) CreateKey(nodeID, certType, subject, password string) (csr []byte, err error) {
+	certTypes, ok := handler.nodesCertTypes[nodeID]
+	if !ok {
+		return nil, errNodeNotFound
+	}
+
+	for _, existingCertType := range certTypes {
+		if existingCertType == certType {
+			handler.subject = subject
+
+			return handler.csr, nil
+		}
+	}
+
+	return nil, errCertTypeNotFound
+}
+
+func (handler *testRemoteIAMsHandler) ApplyCertificate(
+	nodeID, certType string, cert []byte,
+) (certURL string, err error) {
+	certTypes, ok := handler.nodesCertTypes[nodeID]
+	if !ok {
+		return "", errNodeNotFound
+	}
+
+	for _, existingCertType := range certTypes {
+		if existingCertType == certType {
+			return handler.certURL, nil
+		}
+	}
+
+	return "", errCertTypeNotFound
+}
+
+func (handler *testRemoteIAMsHandler) EncryptDisk(nodeID, password string) error {
+	handler.diskEncrypted[nodeID] = true
+	handler.password = password
+
+	return nil
+}
+
+func (handler *testRemoteIAMsHandler) FinishProvisioning(nodeID string) error {
+	handler.provisioningFinished[nodeID] = true
+
+	return nil
 }
