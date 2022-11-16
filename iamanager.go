@@ -28,6 +28,7 @@ import (
 	"syscall"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
@@ -35,6 +36,7 @@ import (
 	"github.com/aoscloud/aos_iamanager/certhandler"
 	"github.com/aoscloud/aos_iamanager/config"
 	"github.com/aoscloud/aos_iamanager/database"
+	"github.com/aoscloud/aos_iamanager/iamclient"
 	"github.com/aoscloud/aos_iamanager/iamserver"
 	"github.com/aoscloud/aos_iamanager/identhandler"
 	"github.com/aoscloud/aos_iamanager/permhandler"
@@ -43,38 +45,40 @@ import (
 	_ "github.com/aoscloud/aos_iamanager/identhandler/modules"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Consts
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 const dbFileName = "iamanager.db"
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Vars
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 // GitSummary provided by govvv at compile-time.
 var GitSummary string // nolint:gochecknoglobals
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type journalHook struct {
 	severityMap map[log.Level]journal.Priority
 }
 
 type iaManager struct {
+	cryptoContext      *cryptutils.CryptoContext
 	db                 *database.Database
 	identHandler       *identhandler.Handler
 	certHandler        *certhandler.Handler
 	permissionsHandler *permhandler.Handler
 	server             *iamserver.Server
+	client             *iamclient.Client
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{
@@ -84,11 +88,15 @@ func init() {
 	})
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * IAManager
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-func newIAManger(cfg *config.Config) (iam *iaManager, err error) {
+func newIAManger(cfg *config.Config, provisioningMode bool) (iam *iaManager, err error) {
+	if provisioningMode {
+		log.Warn("Provisioning mode enabled")
+	}
+
 	defer func() {
 		if err != nil {
 			iam.close()
@@ -98,7 +106,6 @@ func newIAManger(cfg *config.Config) (iam *iaManager, err error) {
 
 	iam = &iaManager{}
 
-	// Create DB
 	dbFile := path.Join(cfg.WorkingDir, dbFileName)
 
 	iam.db, err = database.New(dbFile)
@@ -114,27 +121,36 @@ func newIAManger(cfg *config.Config) (iam *iaManager, err error) {
 		}
 	}
 
-	iam.identHandler, err = identhandler.New(cfg)
+	if iam.cryptoContext, err = cryptutils.NewCryptoContext(cfg.CACert); err != nil {
+		return iam, aoserrors.Wrap(err)
+	}
+
+	if cfg.Identifier.Plugin != "" {
+		iam.identHandler, err = identhandler.New(cfg)
+		if err != nil {
+			return iam, aoserrors.Wrap(err)
+		}
+	}
+
+	iam.certHandler, err = certhandler.New(cfg, iam.db)
 	if err != nil {
 		return iam, aoserrors.Wrap(err)
 	}
 
-	systemID, err := iam.identHandler.GetSystemID()
-	if err != nil {
-		return iam, aoserrors.Wrap(err)
+	if cfg.EnablePermissionsHandler {
+		iam.permissionsHandler, err = permhandler.New()
+		if err != nil {
+			log.Errorf("Can't create permissions handler: %s", err)
+		}
 	}
 
-	iam.certHandler, err = certhandler.New(systemID, cfg, iam.db)
+	iam.client, err = iamclient.New(cfg, iam.cryptoContext, iam.certHandler, provisioningMode)
 	if err != nil {
-		return iam, aoserrors.Wrap(err)
+		log.Errorf("Can't create IAM client: %s", err)
 	}
 
-	iam.permissionsHandler, err = permhandler.New()
-	if err != nil {
-		log.Errorf("Can't create permissions handler: %s", err)
-	}
-
-	iam.server, err = iamserver.New(cfg, iam.identHandler, iam.certHandler, iam.permissionsHandler, false)
+	iam.server, err = iamserver.New(
+		cfg, iam.cryptoContext, iam.certHandler, iam.identHandler, iam.permissionsHandler, iam.client, provisioningMode)
 	if err != nil {
 		return iam, aoserrors.Wrap(err)
 	}
@@ -143,26 +159,34 @@ func newIAManger(cfg *config.Config) (iam *iaManager, err error) {
 }
 
 func (iam *iaManager) close() {
-	if iam.db != nil {
-		iam.db.Close()
+	if iam.server != nil {
+		iam.server.Close()
 	}
 
-	if iam.identHandler != nil {
-		iam.identHandler.Close()
+	if iam.client != nil {
+		iam.client.Close()
 	}
 
 	if iam.certHandler != nil {
 		iam.certHandler.Close()
 	}
 
-	if iam.server != nil {
-		iam.server.Close()
+	if iam.identHandler != nil {
+		iam.identHandler.Close()
+	}
+
+	if iam.cryptoContext != nil {
+		iam.cryptoContext.Close()
+	}
+
+	if iam.db != nil {
+		iam.db.Close()
 	}
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func cleanup(dbFile string) {
 	log.Debug("System cleanup")
@@ -215,15 +239,16 @@ func (hook *journalHook) Levels() []log.Level {
 	}
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Main
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func main() {
 	// Initialize command line flags
 	configFile := flag.String("c", "aos_iamanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)
 	useJournal := flag.Bool("j", false, "output logs to systemd journal")
+	provisioningMode := flag.Bool("provisioning", false, "enable provisioning mode")
 	showVersion := flag.Bool("version", false, `show iamanager version`)
 
 	flag.Parse()
@@ -258,7 +283,7 @@ func main() {
 		log.Fatalf("Can't parse config: %s", err)
 	}
 
-	iam, err := newIAManger(cfg)
+	iam, err := newIAManger(cfg, *provisioningMode)
 	if err != nil {
 		log.Fatalf("Can't create IAM: %s", err)
 	}
