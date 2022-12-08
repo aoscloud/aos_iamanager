@@ -190,7 +190,13 @@ func TestEnablePermissionsHandler(t *testing.T) {
 
 func TestNodeID(t *testing.T) {
 	if cfg.NodeID != "NodeID" {
-		t.Errorf("Wrong node ID parameters: %v", cfg.NodeID)
+		t.Errorf("Wrong node ID parameters: %s", cfg.NodeID)
+	}
+}
+
+func TestNodeType(t *testing.T) {
+	if cfg.NodeType != "NodeType" {
+		t.Errorf("Wrong node type parameters: %s", cfg.NodeType)
 	}
 }
 
@@ -226,6 +232,7 @@ func setup() (err error) {
 		"CACert": "/etc/ssl/certs/rootCA.crt",
 		"CertStorage": "/var/aos/crypt/iam/",
 		"NodeId": "NodeID",
+		"NodeType": "NodeType",
 		"WorkingDir": "/var/aos/iamanager",
 		"FinishProvisioningCmdArgs": [
 			"/var/aos/finish.sh"

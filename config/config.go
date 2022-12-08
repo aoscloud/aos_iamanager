@@ -34,6 +34,7 @@ type Config struct {
 	PublicServerURL           string         `json:"publicServerUrl"`
 	ProtectedServerURL        string         `json:"protectedServerUrl"`
 	NodeID                    string         `json:"nodeId"`
+	NodeType                  string         `json:"nodeType"`
 	CACert                    string         `json:"caCert"`
 	CertStorage               string         `json:"certStorage"`
 	WorkingDir                string         `json:"workingDir"`
