@@ -157,7 +157,7 @@ func TestPublicService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if apiResponse.Version != 3 {
+	if apiResponse.Version != 4 {
 		t.Errorf("Wrong API version received: %d", apiResponse.Version)
 	}
 
