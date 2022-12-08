@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/api/cloudprotocol"
+	"github.com/aoscloud/aos_common/aostypes"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -50,7 +50,7 @@ type Handler struct {
 }
 
 type instancePermissions struct {
-	instaneIdent cloudprotocol.InstanceIdent
+	instaneIdent aostypes.InstanceIdent
 	permissions  map[string]map[string]string
 }
 
@@ -71,7 +71,7 @@ func New() (handler *Handler, err error) {
 
 // RegisterInstance adds new service instance into cache and creates secret.
 func (handler *Handler) RegisterInstance(
-	instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string,
+	instance aostypes.InstanceIdent, permissions map[string]map[string]string,
 ) (secret string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
@@ -91,7 +91,7 @@ func (handler *Handler) RegisterInstance(
 }
 
 // UnregisterInstance deletes service instance with permissions from cache.
-func (handler *Handler) UnregisterInstance(instance cloudprotocol.InstanceIdent) {
+func (handler *Handler) UnregisterInstance(instance aostypes.InstanceIdent) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -112,7 +112,7 @@ func (handler *Handler) UnregisterInstance(instance cloudprotocol.InstanceIdent)
 // GetPermissions returns instance and permissions by secret and functional server ID.
 func (handler *Handler) GetPermissions(
 	secret, funcServerID string,
-) (instance cloudprotocol.InstanceIdent, permissions map[string]string, err error) {
+) (instance aostypes.InstanceIdent, permissions map[string]string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -158,7 +158,7 @@ func generateSecret() (secret secretKey, err error) {
 	return secretKey(base64.StdEncoding.EncodeToString(b)), nil
 }
 
-func (handler *Handler) getSecretForInstance(instance cloudprotocol.InstanceIdent) (string, error) {
+func (handler *Handler) getSecretForInstance(instance aostypes.InstanceIdent) (string, error) {
 	for key, value := range handler.secrets {
 		if value.instaneIdent == instance {
 			return string(key), nil

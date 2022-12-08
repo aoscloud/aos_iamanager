@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/api/cloudprotocol"
+	"github.com/aoscloud/aos_common/aostypes"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -116,10 +116,10 @@ type IdentHandler interface {
 // PermissionHandler interface.
 type PermissionHandler interface {
 	RegisterInstance(
-		instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string) (secret string, err error)
-	UnregisterInstance(instance cloudprotocol.InstanceIdent)
+		instance aostypes.InstanceIdent, permissions map[string]map[string]string) (secret string, err error)
+	UnregisterInstance(instance aostypes.InstanceIdent)
 	GetPermissions(secret, funcServerID string) (
-		instance cloudprotocol.InstanceIdent, permissions map[string]string, err error)
+		instance aostypes.InstanceIdent, permissions map[string]string, err error)
 }
 
 /***********************************************************************************************************************
@@ -719,8 +719,8 @@ func (server *Server) handleSubjectsChanged(ctx context.Context) {
 	}
 }
 
-func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) cloudprotocol.InstanceIdent {
-	return cloudprotocol.InstanceIdent{
+func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) aostypes.InstanceIdent {
+	return aostypes.InstanceIdent{
 		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: ident.Instance,
 	}
 }
