@@ -50,6 +50,8 @@ const (
 	protectedServerURL = "localhost:8089"
 )
 
+const testNodeID = "testNodeID"
+
 /***********************************************************************************************************************
  * Types
  **********************************************************************************************************************/
@@ -130,7 +132,7 @@ func TestPublicService(t *testing.T) {
 	server, err := iamserver.New(&config.Config{
 		PublicServerURL:    publicServerURL,
 		ProtectedServerURL: protectedServerURL,
-		NodeID:             "testNode",
+		NodeID:             testNodeID,
 	},
 		nil, certHandler, nil, nil, nil, true)
 	if err != nil {
@@ -168,7 +170,7 @@ func TestPublicService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if nodeResponse.NodeId != "testNode" {
+	if nodeResponse.NodeId != testNodeID {
 		t.Errorf("Wrong node ID received: %s", nodeResponse.NodeId)
 	}
 
@@ -394,7 +396,7 @@ func TestProvisioningService(t *testing.T) {
 	server, err := iamserver.New(&config.Config{
 		PublicServerURL:           publicServerURL,
 		ProtectedServerURL:        protectedServerURL,
-		NodeID:                    "testNode",
+		NodeID:                    testNodeID,
 		DiskEncryptionCmdArgs:     []string{"touch", encryptDiskFile},
 		FinishProvisioningCmdArgs: []string{"touch", finishProvisioningFile},
 	},
@@ -423,7 +425,7 @@ func TestProvisioningService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if !reflect.DeepEqual(nodeIDsResponse.Ids, []string{"testNode"}) {
+	if !reflect.DeepEqual(nodeIDsResponse.Ids, []string{testNodeID}) {
 		t.Errorf("Wrong node ID's: %v", nodeIDsResponse.Ids)
 	}
 
@@ -556,7 +558,7 @@ func TestRemoteIAMs(t *testing.T) {
 	server, err := iamserver.New(&config.Config{
 		PublicServerURL:    publicServerURL,
 		ProtectedServerURL: protectedServerURL,
-		NodeID:             "testNode",
+		NodeID:             testNodeID,
 	},
 		nil, certHandler, nil, nil, remoteIAMsHandler, true)
 	if err != nil {
@@ -592,7 +594,7 @@ func TestRemoteIAMs(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	expectedNodes := []string{"testNode"}
+	expectedNodes := []string{testNodeID}
 
 	for node := range remoteIAMsHandler.nodesCertTypes {
 		expectedNodes = append(expectedNodes, node)
@@ -609,7 +611,7 @@ func TestRemoteIAMs(t *testing.T) {
 
 	expectedCertTypes := make(map[string][]string)
 
-	expectedCertTypes["testNode"] = certHandler.certTypes
+	expectedCertTypes[testNodeID] = certHandler.certTypes
 
 	for key, value := range remoteIAMsHandler.nodesCertTypes {
 		expectedCertTypes[key] = value
@@ -628,7 +630,7 @@ func TestRemoteIAMs(t *testing.T) {
 		// Clear
 
 		for _, certType := range certTypesResponse.Types {
-			if node == "testNode" {
+			if node == testNodeID {
 				certHandler.password = uuid.New().String()
 			} else {
 				remoteIAMsHandler.password = uuid.New().String()
@@ -638,7 +640,7 @@ func TestRemoteIAMs(t *testing.T) {
 				t.Fatalf("Can't send request: %v", err)
 			}
 
-			if node == "testNode" {
+			if node == testNodeID {
 				if certHandler.password != "" {
 					t.Errorf("Wrong cert storage password: %s", certHandler.password)
 				}
@@ -660,7 +662,7 @@ func TestRemoteIAMs(t *testing.T) {
 				t.Fatalf("Can't send request: %v", err)
 			}
 
-			if node == "testNode" {
+			if node == testNodeID {
 				if certHandler.password != password {
 					t.Errorf("Wrong cert storage password: %s", certHandler.password)
 				}
@@ -677,7 +679,7 @@ func TestRemoteIAMs(t *testing.T) {
 			csr := uuid.New().String()
 			subject := uuid.New().String()
 
-			if node == "testNode" {
+			if node == testNodeID {
 				certHandler.csr = []byte(csr)
 			} else {
 				remoteIAMsHandler.csr = []byte(csr)
@@ -689,7 +691,7 @@ func TestRemoteIAMs(t *testing.T) {
 				t.Fatalf("Can't send request: %v", err)
 			}
 
-			if node == "testNode" {
+			if node == testNodeID {
 				if certHandler.subject != subject {
 					t.Errorf("Wrong subject: %s", certHandler.subject)
 				}
@@ -709,7 +711,7 @@ func TestRemoteIAMs(t *testing.T) {
 		for _, certType := range certTypesResponse.Types {
 			certURL := uuid.New().String()
 
-			if node == "testNode" {
+			if node == testNodeID {
 				certHandler.certURL = certURL
 			} else {
 				remoteIAMsHandler.certURL = certURL
@@ -721,7 +723,7 @@ func TestRemoteIAMs(t *testing.T) {
 				t.Fatalf("Can't send request: %v", err)
 			}
 
-			if node == "testNode" {
+			if node == testNodeID {
 				if certHandler.certURL != certResponse.CertUrl {
 					t.Errorf("Wrong cert URL: %s", certHandler.certURL)
 				}
@@ -744,7 +746,7 @@ func TestRemoteIAMs(t *testing.T) {
 			t.Fatalf("Can't send request: %v", err)
 		}
 
-		if node == "testNode" {
+		if node == testNodeID {
 			continue
 		}
 
@@ -766,7 +768,7 @@ func TestRemoteIAMs(t *testing.T) {
 	}
 
 	for _, node := range expectedNodes {
-		if node == "testNode" {
+		if node == testNodeID {
 			continue
 		}
 
