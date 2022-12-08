@@ -133,6 +133,7 @@ func TestPublicService(t *testing.T) {
 		PublicServerURL:    publicServerURL,
 		ProtectedServerURL: protectedServerURL,
 		NodeID:             testNodeID,
+		NodeType:           "testNodeType",
 	},
 		nil, certHandler, nil, nil, nil, true)
 	if err != nil {
@@ -163,15 +164,19 @@ func TestPublicService(t *testing.T) {
 		t.Errorf("Wrong API version received: %d", apiResponse.Version)
 	}
 
-	// GetNodeID
+	// GetNodeInfo
 
-	nodeResponse, err := publicService.GetNodeID(ctx, &empty.Empty{})
+	nodeResponse, err := publicService.GetNodeInfo(ctx, &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
 	if nodeResponse.NodeId != testNodeID {
 		t.Errorf("Wrong node ID received: %s", nodeResponse.NodeId)
+	}
+
+	if nodeResponse.NodeType != "testNodeType" {
+		t.Errorf("Wrong node type received: %s", nodeResponse.NodeId)
 	}
 
 	// GetCert
