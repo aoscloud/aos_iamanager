@@ -76,6 +76,7 @@ type Server struct {
 	grpcProtectedServer       *grpc.Server
 	subjectsChangedStreams    []pb.IAMPublicIdentityService_SubscribeSubjectsChangedServer
 	nodeID                    string
+	nodeType                  string
 	finishProvisioningCmdArgs []string
 	diskEncryptCmdArgs        []string
 
@@ -138,6 +139,7 @@ func New(
 		permissionHandler:         permissionHandler,
 		remoteIAMsHandler:         remoteIAMsHandler,
 		nodeID:                    cfg.NodeID,
+		nodeType:                  cfg.NodeType,
 		finishProvisioningCmdArgs: cfg.FinishProvisioningCmdArgs,
 		diskEncryptCmdArgs:        cfg.DiskEncryptionCmdArgs,
 	}
@@ -207,11 +209,11 @@ func (server *Server) GetAPIVersion(ctx context.Context, req *empty.Empty) (*pb.
 	return &pb.APIVersion{Version: iamAPIVersion}, nil
 }
 
-// GetNodeID returns current iam api version.
-func (server *Server) GetNodeID(ctx context.Context, req *empty.Empty) (*pb.NodeID, error) {
+// GetNodeInfo returns node information.
+func (server *Server) GetNodeInfo(ctx context.Context, req *empty.Empty) (*pb.NodeInfo, error) {
 	log.Debug("Process get node ID")
 
-	return &pb.NodeID{NodeId: server.nodeID}, nil
+	return &pb.NodeInfo{NodeId: server.nodeID, NodeType: server.nodeType}, nil
 }
 
 // CreateKey creates private key.
