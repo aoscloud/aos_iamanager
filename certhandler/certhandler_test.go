@@ -139,7 +139,7 @@ func TestGetCertTypes(t *testing.T) {
 		},
 	}
 
-	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	handler, err := certhandler.New(&cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -164,7 +164,7 @@ func TestGetCertTypes(t *testing.T) {
 func TestSetOwner(t *testing.T) {
 	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
-	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	handler, err := certhandler.New(&cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -199,13 +199,13 @@ func TestCreateKey(t *testing.T) {
 		},
 	}}
 
-	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	handler, err := certhandler.New(&cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
 	defer handler.Close()
 
-	csrData, err := handler.CreateKey("cert1", "password")
+	csrData, err := handler.CreateKey("cert1", "subject", "password")
 	if err != nil {
 		t.Fatalf("Can't create key: %s", err)
 	}
@@ -266,7 +266,7 @@ func TestCreateKey(t *testing.T) {
 func TestApplyCertificate(t *testing.T) {
 	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
-	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	handler, err := certhandler.New(&cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -292,7 +292,7 @@ func TestGetCertificate(t *testing.T) {
 
 	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
-	handler, err := certhandler.New("testID", &cfg, storage)
+	handler, err := certhandler.New(&cfg, storage)
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -339,7 +339,7 @@ func TestMaxItems(t *testing.T) {
 
 	storage := &testStorage{}
 
-	handler, err := certhandler.New("testID", &cfg, storage)
+	handler, err := certhandler.New(&cfg, storage)
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -405,7 +405,7 @@ func TestSyncStorage(t *testing.T) {
 
 	cfg := config.Config{CertModules: []config.ModuleConfig{{ID: "cert1", Plugin: "testmodule"}}}
 
-	handler, err := certhandler.New("testID", &cfg, storage)
+	handler, err := certhandler.New(&cfg, storage)
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
@@ -426,7 +426,7 @@ func TestCreateSelfSignedCert(t *testing.T) {
 		{ID: "cert1", Plugin: "testmodule"},
 	}}
 
-	handler, err := certhandler.New("testID", &cfg, &testStorage{})
+	handler, err := certhandler.New(&cfg, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create cert handler: %s", err)
 	}
