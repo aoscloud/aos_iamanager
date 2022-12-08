@@ -24,7 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_common/api/cloudprotocol"
+	"github.com/aoscloud/aos_common/aostypes"
 	"github.com/aoscloud/aos_iamanager/permhandler"
 )
 
@@ -49,8 +49,8 @@ func TestInstancePermissions(t *testing.T) {
 	}
 
 	var (
-		instanceIdent1        = cloudprotocol.InstanceIdent{ServiceID: "serviceID1", Instance: 1}
-		instanceIdent2        = cloudprotocol.InstanceIdent{ServiceID: "serviceID1", Instance: 2}
+		instanceIdent1        = aostypes.InstanceIdent{ServiceID: "serviceID1", Instance: 1}
+		instanceIdent2        = aostypes.InstanceIdent{ServiceID: "serviceID1", Instance: 2}
 		vis                   = map[string]string{"*": "rw", "test": "r"}
 		systemCore            = map[string]string{"test1.*": "rw", "test2": "r"}
 		funcServerPermissions = map[string]map[string]string{"vis": vis, "systemCore": systemCore}

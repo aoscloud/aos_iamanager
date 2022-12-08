@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/api/cloudprotocol"
+	"github.com/aoscloud/aos_common/aostypes"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/google/uuid"
@@ -78,8 +78,8 @@ type testIdentHandler struct {
 type testPermissionHandler struct {
 	permissions               map[string]map[string]map[string]string
 	currentSecret             string
-	currentRegisterInstance   cloudprotocol.InstanceIdent
-	currentUnregisterInstance cloudprotocol.InstanceIdent
+	currentRegisterInstance   aostypes.InstanceIdent
+	currentUnregisterInstance aostypes.InstanceIdent
 	registerError             error
 }
 
@@ -359,7 +359,7 @@ func TestPermissionsService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	expectedInstanceIdent := cloudprotocol.InstanceIdent{
+	expectedInstanceIdent := aostypes.InstanceIdent{
 		ServiceID: unregisterRequest.Instance.ServiceId,
 		SubjectID: unregisterRequest.Instance.SubjectId,
 		Instance:  unregisterRequest.Instance.Instance,
@@ -853,7 +853,7 @@ func (handler *testIdentHandler) SubjectsChangedChannel() (channel <-chan []stri
 }
 
 func (handler *testPermissionHandler) RegisterInstance(
-	instance cloudprotocol.InstanceIdent, permissions map[string]map[string]string,
+	instance aostypes.InstanceIdent, permissions map[string]map[string]string,
 ) (secret string, err error) {
 	if handler.registerError != nil {
 		return "", handler.registerError
@@ -866,13 +866,13 @@ func (handler *testPermissionHandler) RegisterInstance(
 	return handler.currentSecret, nil
 }
 
-func (handler *testPermissionHandler) UnregisterInstance(instance cloudprotocol.InstanceIdent) {
+func (handler *testPermissionHandler) UnregisterInstance(instance aostypes.InstanceIdent) {
 	handler.currentUnregisterInstance = instance
 }
 
 func (handler *testPermissionHandler) GetPermissions(
 	secret, funcServerID string,
-) (cloudprotocol.InstanceIdent, map[string]string, error) {
+) (aostypes.InstanceIdent, map[string]string, error) {
 	allPermissions, ok := handler.permissions[secret]
 	if !ok {
 		return handler.currentRegisterInstance, nil, aoserrors.New("no permissions")
