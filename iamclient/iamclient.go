@@ -105,7 +105,7 @@ func New(
 	} else {
 		tlsConfig, err := client.getTLSConfig(cfg.CertStorage)
 		if err != nil {
-			return nil, err
+			return client, err
 		}
 
 		client.dialOptions = append(client.dialOptions, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
