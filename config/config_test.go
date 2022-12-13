@@ -63,12 +63,12 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetCredentials(t *testing.T) {
-	if cfg.ProtectedServerURL != "localhost:8089" {
-		t.Errorf("Wrong protected server URL value: %s", cfg.ProtectedServerURL)
+	if cfg.IAMProtectedServerURL != "localhost:8089" {
+		t.Errorf("Wrong protected server URL value: %s", cfg.IAMProtectedServerURL)
 	}
 
-	if cfg.PublicServerURL != "localhost:8090" {
-		t.Errorf("Wrong public server URL value: %s", cfg.PublicServerURL)
+	if cfg.IAMPublicServerURL != "localhost:8090" {
+		t.Errorf("Wrong public server URL value: %s", cfg.IAMPublicServerURL)
 	}
 
 	if cfg.CACert != "/etc/ssl/certs/rootCA.crt" {
@@ -227,8 +227,8 @@ func setup() (err error) {
 	}
 
 	configContent := `{
-		"PublicServerUrl": "localhost:8090",
-		"ProtectedServerUrl": "localhost:8089",
+		"IAMPublicServerUrl": "localhost:8090",
+		"IAMProtectedServerUrl": "localhost:8089",
 		"CACert": "/etc/ssl/certs/rootCA.crt",
 		"CertStorage": "/var/aos/crypt/iam/",
 		"NodeId": "NodeID",
