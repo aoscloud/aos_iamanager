@@ -162,11 +162,11 @@ func New(
 		protectedOpts = append(protectedOpts, grpc.Creds(credentials.NewTLS(mtlsConfig)))
 	}
 
-	if err = server.createPublicServer(cfg.PublicServerURL, publicOpts...); err != nil {
+	if err = server.createPublicServer(cfg.IAMPublicServerURL, publicOpts...); err != nil {
 		return server, err
 	}
 
-	if err = server.createProtectedServer(cfg.ProtectedServerURL, provisioningMode, protectedOpts...); err != nil {
+	if err = server.createProtectedServer(cfg.IAMProtectedServerURL, provisioningMode, protectedOpts...); err != nil {
 		return server, err
 	}
 
