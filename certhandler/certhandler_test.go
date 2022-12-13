@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
 
@@ -277,7 +278,12 @@ func TestApplyCertificate(t *testing.T) {
 		KeyURL:  "keyURL",
 	}
 
-	certURL, err := handler.ApplyCertificate("cert1", testtools.GetCACertificate())
+	cert, _, err := testtools.GenerateDefaultCARootCertAndKey()
+	if err != nil {
+		t.Fatalf("Can't generate certificate: %v", err)
+	}
+
+	certURL, err := handler.ApplyCertificate("cert1", cryptutils.CertToPEM(cert))
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %s", err)
 	}
@@ -345,6 +351,11 @@ func TestMaxItems(t *testing.T) {
 	}
 	defer handler.Close()
 
+	cert, _, err := testtools.GenerateDefaultCARootCertAndKey()
+	if err != nil {
+		t.Fatalf("Can't generate certificate: %v", err)
+	}
+
 	for i := 0; i < addItems; i++ {
 		modules["cert1"].data.certInfo = certhandler.CertInfo{
 			CertURL:  fmt.Sprintf("certURL%d", i),
@@ -354,7 +365,7 @@ func TestMaxItems(t *testing.T) {
 			NotAfter: time.Now(),
 		}
 
-		if _, err = handler.ApplyCertificate("cert1", testtools.GetCACertificate()); err != nil {
+		if _, err = handler.ApplyCertificate("cert1", cryptutils.CertToPEM(cert)); err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
