@@ -130,10 +130,10 @@ func TestPublicService(t *testing.T) {
 	certHandler := &testCertHandler{}
 
 	server, err := iamserver.New(&config.Config{
-		PublicServerURL:    publicServerURL,
-		ProtectedServerURL: protectedServerURL,
-		NodeID:             testNodeID,
-		NodeType:           "testNodeType",
+		IAMPublicServerURL:    publicServerURL,
+		IAMProtectedServerURL: protectedServerURL,
+		NodeID:                testNodeID,
+		NodeType:              "testNodeType",
 	},
 		nil, certHandler, nil, nil, nil, true)
 	if err != nil {
@@ -208,8 +208,8 @@ func TestPublicIdentityService(t *testing.T) {
 	identHandler := &testIdentHandler{subjectsChangedChannel: make(chan []string, 1)}
 
 	server, err := iamserver.New(&config.Config{
-		PublicServerURL:    publicServerURL,
-		ProtectedServerURL: protectedServerURL,
+		IAMPublicServerURL:    publicServerURL,
+		IAMProtectedServerURL: protectedServerURL,
 	},
 		nil, &testCertHandler{}, identHandler, nil, nil, true)
 	if err != nil {
@@ -291,8 +291,8 @@ func TestPermissionsService(t *testing.T) {
 	}
 
 	server, err := iamserver.New(&config.Config{
-		PublicServerURL:    publicServerURL,
-		ProtectedServerURL: protectedServerURL,
+		IAMPublicServerURL:    publicServerURL,
+		IAMProtectedServerURL: protectedServerURL,
 	},
 		nil, &testCertHandler{}, nil, permissionHandler, nil, true)
 	if err != nil {
@@ -399,8 +399,8 @@ func TestProvisioningService(t *testing.T) {
 	finishProvisioningFile := path.Join(tmpDir, "finish.sh")
 
 	server, err := iamserver.New(&config.Config{
-		PublicServerURL:           publicServerURL,
-		ProtectedServerURL:        protectedServerURL,
+		IAMPublicServerURL:        publicServerURL,
+		IAMProtectedServerURL:     protectedServerURL,
 		NodeID:                    testNodeID,
 		DiskEncryptionCmdArgs:     []string{"touch", encryptDiskFile},
 		FinishProvisioningCmdArgs: []string{"touch", finishProvisioningFile},
@@ -498,8 +498,8 @@ func TestCertificateService(t *testing.T) {
 	certHandler := &testCertHandler{}
 
 	server, err := iamserver.New(&config.Config{
-		PublicServerURL:    publicServerURL,
-		ProtectedServerURL: protectedServerURL,
+		IAMPublicServerURL:    publicServerURL,
+		IAMProtectedServerURL: protectedServerURL,
 	},
 		nil, certHandler, &testIdentHandler{systemID: "testSystem"}, nil, nil, true)
 	if err != nil {
@@ -561,9 +561,9 @@ func TestRemoteIAMs(t *testing.T) {
 	remoteIAMsHandler := &testRemoteIAMsHandler{}
 
 	server, err := iamserver.New(&config.Config{
-		PublicServerURL:    publicServerURL,
-		ProtectedServerURL: protectedServerURL,
-		NodeID:             testNodeID,
+		IAMPublicServerURL:    publicServerURL,
+		IAMProtectedServerURL: protectedServerURL,
+		NodeID:                testNodeID,
 	},
 		nil, certHandler, nil, nil, remoteIAMsHandler, true)
 	if err != nil {
