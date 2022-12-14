@@ -149,8 +149,16 @@ func newIAManger(cfg *config.Config, provisioningMode bool) (iam *iaManager, err
 		log.Errorf("Can't create IAM client: %s", err)
 	}
 
+	// Use intermediate variable to pass nil interface. We can pass iam.identHandler directly as it could be nil in case
+	// ident plugin is not specified. In this case interface will hold nil value that is not what we expect.
+	var identHandler iamserver.IdentHandler
+
+	if iam.identHandler != nil {
+		identHandler = iam.identHandler
+	}
+
 	iam.server, err = iamserver.New(
-		cfg, iam.cryptoContext, iam.certHandler, iam.identHandler, iam.permissionsHandler, iam.client, provisioningMode)
+		cfg, iam.cryptoContext, iam.certHandler, identHandler, iam.permissionsHandler, iam.client, provisioningMode)
 	if err != nil {
 		return iam, aoserrors.Wrap(err)
 	}
