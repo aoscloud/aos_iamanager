@@ -578,19 +578,19 @@ func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReques
 func (server *Server) FinishProvisioning(context context.Context, req *empty.Empty) (rsp *empty.Empty, err error) {
 	log.Debug("Process finish provisioning request")
 
-	if len(server.finishProvisioningCmdArgs) > 0 {
-		output, execErr := exec.Command(
-			server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
-		if execErr != nil && err == nil {
-			err = aoserrors.Errorf("message: %s, err: %s", string(output), err)
-		}
-	}
-
 	if server.remoteIAMsHandler != nil {
 		for _, nodeID := range server.remoteIAMsHandler.GetRemoteNodes() {
 			if nodeErr := server.remoteIAMsHandler.FinishProvisioning(nodeID); nodeErr != nil && err == nil {
 				err = nodeErr
 			}
+		}
+	}
+
+	if len(server.finishProvisioningCmdArgs) > 0 {
+		output, execErr := exec.Command(
+			server.finishProvisioningCmdArgs[0], server.finishProvisioningCmdArgs[1:]...).CombinedOutput()
+		if execErr != nil && err == nil {
+			err = aoserrors.Errorf("message: %s, err: %s", string(output), err)
 		}
 	}
 
