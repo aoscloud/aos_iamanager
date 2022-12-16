@@ -286,7 +286,7 @@ func (server *Server) ApplyCert(
 		log.Errorf("Apply certificate error: %v", err)
 	}
 
-	return &pb.ApplyCertResponse{NodeId: req.NodeId, Type: req.Type, CertUrl: certURL}, nil
+	return &pb.ApplyCertResponse{NodeId: req.NodeId, Type: req.Type, CertUrl: certURL}, err
 }
 
 // GetCert returns certificate URI by issuer.
