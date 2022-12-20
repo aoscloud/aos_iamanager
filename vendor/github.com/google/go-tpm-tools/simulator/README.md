@@ -3,12 +3,12 @@
 Microsoft maintains the reference implementation of the TPM2 spec at:
 https://github.com/Microsoft/ms-tpm-20-ref/.
 
-The Microsoft code used here is a actually
+The Microsoft code used here is actually
 [a fork of the upstream source](https://github.com/josephlr/ms-tpm-20-ref/tree/google).
 It is vendored at `simulator/ms-tpm-20-ref` to maintain compatiblity with
 `go get`. Building the simulator requires the OpenSSL headers to be installed.
 This can be doen with:
-  - Debain based systems (including Ubuntu): `apt install libssl-dev`
+  - Debian based systems (including Ubuntu): `apt install libssl-dev`
   - Red Hat based systems: `yum install openssl-devel`
   - Arch Linux based systems: [`openssl`](https://www.archlinux.org/packages/core/x86_64/openssl/)
     is installed by default (as a dependancy of `base`) and includes the headers.
@@ -22,23 +22,23 @@ operations performed.
 
 To do this:
 1. Compile a test as a standalone binary. For example, if you were using a
-  `go-tpm-tools/tpm2tools` test (which all run against the simulator), compile
-  the test binary named `tpm2tools.test` by running:
+  `go-tpm-tools/client` test (which all run against the simulator), compile
+  the test binary named `client.test` by running:
     ```bash
-    go test -c github.com/google/go-tpm-tools/tpm2tools
+    go test -c github.com/google/go-tpm-tools/client
     ```
 1. Now you can debug the binary using GDB:
     ```bash
     # Load the binary into GDB (fixing any errors/warnings you get)
-    gdb ./tpm2tools.test
+    gdb ./client.test
     # In GDB, set a breakpoint in the funciton you want to use.
     (gdb) break TPM2_CreatePrimary 
     Breakpoint 1 at 0x5d3710: file ./TPMCmd/tpm/src/command/Hierarchy/CreatePrimary.c, line 72.
     # Now you can either run all the tests in the package, or just one.
     # As we want to depug TPM2_CreatePrimary we'll run TestSeal
     (gdb) run -test.run TestSeal
-    Starting program: ./tpm2tools.test -test.run TestSeal
-    Thread 1 "tpm2tools.test" hit Breakpoint 1, TPM2_CreatePrimary
+    Starting program: ./client.test -test.run TestSeal
+    Thread 1 "client.test" hit Breakpoint 1, TPM2_CreatePrimary
         at ./TPMCmd/tpm/src/command/Hierarchy/CreatePrimary.c:72
     72	{
     # Go to the next line
