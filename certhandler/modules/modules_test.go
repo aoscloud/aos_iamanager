@@ -31,7 +31,6 @@ import (
 	"math/big"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -88,6 +87,8 @@ var (
 	tmpDir       string
 	certStorage  string
 	tpmSimulator *simulator.Simulator
+	rootCert     *x509.Certificate
+	rootKey      crypto.PrivateKey
 )
 
 /*******************************************************************************
@@ -111,15 +112,18 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "um_")
-	if err != nil {
-		log.Fatalf("Error create temporary dir: %s", err)
+	if tmpDir, err = ioutil.TempDir("", "um_"); err != nil {
+		log.Fatalf("Error create temporary dir: %v", err)
 	}
 
 	certStorage = path.Join(tmpDir, "certStorage")
 
 	if tpmSimulator, err = simulator.Get(); err != nil {
-		log.Fatalf("Can't get TPM simulator: %s", err)
+		log.Fatalf("Can't get TPM simulator: %v", err)
+	}
+
+	if rootCert, rootKey, err = testtools.GenerateDefaultCARootCertAndKey(); err != nil {
+		log.Fatalf("Can't generate certificate: %v", err)
 	}
 
 	ret := m.Run()
@@ -127,7 +131,7 @@ func TestMain(m *testing.M) {
 	tpmSimulator.Close()
 
 	if err := os.RemoveAll(tmpDir); err != nil {
-		log.Fatalf("Error removing temporary dir: %s", err)
+		log.Fatalf("Error removing temporary dir: %v", err)
 	}
 
 	os.Exit(ret)
@@ -179,35 +183,11 @@ func TestUpdateCertificate(t *testing.T) {
 			var certInfos []certhandler.CertInfo
 
 			for _, key := range keys {
-				csr, err := testtools.CreateCSR(key)
-				if err != nil {
-					t.Fatalf("Can't create CSR: %s", err)
-				}
-
-				// Verify CSR
-
-				csrFile := path.Join(tmpDir, "data.csr")
-
-				if err = ioutil.WriteFile(csrFile, csr, 0o600); err != nil {
-					t.Fatalf("Can't write CSR to file: %s", err)
-				}
-
-				out, err := exec.Command(
-					"openssl", "req", "-text", "-noout", "-verify", "-inform", "PEM", "-in", csrFile).CombinedOutput()
-				if err != nil {
-					t.Fatalf("Can't verify CSR: %s, %s", out, err)
-				}
-
 				// Apply certificate
 
-				cert, err := testtools.CreateCertificate(tmpDir, csr)
+				x509Certs, err := generateCerts(key)
 				if err != nil {
-					t.Fatalf("Can't generate certificate: %s", err)
-				}
-
-				x509Certs, err := cryptutils.PEMToX509Cert(cert)
-				if err != nil {
-					t.Fatalf("Can't convert certificate: %s", err)
+					t.Fatalf("Can't generate certificate: %v", err)
 				}
 
 				certInfo, _, err := module.ApplyCertificate(x509Certs)
@@ -380,23 +360,11 @@ func TestValidateCertificates(t *testing.T) {
 				t.Fatalf("Can't create key: %s", err)
 			}
 
-			// Create CSR
-
-			csr, err := testtools.CreateCSR(key)
-			if err != nil {
-				t.Fatalf("Can't create CSR: %s", err)
-			}
-
 			// Apply certificate
 
-			cert, err := testtools.CreateCertificate(tmpDir, csr)
+			x509Certs, err := generateCerts(key)
 			if err != nil {
-				t.Fatalf("Can't generate certificate: %s", err)
-			}
-
-			x509Certs, err := cryptutils.PEMToX509Cert(cert)
-			if err != nil {
-				t.Fatalf("Can't convert certificate: %s", err)
+				t.Fatalf("Can't generate certificate: %v", err)
 			}
 
 			certInfo, _, err := module.ApplyCertificate(x509Certs)
@@ -523,23 +491,11 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't create key: %s", err)
 		}
 
-		// Create CSR
-
-		csr, err := testtools.CreateCSR(key)
-		if err != nil {
-			t.Fatalf("Can't create CSR: %s", err)
-		}
-
 		// Apply certificate
 
-		cert, err := testtools.CreateCertificate(tmpDir, csr)
+		x509Certs, err := generateCerts(key)
 		if err != nil {
 			t.Fatalf("Can't generate certificate: %s", err)
-		}
-
-		x509Certs, err := cryptutils.PEMToX509Cert(cert)
-		if err != nil {
-			t.Fatalf("Can't convert certificate: %s", err)
 		}
 
 		certInfo, _, err := module.ApplyCertificate(x509Certs)
@@ -712,23 +668,11 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 			t.Fatalf("Can't create key: %s", err)
 		}
 
-		// Create CSR
-
-		csr, err := testtools.CreateCSR(key)
-		if err != nil {
-			t.Fatalf("Can't create CSR: %s", err)
-		}
-
 		// Apply certificate
 
-		cert, err := testtools.CreateCertificate(tmpDir, csr)
+		x509Certs, err := generateCerts(key)
 		if err != nil {
 			t.Fatalf("Can't generate certificate: %s", err)
-		}
-
-		x509Certs, err := cryptutils.PEMToX509Cert(cert)
-		if err != nil {
-			t.Fatalf("Can't convert certificate: %s", err)
 		}
 
 		if _, _, err = module.ApplyCertificate(x509Certs); err != nil {
@@ -1105,4 +1049,18 @@ func verifyASN1(pub *ecdsa.PublicKey, hash, sig []byte) bool {
 	}
 
 	return ecdsa.Verify(pub, hash, r, s)
+}
+
+func generateCerts(privateKey crypto.PrivateKey) ([]*x509.Certificate, error) {
+	signer, ok := privateKey.(crypto.Signer)
+	if !ok {
+		return nil, aoserrors.New("key is not signer")
+	}
+
+	x509Cert, err := testtools.GenerateCert(&testtools.DefaultCertificateTemplate, rootCert, rootKey, signer.Public())
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return []*x509.Certificate{x509Cert}, nil
 }
