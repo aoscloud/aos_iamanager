@@ -84,11 +84,10 @@ type createModuleType func(doReset bool) (module certhandler.CertModule, err err
  ******************************************************************************/
 
 var (
-	tmpDir       string
-	certStorage  string
-	tpmSimulator *simulator.Simulator
-	rootCert     *x509.Certificate
-	rootKey      crypto.PrivateKey
+	tmpDir      string
+	certStorage string
+	rootCert    *x509.Certificate
+	rootKey     crypto.PrivateKey
 )
 
 /*******************************************************************************
@@ -118,17 +117,11 @@ func TestMain(m *testing.M) {
 
 	certStorage = path.Join(tmpDir, "certStorage")
 
-	if tpmSimulator, err = simulator.Get(); err != nil {
-		log.Fatalf("Can't get TPM simulator: %v", err)
-	}
-
 	if rootCert, rootKey, err = testtools.GenerateDefaultCARootCertAndKey(); err != nil {
 		log.Fatalf("Can't generate certificate: %v", err)
 	}
 
 	ret := m.Run()
-
-	tpmSimulator.Close()
 
 	if err := os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error removing temporary dir: %v", err)
@@ -198,10 +191,6 @@ func TestUpdateCertificate(t *testing.T) {
 				certInfos = append(certInfos, certInfo)
 			}
 
-			if err = module.Close(); err != nil {
-				t.Errorf("Can't close module: %s", err)
-			}
-
 			// Check encrypt/decrypt with private key
 
 			var pkcs11Ctx *crypto11.Context
@@ -226,7 +215,8 @@ func TestUpdateCertificate(t *testing.T) {
 						t.Fatalf("Can't parse key URL: %s", err)
 					}
 
-					if currentKey, err = tpmkey.CreateFromPersistent(tpmSimulator, tpmutil.Handle(handle)); err != nil {
+					if currentKey, err = tpmkey.CreateFromPersistent(
+						tpmmodule.DefaultTPMDevice, tpmutil.Handle(handle)); err != nil {
 						t.Fatalf("Can't create key: %s", err)
 					}
 
@@ -317,6 +307,10 @@ func TestUpdateCertificate(t *testing.T) {
 						t.Fatal("Unsupported key type")
 					}
 				}
+			}
+
+			if err = module.Close(); err != nil {
+				t.Errorf("Can't close module: %s", err)
 			}
 
 			// Close PKCS11 context
@@ -438,10 +432,6 @@ func TestValidateCertificates(t *testing.T) {
 			}
 		}
 
-		if err = module.Close(); err != nil {
-			t.Fatalf("Can't close module: %s", err)
-		}
-
 		// Check cert files
 
 		certURLs := make([]string, 0, len(certInfos))
@@ -461,6 +451,10 @@ func TestValidateCertificates(t *testing.T) {
 		}
 
 		checkLocationURLs(t, keyURLs[0], "key", keyURLs)
+
+		if err = module.Close(); err != nil {
+			t.Fatalf("Can't close module: %s", err)
+		}
 	}
 }
 
@@ -503,14 +497,14 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
-		if err = module.Close(); err != nil {
-			t.Fatalf("Can't close module: %s", err)
-		}
-
 		// Check key files
 
 		checkLocationURLs(t, certInfo.CertURL, "cert", []string{certInfo.CertURL})
 		checkLocationURLs(t, certInfo.KeyURL, "key", []string{certInfo.KeyURL})
+
+		if err = module.Close(); err != nil {
+			t.Fatalf("Can't close module: %s", err)
+		}
 
 		// Clear
 
@@ -522,12 +516,12 @@ func TestSetOwnerClear(t *testing.T) {
 			t.Fatalf("Can't clear: %s", err)
 		}
 
+		checkLocationURLs(t, certInfo.CertURL, "cert", nil)
+		checkLocationURLs(t, certInfo.KeyURL, "key", nil)
+
 		if err = module.Close(); err != nil {
 			t.Fatalf("Can't close module: %s", err)
 		}
-
-		checkLocationURLs(t, certInfo.CertURL, "cert", nil)
-		checkLocationURLs(t, certInfo.KeyURL, "key", nil)
 	}
 }
 
@@ -545,7 +539,8 @@ func TestTPMNonZeroDictionaryAttackParameters(t *testing.T) {
 		t.Fatalf("Can't set owner: %s", err)
 	}
 
-	caps, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityTPMProperties, 3, uint32(tpm2.MaxAuthFail))
+	caps, _, err := tpm2.GetCapability(
+		tpmmodule.DefaultTPMDevice, tpm2.CapabilityTPMProperties, 3, uint32(tpm2.MaxAuthFail))
 	if err != nil {
 		t.Fatalf("Failed to get TPM capabilities: %v", err)
 	}
@@ -590,7 +585,7 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 		t.Fatalf("Can't set owner: %s", err)
 	}
 
-	handle, _, err := tpm2.CreatePrimary(tpmSimulator, tpm2.HandleOwner, pcrSelection7, password, "", tpm2.Public{
+	handle, _, err := tpm2.CreatePrimary(tpmmodule.DefaultTPMDevice, tpm2.HandleOwner, pcrSelection7, password, "", tpm2.Public{
 		Type:    tpm2.AlgRSA,
 		NameAlg: tpm2.AlgSHA256,
 		Attributes: tpm2.FlagDecrypt | tpm2.FlagUserWithAuth | tpm2.FlagFixedParent |
@@ -608,7 +603,7 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	}
 
 	defer func() {
-		if flushErr := tpm2.FlushContext(tpmSimulator, handle); flushErr != nil {
+		if flushErr := tpm2.FlushContext(tpmmodule.DefaultTPMDevice, handle); flushErr != nil {
 			t.Errorf("Can't flush context: %s", flushErr)
 		}
 	}()
@@ -616,13 +611,13 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 	scheme := &tpm2.AsymScheme{Alg: tpm2.AlgOAEP, Hash: tpm2.AlgSHA256}
 	label := "label"
 
-	encrypted, err := tpm2.RSAEncrypt(tpmSimulator, handle, bytes.Repeat([]byte("a"), 190), scheme, label)
+	encrypted, err := tpm2.RSAEncrypt(tpmmodule.DefaultTPMDevice, handle, bytes.Repeat([]byte("a"), 190), scheme, label)
 	if err != nil {
 		t.Fatalf("RSA encryption failed: %v", err)
 	}
 
 	// Try RSADecrypt with bad password
-	if _, err = tpm2.RSADecrypt(tpmSimulator, handle, "bad password", encrypted, scheme, label); err != nil {
+	if _, err = tpm2.RSADecrypt(tpmmodule.DefaultTPMDevice, handle, "bad password", encrypted, scheme, label); err != nil {
 		var sessionErr tpm2.SessionError
 
 		if !errors.As(err, &sessionErr) || sessionErr.Code != tpm2.RCAuthFail {
@@ -630,7 +625,7 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 		}
 	}
 
-	caps, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.LockoutCounter))
+	caps, _, err := tpm2.GetCapability(tpmmodule.DefaultTPMDevice, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.LockoutCounter))
 	if err != nil {
 		t.Fatalf("Failed to get capabilities: %v", err)
 	}
@@ -766,17 +761,22 @@ func createSwModule(doReset bool) (module certhandler.CertModule, err error) {
 }
 
 func createTpmModule(doReset bool) (module certhandler.CertModule, err error) {
+	tpmDevice, err := simulator.Get()
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
 	if doReset {
 		if err := os.RemoveAll(certStorage); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 
-		if err = tpmSimulator.ManufactureReset(); err != nil {
+		if err = tpmDevice.ManufactureReset(); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 	}
 
-	tpmmodule.DefaultTPMDevice = tpmSimulator
+	tpmmodule.DefaultTPMDevice = tpmDevice
 
 	// Dictionary attack parameters
 	lockoutMaxRetries, recoveryTime, lockoutRecoveryTime := 3, 1000, 1000
@@ -882,7 +882,7 @@ func getExistingTPMItems(itemType string) (existingURLs []string, err error) {
 		return nil, aoserrors.Errorf("unsupported item type: %s", itemType)
 	}
 
-	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
+	values, _, err := tpm2.GetCapability(tpmmodule.DefaultTPMDevice, tpm2.CapabilityHandles,
 		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
