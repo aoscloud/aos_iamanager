@@ -33,35 +33,31 @@ import (
 // handles, no synchronization is provided; the same simulator handle should not
 // be used from multiple threads.
 type Simulator struct {
-	buf bytes.Buffer
+	buf    bytes.Buffer
+	closed bool
 }
 
-// ErrSimulatorInUse indicates another open Simulator already exists.
-var ErrSimulatorInUse = errors.New("simulator is being used by another caller")
+// ErrUsingClosedSimulator is returned if any operation on a Simulator is
+// attempted after it is closed.
+var ErrUsingClosedSimulator = errors.New("attempting to use a closed simulator")
 
 // The simulator is a global resource, so we use the variables below to make
 // sure we only ever have one open reference to the Simulator at a time.
-var (
-	lock  sync.Mutex
-	inUse bool
-)
+var lock sync.Mutex
 
 // Get the pointer to an initialized, powered on, and started simulator. As only
-// one simulator may be running at a time, a second call to Get() will return
-// ErrSimulatorInUse until the first Simulator is Closed.
+// one simulator may be running at a time, a second call to Get() block until
+// the first Simulator is Closed.
 func Get() (*Simulator, error) {
 	lock.Lock()
-	defer lock.Unlock()
-	if inUse {
-		return nil, ErrSimulatorInUse
-	}
 
 	simulator := &Simulator{}
 	internal.Reset(true)
 	if err := simulator.on(true); err != nil {
+		lock.Unlock()
 		return nil, err
 	}
-	inUse = true
+	simulator.closed = false
 	return simulator, nil
 }
 
@@ -80,6 +76,9 @@ func GetWithFixedSeedInsecure(seed int64) (*Simulator, error) {
 
 // Reset the TPM as if the host computer had rebooted.
 func (s *Simulator) Reset() error {
+	if s.IsClosed() {
+		return ErrUsingClosedSimulator
+	}
 	if err := s.off(); err != nil {
 		return err
 	}
@@ -90,6 +89,9 @@ func (s *Simulator) Reset() error {
 // ManufactureReset behaves like Reset() except that the TPM is complete wiped.
 // All data (NVData, Hierarchy seeds, etc...) is cleared or reset.
 func (s *Simulator) ManufactureReset() error {
+	if s.IsClosed() {
+		return ErrUsingClosedSimulator
+	}
 	if err := s.off(); err != nil {
 		return err
 	}
@@ -100,6 +102,9 @@ func (s *Simulator) ManufactureReset() error {
 // Write executes the command specified by commandBuffer. The command response
 // can be retrieved with a subsequent call to Read().
 func (s *Simulator) Write(commandBuffer []byte) (int, error) {
+	if s.IsClosed() {
+		return 0, ErrUsingClosedSimulator
+	}
 	resp, err := internal.RunCommand(commandBuffer)
 	if err != nil {
 		return 0, err
@@ -109,16 +114,27 @@ func (s *Simulator) Write(commandBuffer []byte) (int, error) {
 
 // Read gets the response of a command previously issued by calling Write().
 func (s *Simulator) Read(responseBuffer []byte) (int, error) {
+	if s.IsClosed() {
+		return 0, ErrUsingClosedSimulator
+	}
 	return s.buf.Read(responseBuffer)
 }
 
 // Close cleans up and stops the simulator, Close() should always be called when
 // the Simulator is no longer needed, freeing up other callers to use Get().
 func (s *Simulator) Close() error {
-	lock.Lock()
-	defer lock.Unlock()
-	inUse = false
-	return s.off()
+	if s.IsClosed() {
+		return ErrUsingClosedSimulator
+	}
+	err := s.off()
+	s.closed = true
+	lock.Unlock()
+	return err
+}
+
+// IsClosed returns true if the simulator has been Closed()
+func (s *Simulator) IsClosed() bool {
+	return s.closed
 }
 
 func (s *Simulator) on(manufactureReset bool) error {
