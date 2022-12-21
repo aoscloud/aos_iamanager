@@ -67,6 +67,7 @@ type testCertHandler struct {
 	certURL   string
 	keyURL    string
 	password  string
+	serial    string
 	err       error
 }
 
@@ -91,6 +92,7 @@ type testRemoteIAMsHandler struct {
 	subject              string
 	csr                  []byte
 	certURL              string
+	serial               string
 	diskEncrypted        map[string]bool
 	provisioningFinished map[string]bool
 }
@@ -829,8 +831,8 @@ func (handler *testCertHandler) CreateKey(certType, subject, password string) (c
 	return handler.csr, handler.err
 }
 
-func (handler *testCertHandler) ApplyCertificate(certType string, cert []byte) (certURL string, err error) {
-	return handler.certURL, handler.err
+func (handler *testCertHandler) ApplyCertificate(certType string, cert []byte) (certURL, serial string, err error) {
+	return handler.certURL, handler.serial, handler.err
 }
 
 func (handler *testCertHandler) GetCertificate(certType string, issuer []byte, serial string) (
@@ -965,19 +967,19 @@ func (handler *testRemoteIAMsHandler) CreateKey(nodeID, certType, subject, passw
 
 func (handler *testRemoteIAMsHandler) ApplyCertificate(
 	nodeID, certType string, cert []byte,
-) (certURL string, err error) {
+) (certURL, serial string, err error) {
 	certTypes, ok := handler.nodesCertTypes[nodeID]
 	if !ok {
-		return "", errNodeNotFound
+		return "", "", errNodeNotFound
 	}
 
 	for _, existingCertType := range certTypes {
 		if existingCertType == certType {
-			return handler.certURL, nil
+			return handler.certURL, handler.serial, nil
 		}
 	}
 
-	return "", errCertTypeNotFound
+	return "", "", errCertTypeNotFound
 }
 
 func (handler *testRemoteIAMsHandler) EncryptDisk(nodeID, password string) error {
