@@ -283,13 +283,17 @@ func TestApplyCertificate(t *testing.T) {
 		t.Fatalf("Can't generate certificate: %v", err)
 	}
 
-	certURL, err := handler.ApplyCertificate("cert1", cryptutils.CertToPEM(cert))
+	certURL, serial, err := handler.ApplyCertificate("cert1", cryptutils.CertToPEM(cert))
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %s", err)
 	}
 
 	if modules["cert1"].data.certInfo.CertURL != certURL {
 		t.Errorf("Wrong cert URL: %s", certURL)
+	}
+
+	if modules["cert1"].data.certInfo.Serial != serial {
+		t.Errorf("Wrong cert serial: %s", serial)
 	}
 }
 
@@ -365,7 +369,7 @@ func TestMaxItems(t *testing.T) {
 			NotAfter: time.Now(),
 		}
 
-		if _, err = handler.ApplyCertificate("cert1", cryptutils.CertToPEM(cert)); err != nil {
+		if _, _, err = handler.ApplyCertificate("cert1", cryptutils.CertToPEM(cert)); err != nil {
 			t.Fatalf("Can't apply certificate: %s", err)
 		}
 
