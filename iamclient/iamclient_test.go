@@ -57,6 +57,7 @@ type testServer struct {
 	certURL      string
 	subject      string
 	grpcServer   *grpc.Server
+	certSerial   string
 }
 
 /***********************************************************************************************************************
@@ -256,13 +257,17 @@ func TestCreateKeyCert(t *testing.T) {
 		t.Errorf("Wrong CSR: %s", string(csr))
 	}
 
-	certURL, err := testClient.ApplyCertificate("node1", "cert1", []byte("certificate"))
+	certURL, serial, err := testClient.ApplyCertificate("node1", "cert1", []byte("certificate"))
 	if err != nil {
 		t.Fatalf("Can't apply certificate: %v", err)
 	}
 
 	if certURL != testServer.certURL {
 		t.Errorf("Wrong cert URL: %s", certURL)
+	}
+
+	if serial != testServer.certSerial {
+		t.Errorf("Wrong cert serial: %s", serial)
 	}
 }
 
@@ -272,7 +277,8 @@ func TestCreateKeyCert(t *testing.T) {
 
 func newTestServer(serverURL string) (*testServer, error) {
 	server := &testServer{
-		certTypes: make(map[string][]string),
+		certTypes:  make(map[string][]string),
+		certSerial: "superCertificateSerial",
 	}
 
 	listener, err := net.Listen("tcp", serverURL)
@@ -367,6 +373,7 @@ func (server *testServer) ApplyCert(ctx context.Context, request *pb.ApplyCertRe
 	}
 
 	response.CertUrl = server.certURL
+	response.Serial = server.certSerial
 
 	return response, nil
 }

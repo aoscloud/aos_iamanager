@@ -223,7 +223,7 @@ func (client *Client) CreateKey(nodeID, certType, subject, password string) (csr
 	return csr, nil
 }
 
-func (client *Client) ApplyCertificate(nodeID, certType string, cert []byte) (certURL string, err error) {
+func (client *Client) ApplyCertificate(nodeID, certType string, cert []byte) (certURL, serial string, err error) {
 	if err = client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
 		log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Apply remote IAM certificate")
 
@@ -235,13 +235,14 @@ func (client *Client) ApplyCertificate(nodeID, certType string, cert []byte) (ce
 		}
 
 		certURL = response.CertUrl
+		serial = response.Serial
 
 		return nil
 	}); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return certURL, nil
+	return certURL, serial, nil
 }
 
 func (client *Client) EncryptDisk(nodeID, password string) error {

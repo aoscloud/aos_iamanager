@@ -90,7 +90,7 @@ type RemoteIAMsHandler interface {
 	SetOwner(nodeID, certType, password string) error
 	Clear(nodeID, certType string) error
 	CreateKey(nodeID, certType, subject, password string) (csr []byte, err error)
-	ApplyCertificate(nodeID, certType string, cert []byte) (certURL string, err error)
+	ApplyCertificate(nodeID, certType string, cert []byte) (certURL, serial string, err error)
 	EncryptDisk(nodeID, password string) error
 	FinishProvisioning(nodeID string) error
 }
@@ -102,7 +102,7 @@ type CertHandler interface {
 	SetOwner(certType, password string) error
 	Clear(certType string) error
 	CreateKey(certType, subject, password string) (csr []byte, err error)
-	ApplyCertificate(certType string, cert []byte) (certURL string, err error)
+	ApplyCertificate(certType string, cert []byte) (certURL, serial string, err error)
 	CreateSelfSignedCert(certType, password string) (err error)
 }
 
@@ -269,14 +269,14 @@ func (server *Server) ApplyCert(
 ) (rsp *pb.ApplyCertResponse, err error) {
 	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process apply cert request")
 
-	var certURL string
+	var certURL, serial string
 
 	switch {
 	case req.NodeId == server.nodeID || req.NodeId == "":
-		certURL, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert))
+		certURL, serial, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert))
 
 	case server.remoteIAMsHandler != nil:
-		certURL, err = server.remoteIAMsHandler.ApplyCertificate(req.NodeId, req.Type, []byte(req.Cert))
+		certURL, serial, err = server.remoteIAMsHandler.ApplyCertificate(req.NodeId, req.Type, []byte(req.Cert))
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -286,7 +286,7 @@ func (server *Server) ApplyCert(
 		log.Errorf("Apply certificate error: %v", err)
 	}
 
-	return &pb.ApplyCertResponse{NodeId: req.NodeId, Type: req.Type, CertUrl: certURL}, err
+	return &pb.ApplyCertResponse{NodeId: req.NodeId, Type: req.Type, CertUrl: certURL, Serial: serial}, err
 }
 
 // GetCert returns certificate URI by issuer.
