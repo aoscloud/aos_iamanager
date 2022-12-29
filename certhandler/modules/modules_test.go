@@ -177,7 +177,6 @@ func TestUpdateCertificate(t *testing.T) {
 
 			for _, key := range keys {
 				// Apply certificate
-
 				x509Certs, err := generateCerts(key)
 				if err != nil {
 					t.Fatalf("Can't generate certificate: %v", err)
@@ -585,19 +584,20 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 		t.Fatalf("Can't set owner: %s", err)
 	}
 
-	handle, _, err := tpm2.CreatePrimary(tpmmodule.DefaultTPMDevice, tpm2.HandleOwner, pcrSelection7, password, "", tpm2.Public{
-		Type:    tpm2.AlgRSA,
-		NameAlg: tpm2.AlgSHA256,
-		Attributes: tpm2.FlagDecrypt | tpm2.FlagUserWithAuth | tpm2.FlagFixedParent |
-			tpm2.FlagFixedTPM | tpm2.FlagSensitiveDataOrigin,
-		RSAParameters: &tpm2.RSAParams{
-			Sign: &tpm2.SigScheme{
-				Alg:  tpm2.AlgNull,
-				Hash: tpm2.AlgNull,
+	handle, _, err := tpm2.CreatePrimary(tpmmodule.DefaultTPMDevice, tpm2.HandleOwner, pcrSelection7, password, "",
+		tpm2.Public{
+			Type:    tpm2.AlgRSA,
+			NameAlg: tpm2.AlgSHA256,
+			Attributes: tpm2.FlagDecrypt | tpm2.FlagUserWithAuth | tpm2.FlagFixedParent |
+				tpm2.FlagFixedTPM | tpm2.FlagSensitiveDataOrigin,
+			RSAParameters: &tpm2.RSAParams{
+				Sign: &tpm2.SigScheme{
+					Alg:  tpm2.AlgNull,
+					Hash: tpm2.AlgNull,
+				},
+				KeyBits: 2048,
 			},
-			KeyBits: 2048,
-		},
-	})
+		})
 	if err != nil {
 		t.Fatalf("Creating primary key failed: %v", err)
 	}
@@ -625,7 +625,8 @@ func TestTPMDictionaryAttackLockoutCounter(t *testing.T) {
 		}
 	}
 
-	caps, _, err := tpm2.GetCapability(tpmmodule.DefaultTPMDevice, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.LockoutCounter))
+	caps, _, err := tpm2.GetCapability(
+		tpmmodule.DefaultTPMDevice, tpm2.CapabilityTPMProperties, 1, uint32(tpm2.LockoutCounter))
 	if err != nil {
 		t.Fatalf("Failed to get capabilities: %v", err)
 	}
