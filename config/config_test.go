@@ -63,12 +63,12 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetCredentials(t *testing.T) {
-	if cfg.ServerURL != "localhost:8089" {
-		t.Errorf("Wrong ServerURL value: %s", cfg.ServerURL)
+	if cfg.IAMProtectedServerURL != "localhost:8089" {
+		t.Errorf("Wrong protected server URL value: %s", cfg.IAMProtectedServerURL)
 	}
 
-	if cfg.ServerPublicURL != "localhost:8090" {
-		t.Errorf("Wrong ServerURLPublic value: %s", cfg.ServerPublicURL)
+	if cfg.IAMPublicServerURL != "localhost:8090" {
+		t.Errorf("Wrong public server URL value: %s", cfg.IAMPublicServerURL)
 	}
 
 	if cfg.CACert != "/etc/ssl/certs/rootCA.crt" {
@@ -182,6 +182,33 @@ func TestDiskEncryptionCmdArgs(t *testing.T) {
 	}
 }
 
+func TestEnablePermissionsHandler(t *testing.T) {
+	if !cfg.EnablePermissionsHandler {
+		t.Errorf("Wrong enable permissions handler value: %v", cfg.EnablePermissionsHandler)
+	}
+}
+
+func TestNodeID(t *testing.T) {
+	if cfg.NodeID != "NodeID" {
+		t.Errorf("Wrong node ID parameters: %s", cfg.NodeID)
+	}
+}
+
+func TestNodeType(t *testing.T) {
+	if cfg.NodeType != "NodeType" {
+		t.Errorf("Wrong node type parameters: %s", cfg.NodeType)
+	}
+}
+
+func TestRemoteIAMs(t *testing.T) {
+	if !reflect.DeepEqual(cfg.RemoteIAMs, []config.RemoteIAM{
+		{NodeID: "Node1", URL: "remotehost1:8089"},
+		{NodeID: "Node2", URL: "remotehost2:8089"},
+	}) {
+		t.Errorf("Wrong connected IAM's parameters: %v", cfg.RemoteIAMs)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -200,10 +227,12 @@ func setup() (err error) {
 	}
 
 	configContent := `{
-		"ServerUrl": "localhost:8089",
-		"ServerPublicUrl": "localhost:8090",
+		"IAMPublicServerUrl": "localhost:8090",
+		"IAMProtectedServerUrl": "localhost:8089",
 		"CACert": "/etc/ssl/certs/rootCA.crt",
 		"CertStorage": "/var/aos/crypt/iam/",
+		"NodeId": "NodeID",
+		"NodeType": "NodeType",
 		"WorkingDir": "/var/aos/iamanager",
 		"FinishProvisioningCmdArgs": [
 			"/var/aos/finish.sh"
@@ -211,6 +240,19 @@ func setup() (err error) {
 		"DiskEncryptionCmdArgs": [
 			"/bin/sh",
 			"/var/aos/encrypt.sh"
+		],
+		"EnablePermissionsHandler": true,
+		"RemoteIams": [
+			{
+				"nodeId": "Node1",
+				"url": "remotehost1:8089",
+				"certIds": ["cert1", "cert2", "cert3"]
+			},
+			{
+				"nodeId": "Node2",
+				"url": "remotehost2:8089",
+				"certIds": ["cert4", "cert5", "cert6"]
+			}
 		],
 		"CertModules":[{
 			"ID": "id1",

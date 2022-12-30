@@ -74,7 +74,6 @@ var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
 type Handler struct {
 	sync.Mutex
 
-	systemID          string
 	storage           CertStorage
 	moduleDescriptors map[string]moduleDescriptor
 }
@@ -131,8 +130,8 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 }
 
 // New returns pointer to new Handler.
-func New(systemID string, cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
-	handler = &Handler{systemID: systemID, moduleDescriptors: make(map[string]moduleDescriptor), storage: storage}
+func New(cfg *config.Config, storage CertStorage) (handler *Handler, err error) {
+	handler = &Handler{moduleDescriptors: make(map[string]moduleDescriptor), storage: storage}
 
 	log.Debug("Create certificate handler")
 
@@ -203,7 +202,7 @@ func (handler *Handler) Clear(certType string) (err error) {
 }
 
 // CreateKey creates key pair.
-func (handler *Handler) CreateKey(certType, password string) (csr []byte, err error) {
+func (handler *Handler) CreateKey(certType, subject, password string) (csr []byte, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -217,8 +216,7 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 		return nil, aoserrors.Wrap(err)
 	}
 
-	csrData, err := createCSR(handler.systemID,
-		descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
+	csrData, err := createCSR(subject, descriptor.config.ExtendedKeyUsage, descriptor.config.AlternativeNames, key)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -227,20 +225,20 @@ func (handler *Handler) CreateKey(certType, password string) (csr []byte, err er
 }
 
 // ApplyCertificate applies certificate.
-func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL string, err error) {
+func (handler *Handler) ApplyCertificate(certType string, cert []byte) (certURL, serial string, err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
 	descriptor, ok := handler.moduleDescriptors[certType]
 	if !ok {
-		return "", aoserrors.Errorf("module %s not found", certType)
+		return "", "", aoserrors.Errorf("module %s not found", certType)
 	}
 
-	if certURL, err = handler.applyCertificate(descriptor, certType, cert); err != nil {
-		return "", aoserrors.Wrap(err)
+	if certURL, serial, err = handler.applyCertificate(descriptor, certType, cert); err != nil {
+		return "", "", aoserrors.Wrap(err)
 	}
 
-	return certURL, nil
+	return certURL, serial, nil
 }
 
 // GetCertificate returns certificate info.
@@ -314,7 +312,7 @@ func (handler *Handler) CreateSelfSignedCert(certType, password string) (err err
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err = handler.applyCertificate(descriptor, certType,
+	if _, _, err = handler.applyCertificate(descriptor, certType,
 		pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificate, Bytes: cert})); err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -374,11 +372,11 @@ func checkX509CertificateChan(certs []*x509.Certificate) (err error) {
 	}
 }
 
-func createCSR(systemID string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (
+func createCSR(subject string, extendedKeyUsage, alternativeNames []string, key crypto.PrivateKey) (
 	csr []byte, err error,
 ) {
 	template := &x509.CertificateRequest{
-		Subject:  pkix.Name{CommonName: systemID},
+		Subject:  pkix.Name{CommonName: subject},
 		DNSNames: alternativeNames,
 	}
 
@@ -539,25 +537,26 @@ func (handler *Handler) createPrivateKey(
 
 func (handler *Handler) applyCertificate(
 	descriptor moduleDescriptor, certType string, cert []byte,
-) (certURL string, err error) {
+) (certURL, serial string, err error) {
 	x509Certs, err := cryptutils.PEMToX509Cert(cert)
 	if err != nil {
-		return "", aoserrors.Wrap(err)
+		return "", "", aoserrors.Wrap(err)
 	}
 
 	if err = checkX509CertificateChan(x509Certs); err != nil {
-		return "", aoserrors.Wrap(err)
+		return "", "", aoserrors.Wrap(err)
 	}
 
 	certInfo, password, err := descriptor.module.ApplyCertificate(x509Certs)
 	if err != nil {
-		return "", aoserrors.Wrap(err)
+		return "", "", aoserrors.Wrap(err)
 	}
 
 	certURL = certInfo.CertURL
+	serial = certInfo.Serial
 
 	if err = handler.storage.AddCertificate(certType, certInfo); err != nil {
-		return "", aoserrors.Wrap(err)
+		return "", "", aoserrors.Wrap(err)
 	}
 
 	certs, err := handler.storage.GetCertificates(certType)
@@ -582,19 +581,19 @@ func (handler *Handler) applyCertificate(
 		}
 
 		if err = descriptor.module.RemoveCertificate(certs[minIndex].CertURL, password); err != nil {
-			return "", aoserrors.Wrap(err)
+			return "", "", aoserrors.Wrap(err)
 		}
 
 		if err = descriptor.module.RemoveKey(certs[minIndex].KeyURL, password); err != nil {
-			return "", aoserrors.Wrap(err)
+			return "", "", aoserrors.Wrap(err)
 		}
 
 		if err = handler.storage.RemoveCertificate(certType, certs[minIndex].CertURL); err != nil {
-			return "", aoserrors.Wrap(err)
+			return "", "", aoserrors.Wrap(err)
 		}
 
 		certs = append(certs[:minIndex], certs[minIndex+1:]...)
 	}
 
-	return certURL, nil
+	return certURL, serial, nil
 }
