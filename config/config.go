@@ -23,6 +23,7 @@ import (
 	"os"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aostypes"
 )
 
 /*******************************************************************************
@@ -54,8 +55,9 @@ type Identifier struct {
 
 // RemoteIAM remote IAM parameters.
 type RemoteIAM struct {
-	NodeID string `json:"nodeId"`
-	URL    string `json:"url"`
+	NodeID         string            `json:"nodeId"`
+	URL            string            `json:"url"`
+	RequestTimeout aostypes.Duration `json:"requestTimeout"`
 }
 
 // ModuleConfig module configuration.
