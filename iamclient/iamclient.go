@@ -41,8 +41,8 @@ import (
  **********************************************************************************************************************/
 
 const (
-	connectionTimeout = 10 * time.Minute
-	requestTimeout    = 30 * time.Second
+	connectionTimeout     = 10 * time.Minute
+	defaultRequestTimeout = 1 * time.Minute
 )
 
 /***********************************************************************************************************************
@@ -297,7 +297,7 @@ func (client *Client) getConnection(iam *remoteIAM) (*grpc.ClientConn, error) {
 		return iam.connection, nil
 	}
 
-	ctx, cancelFunc := context.WithTimeout(client.ctx, requestTimeout)
+	ctx, cancelFunc := context.WithTimeout(client.ctx, iam.getRequestTimeout())
 	defer cancelFunc()
 
 	log.WithFields(log.Fields{"url": iam.cfg.URL, "nodeID": iam.cfg.NodeID}).Debug("Connecting to IAM...")
@@ -338,7 +338,7 @@ func (client *Client) sendIAMRequest(
 	iam.Lock()
 	defer iam.Unlock()
 
-	timeoutCtx, cancelFunc := context.WithTimeout(client.ctx, requestTimeout)
+	timeoutCtx, cancelFunc := context.WithTimeout(client.ctx, iam.getRequestTimeout())
 	defer cancelFunc()
 
 	connection, err := client.getConnection(iam)
@@ -351,4 +351,12 @@ func (client *Client) sendIAMRequest(
 	}
 
 	return nil
+}
+
+func (iam *remoteIAM) getRequestTimeout() time.Duration {
+	if iam.cfg.RequestTimeout.Duration != 0 {
+		return iam.cfg.RequestTimeout.Duration
+	}
+
+	return defaultRequestTimeout
 }
