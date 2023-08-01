@@ -73,7 +73,7 @@ type testCertHandler struct {
 
 type testIdentHandler struct {
 	systemID               string
-	boardModel             string
+	unitModel              string
 	subjects               []string
 	subjectsChangedChannel chan []string
 }
@@ -234,7 +234,7 @@ func TestPublicIdentityService(t *testing.T) {
 	// GetSystemInfo
 
 	identHandler.systemID = "testSystemID"
-	identHandler.boardModel = "testBoardModel:1.0"
+	identHandler.unitModel = "testUnitModel:1.0"
 
 	systemResponse, err := identityService.GetSystemInfo(ctx, &empty.Empty{})
 	if err != nil {
@@ -245,8 +245,8 @@ func TestPublicIdentityService(t *testing.T) {
 		t.Errorf("Wrong systemd ID: %s", systemResponse.SystemId)
 	}
 
-	if systemResponse.BoardModel != identHandler.boardModel {
-		t.Errorf("Wrong board model: %s", systemResponse.BoardModel)
+	if systemResponse.UnitModel != identHandler.unitModel {
+		t.Errorf("Wrong unit model: %s", systemResponse.UnitModel)
 	}
 
 	// GetSubjects
@@ -849,8 +849,8 @@ func (handler *testIdentHandler) GetSystemID() (systemID string, err error) {
 	return handler.systemID, nil
 }
 
-func (handler *testIdentHandler) GetBoardModel() (boardModel string, err error) {
-	return handler.boardModel, nil
+func (handler *testIdentHandler) GetUnitModel() (unitModel string, err error) {
+	return handler.unitModel, nil
 }
 
 func (handler *testIdentHandler) GetSubjects() (subjects []string, err error) {

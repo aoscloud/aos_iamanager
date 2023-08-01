@@ -109,7 +109,7 @@ type CertHandler interface {
 // IdentHandler interface.
 type IdentHandler interface {
 	GetSystemID() (systemdID string, err error)
-	GetBoardModel() (boardModel string, err error)
+	GetUnitModel() (unitModel string, err error)
 	GetSubjects() (Subjects []string, err error)
 	SubjectsChangedChannel() (channel <-chan []string)
 }
@@ -320,8 +320,8 @@ func (server *Server) GetSystemInfo(context context.Context, req *empty.Empty) (
 		return rsp, aoserrors.Wrap(err)
 	}
 
-	if rsp.BoardModel, err = server.identHandler.GetBoardModel(); err != nil {
-		log.Errorf("Get board model error: %s", err)
+	if rsp.UnitModel, err = server.identHandler.GetUnitModel(); err != nil {
+		log.Errorf("Get unit model error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
 	}

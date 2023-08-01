@@ -271,14 +271,14 @@ func TestGetSystemID(t *testing.T) {
 	}
 }
 
-func TestGetBoardModel(t *testing.T) {
-	boardModel, err := vis.GetBoardModel()
+func TestGetUnitModel(t *testing.T) {
+	unitModel, err := vis.GetUnitModel()
 	if err != nil {
-		t.Fatalf("Error getting board model: %s", err)
+		t.Fatalf("Error getting unit model: %s", err)
 	}
 
-	if boardModel == "" {
-		t.Fatalf("Wrong board model value: %s", boardModel)
+	if unitModel == "" {
+		t.Fatalf("Wrong unit model value: %s", unitModel)
 	}
 }
 
@@ -385,8 +385,8 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			getRsp.Value = map[string]string{getReq.Path: "VIN1234567890"}
 
-		case "Attribute.Aos.BoardModel":
-			getRsp.Value = map[string]string{getReq.Path: "testBoardModel:1.0"}
+		case "Attribute.Aos.UnitModel":
+			getRsp.Value = map[string]string{getReq.Path: "testUnitModel:1.0"}
 
 		case "Attribute.Aos.Subjects":
 			getRsp.Value = map[string][]string{getReq.Path: handler.subjects}
@@ -411,7 +411,7 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.Aos.BoardModel":
+		case "Attribute.Aos.UnitModel":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
 		case "Attribute.Aos.Subjects":
