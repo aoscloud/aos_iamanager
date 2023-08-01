@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -52,7 +51,7 @@ const defaultTokenLabel = "aos"
 
 const maxPendingKeys = 16
 
-// nolint: stylecheck // standard defines
+//nolint:stylecheck // standard defines
 const (
 	CKS_RO_PUBLIC_SESSION = iota
 	CKS_RO_USER_FUNCTIONS
@@ -114,9 +113,9 @@ type pendingKey struct {
 // TEE Client UUID name space identifier (UUIDv4) from linux kernel
 // https://github.com/OP-TEE/optee_os/pull/4222
 // use as constant.
-var teeClientUUIDNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6")) // nolint:gochecknoglobals
+var teeClientUUIDNs = uuid.Must(uuid.Parse("58ac9ca0-2086-4683-a1b8-ec4bc08e01b6")) //nolint:gochecknoglobals
 
-var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals
+var ecsdaCurveID = elliptic.P384() //nolint:gochecknoglobals
 
 var errNoContext = errors.New("PKCS11 context is not created")
 
@@ -229,7 +228,7 @@ func (module *PKCS11Module) SetOwner(password string) (err error) {
 		if userPIN, err = module.getUserPIN(); err != nil {
 			userPIN = uniuri.New()
 
-			if err = ioutil.WriteFile(module.config.UserPINPath, []byte(userPIN), 0o600); err != nil {
+			if err = os.WriteFile(module.config.UserPINPath, []byte(userPIN), 0o600); err != nil {
 				return aoserrors.Wrap(err)
 			}
 		}
@@ -683,7 +682,7 @@ func parseURL(urlStr string) (template []*pkcs11.Attribute, err error) {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	_, _, label, id, _ := cryptutils.ParsePKCS11Url(urlVal) // nolint:dogsled
+	_, _, label, id, _ := cryptutils.ParsePKCS11Url(urlVal) //nolint:dogsled
 
 	if id != "" {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
@@ -776,7 +775,7 @@ func (module *PKCS11Module) getUserPIN() (pin string, err error) {
 		return "", nil
 	}
 
-	data, err := ioutil.ReadFile(module.config.UserPINPath)
+	data, err := os.ReadFile(module.config.UserPINPath)
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
@@ -811,7 +810,7 @@ func (module *PKCS11Module) getSlotID() (uint, error) {
 		paramCount++
 	}
 
-	if paramCount >= 2 { // nolint:gomnd
+	if paramCount >= 2 { //nolint:gomnd
 		return 0, aoserrors.New(
 			"only one parameter for slot identification should be specified (slotId or slotIndex or tokenLabel)")
 	}

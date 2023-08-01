@@ -20,7 +20,6 @@ package iamserver_test
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -390,7 +389,7 @@ func TestPermissionsService(t *testing.T) {
 func TestProvisioningService(t *testing.T) {
 	certHandler := &testCertHandler{}
 
-	tmpDir, err := ioutil.TempDir("", "iam_")
+	tmpDir, err := os.MkdirTemp("", "iam_")
 	if err != nil {
 		log.Fatalf("Error creating temporary dir: %v", err)
 	}

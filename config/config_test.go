@@ -19,7 +19,6 @@ package config_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -157,8 +156,8 @@ func TestIdentifier(t *testing.T) {
 	}
 
 	var moduleConfig struct {
-		Param1 string
-		Param2 string
+		Param1 string `json:"param1"`
+		Param2 string `json:"param2"`
 	}
 
 	if err := json.Unmarshal(cfg.Identifier.Params, &moduleConfig); err != nil {
@@ -214,7 +213,7 @@ func TestRemoteIAMs(t *testing.T) {
  ******************************************************************************/
 
 func saveConfigFile(fileName string, configContent string) (err error) {
-	if err = ioutil.WriteFile(fileName, []byte(configContent), 0o600); err != nil {
+	if err = os.WriteFile(fileName, []byte(configContent), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -222,7 +221,7 @@ func saveConfigFile(fileName string, configContent string) (err error) {
 }
 
 func setup() (err error) {
-	if tmpDir, err = ioutil.TempDir("", "iam_"); err != nil {
+	if tmpDir, err = os.MkdirTemp("", "iam_"); err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 

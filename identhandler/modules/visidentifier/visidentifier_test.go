@@ -19,7 +19,6 @@ package visidentifier_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -184,11 +183,11 @@ QRUogt5UZOrxFviUMF3wtG/D7hOlq0AFdxsstV7BGdOrlZEvdCKZ1/U8Ybl/Q5PV
 IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 -----END RSA PRIVATE KEY-----`
 
-	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0o600); err != nil {
+	if err = os.WriteFile(crtFile, []byte(crtData), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0o600); err != nil {
+	if err = os.WriteFile(keyFile, []byte(keyData), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -196,7 +195,7 @@ IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 }
 
 func setup() (err error) {
-	if tmpDir, err = ioutil.TempDir("", "iam_"); err != nil {
+	if tmpDir, err = os.MkdirTemp("", "iam_"); err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
@@ -436,7 +435,7 @@ func (handler *clientHandler) ProcessMessage(
 	}
 
 	if response, err = json.Marshal(rsp); err != nil {
-		return
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return response, nil

@@ -20,7 +20,6 @@ package fileidentifier
 import (
 	"bufio"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -141,7 +140,7 @@ func (instance *Instance) SubjectsChangedChannel() (channel <-chan []string) {
  ******************************************************************************/
 
 func (instance *Instance) readDataFromFile(path string) (data string, err error) {
-	rawData, err := ioutil.ReadFile(path)
+	rawData, err := os.ReadFile(path)
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
