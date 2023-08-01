@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -82,8 +81,7 @@ type moduleConfig struct {
  **********************************************************************************************************************/
 
 // DefaultTPMDevice used if not specified in the config.
-// nolint:gochecknoglobals
-var DefaultTPMDevice io.ReadWriteCloser
+var DefaultTPMDevice io.ReadWriteCloser //nolint:gochecknoglobals
 
 /***********************************************************************************************************************
  * Public
@@ -169,7 +167,7 @@ func (module *TPMModule) ValidateCertificates() (
 		keyMap[module.handleToURL(handle)] = key
 	}
 
-	content, err := ioutil.ReadDir(module.config.StoragePath)
+	content, err := os.ReadDir(module.config.StoragePath)
 	if err != nil {
 		return nil, nil, nil, aoserrors.Wrap(err)
 	}
@@ -468,7 +466,7 @@ func createPrimaryKey(device io.ReadWriteCloser, password string) (handle tpmuti
 		RSAParameters: &tpm2.RSAParams{
 			Symmetric: &tpm2.SymScheme{
 				Alg:     tpm2.AlgAES,
-				KeyBits: 256, // nolint:gomnd
+				KeyBits: 256, //nolint:gomnd
 				Mode:    tpm2.AlgCFB,
 			},
 			KeyBits: rsaKeyLength,
@@ -519,7 +517,7 @@ func (module *TPMModule) newKey(password, algorithm string) (key tpmkey.TPMKey, 
 		return nil, aoserrors.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
-	// nolint:dogsled // passwords are not using
+	//nolint:dogsled // passwords are not using
 	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKey(module.device, module.primaryHandle,
 		tpm2.PCRSelection{}, password, "", keyTemplate)
 	if err != nil {
@@ -617,7 +615,7 @@ func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err e
 }
 
 func createPEMFile(storageDir string) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*."+cryptutils.PEMExt)
+	file, err := os.CreateTemp(storageDir, "*."+cryptutils.PEMExt)
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}

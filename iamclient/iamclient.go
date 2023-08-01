@@ -61,7 +61,7 @@ type Client struct {
 	provisioningMode bool
 	dialOptions      []grpc.DialOption
 	remoteIAMs       map[string]*remoteIAM
-	ctx              context.Context // nolint: containedctx // used to keep common context
+	ctx              context.Context //nolint: containedctx // used to keep common context
 	cancelFunc       context.CancelFunc
 }
 

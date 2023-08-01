@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"sort"
@@ -101,7 +100,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "iam_")
+	tmpDir, err = os.MkdirTemp("", "iam_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
@@ -449,7 +448,7 @@ func TestCreateSelfSignedCert(t *testing.T) {
 
 	err = handler.CreateSelfSignedCert("cert1", "password")
 	if err != nil {
-		t.Fatalf("Can't create create selfsigned cert: %s", err)
+		t.Fatalf("Can't create self signed cert: %s", err)
 	}
 
 	// Get key public part

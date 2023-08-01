@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -69,7 +68,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "vis_")
+	tmpDir, err = os.MkdirTemp("", "vis_")
 	if err != nil {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
@@ -220,7 +219,7 @@ func writeSubjects(subjectsFile string, subjects []string) (err error) {
 }
 
 func writeID(filePth string, id string) (err error) {
-	if err = ioutil.WriteFile(filePth, []byte(id), 0o600); err != nil {
+	if err = os.WriteFile(filePth, []byte(id), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

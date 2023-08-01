@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net/url"
 	"os"
@@ -111,7 +110,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if tmpDir, err = ioutil.TempDir("", "um_"); err != nil {
+	if tmpDir, err = os.MkdirTemp("", "um_"); err != nil {
 		log.Fatalf("Error create temporary dir: %v", err)
 	}
 
@@ -680,7 +679,7 @@ func TestPKCS11ValidateCertChain(t *testing.T) {
 		t.Fatalf("Can't close module: %s", err)
 	}
 
-	data, err := ioutil.ReadFile(path.Join(tmpDir, "userPin.txt"))
+	data, err := os.ReadFile(path.Join(tmpDir, "userPin.txt"))
 	if err != nil {
 		t.Fatalf("Can't read user pin: %s", err)
 	}
@@ -840,7 +839,7 @@ func checkUrls(t *testing.T, expectedURLs, existingURLs []string) {
 }
 
 func getExistingFileItems(itemType, storagePath string) (existingURLs []string, err error) {
-	content, err := ioutil.ReadDir(storagePath)
+	content, err := os.ReadDir(storagePath)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
