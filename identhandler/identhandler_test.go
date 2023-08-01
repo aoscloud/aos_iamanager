@@ -36,7 +36,7 @@ import (
 
 type testIdentifier struct {
 	systemID               string
-	boardModel             string
+	unitModel              string
 	subjects               []string
 	subjectsChangedChannel chan []string
 }
@@ -98,15 +98,15 @@ func TestIdentifier(t *testing.T) {
 		t.Errorf("Wrong system ID: %s", systemID)
 	}
 
-	identifier.boardModel = "testBoard:1.0"
+	identifier.unitModel = "testUnit:1.0"
 
-	boardModel, err := handler.GetBoardModel()
+	unitModel, err := handler.GetUnitModel()
 	if err != nil {
 		t.Fatalf("Can't get system ID: %s", err)
 	}
 
-	if boardModel != identifier.boardModel {
-		t.Errorf("Wrong system ID: %s", boardModel)
+	if unitModel != identifier.unitModel {
+		t.Errorf("Wrong system ID: %s", unitModel)
 	}
 
 	identifier.subjects = []string{"subject1", "subject2", "subject3"}
@@ -149,8 +149,8 @@ func (identifier *testIdentifier) GetSystemID() (systemdID string, err error) {
 	return identifier.systemID, nil
 }
 
-func (identifier *testIdentifier) GetBoardModel() (boardModel string, err error) {
-	return identifier.boardModel, nil
+func (identifier *testIdentifier) GetUnitModel() (unitModel string, err error) {
+	return identifier.unitModel, nil
 }
 
 func (identifier *testIdentifier) GetSubjects() (subjects []string, err error) {

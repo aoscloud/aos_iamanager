@@ -48,15 +48,15 @@ type Instance struct {
 	config                 instanceConfig
 	subjectsChangedChannel chan []string
 
-	systemID   string
-	boardModel string
-	subjects   []string
+	systemID  string
+	unitModel string
+	subjects  []string
 }
 
 type instanceConfig struct {
-	SystemIDPath   string `json:"systemIdPath"`
-	BoardModelPath string `json:"boardModelPath"`
-	SubjectsPath   string `json:"subjectsPath"`
+	SystemIDPath  string `json:"systemIdPath"`
+	UnitModelPath string `json:"unitModelPath"`
+	SubjectsPath  string `json:"subjectsPath"`
 }
 
 /*******************************************************************************
@@ -83,7 +83,7 @@ func New(configJSON json.RawMessage) (identifier identhandler.IdentModule, err e
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if instance.boardModel, err = instance.readDataFromFile(instance.config.BoardModelPath); err != nil {
+	if instance.unitModel, err = instance.readDataFromFile(instance.config.UnitModelPath); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -111,14 +111,14 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	return instance.systemID, aoserrors.Wrap(err)
 }
 
-// GetBoardModel returns the board model.
-func (instance *Instance) GetBoardModel() (boardModel string, err error) {
+// GetUnitModel returns the unit model.
+func (instance *Instance) GetUnitModel() (unitModel string, err error) {
 	instance.Lock()
 	defer instance.Unlock()
 
-	log.WithField("boardModel", instance.boardModel).Debug("Get board model")
+	log.WithField("unitModel", instance.unitModel).Debug("Get unit model")
 
-	return instance.boardModel, aoserrors.Wrap(err)
+	return instance.unitModel, aoserrors.Wrap(err)
 }
 
 // GetSubjects returns the subjects.
