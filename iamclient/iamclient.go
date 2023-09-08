@@ -43,6 +43,7 @@ import (
 const (
 	connectionTimeout     = 10 * time.Minute
 	defaultRequestTimeout = 1 * time.Minute
+	defaultEncryptTimeout = 5 * time.Minute
 )
 
 /***********************************************************************************************************************
@@ -154,18 +155,19 @@ func (client *Client) GetRemoteNodes() []string {
 }
 
 func (client *Client) GetCertTypes(nodeID string) (certTypes []string, err error) {
-	if err = client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		response, err := pb.NewIAMProvisioningServiceClient(connection).GetCertTypes(ctx, &pb.GetCertTypesRequest{
-			NodeId: nodeID,
-		})
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
+	if err = client.sendIAMRequest(nodeID, nil,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			response, err := pb.NewIAMProvisioningServiceClient(connection).GetCertTypes(ctx, &pb.GetCertTypesRequest{
+				NodeId: nodeID,
+			})
+			if err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		certTypes = response.Types
+			certTypes = response.Types
 
-		return nil
-	}); err != nil {
+			return nil
+		}); err != nil {
 		return nil, err
 	}
 
@@ -175,48 +177,51 @@ func (client *Client) GetCertTypes(nodeID string) (certTypes []string, err error
 }
 
 func (client *Client) SetOwner(nodeID, certType, password string) error {
-	return client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Set remote IAM owner")
+	return client.sendIAMRequest(nodeID, nil,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Set remote IAM owner")
 
-		if _, err := pb.NewIAMProvisioningServiceClient(connection).SetOwner(ctx, &pb.SetOwnerRequest{
-			NodeId: nodeID, Type: certType, Password: password,
-		}); err != nil {
-			return aoserrors.Wrap(err)
-		}
+			if _, err := pb.NewIAMProvisioningServiceClient(connection).SetOwner(ctx, &pb.SetOwnerRequest{
+				NodeId: nodeID, Type: certType, Password: password,
+			}); err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		return nil
-	})
+			return nil
+		})
 }
 
 func (client *Client) Clear(nodeID, certType string) error {
-	return client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Clear remote IAM")
+	return client.sendIAMRequest(nodeID, nil,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Clear remote IAM")
 
-		if _, err := pb.NewIAMProvisioningServiceClient(connection).Clear(ctx, &pb.ClearRequest{
-			NodeId: nodeID, Type: certType,
-		}); err != nil {
-			return aoserrors.Wrap(err)
-		}
+			if _, err := pb.NewIAMProvisioningServiceClient(connection).Clear(ctx, &pb.ClearRequest{
+				NodeId: nodeID, Type: certType,
+			}); err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		return nil
-	})
+			return nil
+		})
 }
 
 func (client *Client) CreateKey(nodeID, certType, subject, password string) (csr []byte, err error) {
-	if err = client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Create remote IAM key")
+	if err = client.sendIAMRequest(nodeID, nil,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Create remote IAM key")
 
-		response, err := pb.NewIAMCertificateServiceClient(connection).CreateKey(ctx, &pb.CreateKeyRequest{
-			NodeId: nodeID, Subject: subject, Type: certType, Password: password,
-		})
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
+			response, err := pb.NewIAMCertificateServiceClient(connection).CreateKey(ctx, &pb.CreateKeyRequest{
+				NodeId: nodeID, Subject: subject, Type: certType, Password: password,
+			})
+			if err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		csr = []byte(response.Csr)
+			csr = []byte(response.Csr)
 
-		return nil
-	}); err != nil {
+			return nil
+		}); err != nil {
 		return nil, err
 	}
 
@@ -224,21 +229,22 @@ func (client *Client) CreateKey(nodeID, certType, subject, password string) (csr
 }
 
 func (client *Client) ApplyCertificate(nodeID, certType string, cert []byte) (certURL, serial string, err error) {
-	if err = client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Apply remote IAM certificate")
+	if err = client.sendIAMRequest(nodeID, nil,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			log.WithFields(log.Fields{"nodeID": nodeID, "certType": certType}).Debug("Apply remote IAM certificate")
 
-		response, err := pb.NewIAMCertificateServiceClient(connection).ApplyCert(ctx, &pb.ApplyCertRequest{
-			NodeId: nodeID, Type: certType, Cert: string(cert),
-		})
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
+			response, err := pb.NewIAMCertificateServiceClient(connection).ApplyCert(ctx, &pb.ApplyCertRequest{
+				NodeId: nodeID, Type: certType, Cert: string(cert),
+			})
+			if err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		certURL = response.CertUrl
-		serial = response.Serial
+			certURL = response.CertUrl
+			serial = response.Serial
 
-		return nil
-	}); err != nil {
+			return nil
+		}); err != nil {
 		return "", "", err
 	}
 
@@ -246,30 +252,32 @@ func (client *Client) ApplyCertificate(nodeID, certType string, cert []byte) (ce
 }
 
 func (client *Client) EncryptDisk(nodeID, password string) error {
-	return client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		log.WithFields(log.Fields{"nodeID": nodeID}).Debug("Encrypt remote IAM disk")
+	return client.sendIAMRequest(nodeID, getEncryptTimeout,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			log.WithFields(log.Fields{"nodeID": nodeID}).Debug("Encrypt remote IAM disk")
 
-		if _, err := pb.NewIAMProvisioningServiceClient(connection).EncryptDisk(ctx, &pb.EncryptDiskRequest{
-			NodeId: nodeID, Password: password,
-		}); err != nil {
-			return aoserrors.Wrap(err)
-		}
+			if _, err := pb.NewIAMProvisioningServiceClient(connection).EncryptDisk(ctx, &pb.EncryptDiskRequest{
+				NodeId: nodeID, Password: password,
+			}); err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		return nil
-	})
+			return nil
+		})
 }
 
 func (client *Client) FinishProvisioning(nodeID string) error {
-	return client.sendIAMRequest(nodeID, func(ctx context.Context, connection *grpc.ClientConn) error {
-		log.WithFields(log.Fields{"nodeID": nodeID}).Debug("Finish remote IAM provisioning")
+	return client.sendIAMRequest(nodeID, nil,
+		func(ctx context.Context, connection *grpc.ClientConn) error {
+			log.WithFields(log.Fields{"nodeID": nodeID}).Debug("Finish remote IAM provisioning")
 
-		if _, err := pb.NewIAMProvisioningServiceClient(
-			connection).FinishProvisioning(ctx, &empty.Empty{}); err != nil {
-			return aoserrors.Wrap(err)
-		}
+			if _, err := pb.NewIAMProvisioningServiceClient(
+				connection).FinishProvisioning(ctx, &empty.Empty{}); err != nil {
+				return aoserrors.Wrap(err)
+			}
 
-		return nil
-	})
+			return nil
+		})
 }
 
 /***********************************************************************************************************************
@@ -328,7 +336,8 @@ func (client *Client) getConnection(iam *remoteIAM) (*grpc.ClientConn, error) {
 }
 
 func (client *Client) sendIAMRequest(
-	nodeID string, requestFunc func(ctx context.Context, connection *grpc.ClientConn) error,
+	nodeID string, timeoutFunc func(*remoteIAM) time.Duration,
+	requestFunc func(ctx context.Context, connection *grpc.ClientConn) error,
 ) error {
 	iam, ok := client.remoteIAMs[nodeID]
 	if !ok {
@@ -338,7 +347,11 @@ func (client *Client) sendIAMRequest(
 	iam.Lock()
 	defer iam.Unlock()
 
-	timeoutCtx, cancelFunc := context.WithTimeout(client.ctx, iam.getRequestTimeout())
+	if timeoutFunc == nil {
+		timeoutFunc = getRequestTimeout
+	}
+
+	timeoutCtx, cancelFunc := context.WithTimeout(client.ctx, timeoutFunc(iam))
 	defer cancelFunc()
 
 	connection, err := client.getConnection(iam)
@@ -359,4 +372,12 @@ func (iam *remoteIAM) getRequestTimeout() time.Duration {
 	}
 
 	return defaultRequestTimeout
+}
+
+func getEncryptTimeout(*remoteIAM) time.Duration {
+	return defaultEncryptTimeout
+}
+
+func getRequestTimeout(iam *remoteIAM) time.Duration {
+	return iam.getRequestTimeout()
 }
