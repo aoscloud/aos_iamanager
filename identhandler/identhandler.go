@@ -35,7 +35,7 @@ import (
  * Vars
  ******************************************************************************/
 
-var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
+var plugins = make(map[string]NewPlugin) //nolint:gochecknoglobals
 
 /*******************************************************************************
  * Types
@@ -51,7 +51,7 @@ type Handler struct {
 // IdentModule identification module interface.
 type IdentModule interface {
 	GetSystemID() (systemdID string, err error)
-	GetBoardModel() (boardModel string, err error)
+	GetUnitModel() (unitModel string, err error)
 	GetSubjects() (subjects []string, err error)
 	SubjectsChangedChannel() (channel <-chan []string)
 	Close() (err error)
@@ -105,13 +105,13 @@ func (handler *Handler) GetSystemID() (systemdID string, err error) {
 	return systemdID, nil
 }
 
-// GetBoardModel return board model.
-func (handler *Handler) GetBoardModel() (boardModel string, err error) {
-	if boardModel, err = handler.module.GetBoardModel(); err != nil {
+// GetUnitModel return unit model.
+func (handler *Handler) GetUnitModel() (unitModel string, err error) {
+	if unitModel, err = handler.module.GetUnitModel(); err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 
-	return boardModel, nil
+	return unitModel, nil
 }
 
 // GetSubjects returns current subjects.

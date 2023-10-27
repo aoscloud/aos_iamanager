@@ -55,7 +55,7 @@ const selfSignedCertValidPeriod = time.Hour * 24 * 365 * 100
  * Vars
  **********************************************************************************************************************/
 
-// nolint:gochecknoglobals // use as constant
+//nolint:gochecknoglobals // use as constant
 var (
 	oidExtensionExtendedKeyUsage = asn1.ObjectIdentifier{2, 5, 29, 37}
 	oidExtKeyUsageServerAuth     = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
@@ -64,7 +64,7 @@ var (
 
 var ErrNotExist = errors.New("certificate not exist")
 
-var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
+var plugins = make(map[string]NewPlugin) //nolint:gochecknoglobals
 
 /***********************************************************************************************************************
  * Types

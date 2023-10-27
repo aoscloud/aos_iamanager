@@ -1,12 +1,12 @@
 module github.com/aoscloud/aos_iamanager
 
-go 1.18
+go 1.20
 
 replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 
 require (
 	github.com/ThalesIgnite/crypto11 v0.0.0-00010101000000-000000000000
-	github.com/aoscloud/aos_common v0.0.0-20230207151223-d8ba3fd728c5
+	github.com/aoscloud/aos_common v0.0.0-20230802082015-dd58afc4ed81
 	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e
 	github.com/dchest/uniuri v1.2.0
 	github.com/golang/protobuf v1.5.2

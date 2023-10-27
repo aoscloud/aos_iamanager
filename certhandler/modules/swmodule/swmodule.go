@@ -28,7 +28,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -71,7 +70,7 @@ type moduleConfig struct {
  * Vars
  **********************************************************************************************************************/
 
-var ecsdaCurveID = elliptic.P384() // nolint:gochecknoglobals // use as constant
+var ecsdaCurveID = elliptic.P384() //nolint:gochecknoglobals // use as constant
 
 /***********************************************************************************************************************
  * Public
@@ -133,7 +132,7 @@ func (module *SWModule) ValidateCertificates() (
 
 	keyMap := make(map[string]crypto.PrivateKey)
 
-	content, err := ioutil.ReadDir(module.config.StoragePath)
+	content, err := os.ReadDir(module.config.StoragePath)
 	if err != nil {
 		return nil, nil, nil, aoserrors.Wrap(err)
 	}
@@ -374,7 +373,7 @@ func fileToURL(file string) (urlStr string) {
 }
 
 func createPEMFile(storageDir string) (fileName string, err error) {
-	file, err := ioutil.TempFile(storageDir, "*."+cryptutils.PEMExt)
+	file, err := os.CreateTemp(storageDir, "*."+cryptutils.PEMExt)
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}

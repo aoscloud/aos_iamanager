@@ -19,7 +19,6 @@ package visidentifier_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -184,11 +183,11 @@ QRUogt5UZOrxFviUMF3wtG/D7hOlq0AFdxsstV7BGdOrlZEvdCKZ1/U8Ybl/Q5PV
 IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 -----END RSA PRIVATE KEY-----`
 
-	if err = ioutil.WriteFile(crtFile, []byte(crtData), 0o600); err != nil {
+	if err = os.WriteFile(crtFile, []byte(crtData), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(keyFile, []byte(keyData), 0o600); err != nil {
+	if err = os.WriteFile(keyFile, []byte(keyData), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -196,7 +195,7 @@ IOdqNfMS0yqDTM/Dl3BUwVPzjXtxXx7ARGTi3sPyxu/i54uqA2DIww==
 }
 
 func setup() (err error) {
-	if tmpDir, err = ioutil.TempDir("", "iam_"); err != nil {
+	if tmpDir, err = os.MkdirTemp("", "iam_"); err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
@@ -271,14 +270,14 @@ func TestGetSystemID(t *testing.T) {
 	}
 }
 
-func TestGetBoardModel(t *testing.T) {
-	boardModel, err := vis.GetBoardModel()
+func TestGetUnitModel(t *testing.T) {
+	unitModel, err := vis.GetUnitModel()
 	if err != nil {
-		t.Fatalf("Error getting board model: %s", err)
+		t.Fatalf("Error getting unit model: %s", err)
 	}
 
-	if boardModel == "" {
-		t.Fatalf("Wrong board model value: %s", boardModel)
+	if unitModel == "" {
+		t.Fatalf("Wrong unit model value: %s", unitModel)
 	}
 }
 
@@ -385,8 +384,8 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			getRsp.Value = map[string]string{getReq.Path: "VIN1234567890"}
 
-		case "Attribute.Aos.BoardModel":
-			getRsp.Value = map[string]string{getReq.Path: "testBoardModel:1.0"}
+		case "Attribute.Aos.UnitModel":
+			getRsp.Value = map[string]string{getReq.Path: "testUnitModel:1.0"}
 
 		case "Attribute.Aos.Subjects":
 			getRsp.Value = map[string][]string{getReq.Path: handler.subjects}
@@ -411,7 +410,7 @@ func (handler *clientHandler) ProcessMessage(
 		case "Attribute.Vehicle.VehicleIdentification.VIN":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
-		case "Attribute.Aos.BoardModel":
+		case "Attribute.Aos.UnitModel":
 			setRsp.Error = &visprotocol.ErrorInfo{Message: "readonly path"}
 
 		case "Attribute.Aos.Subjects":
@@ -436,7 +435,7 @@ func (handler *clientHandler) ProcessMessage(
 	}
 
 	if response, err = json.Marshal(rsp); err != nil {
-		return
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return response, nil

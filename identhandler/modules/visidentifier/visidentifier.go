@@ -42,7 +42,7 @@ const reconnectTimeout = 10 * time.Second
 
 const (
 	vinVISPath      = "Attribute.Vehicle.VehicleIdentification.VIN"
-	boardModelPath  = "Attribute.Aos.BoardModel"
+	unitModelPath   = "Attribute.Aos.UnitModel"
 	subjectsVISPath = "Attribute.Aos.Subjects"
 )
 
@@ -58,9 +58,9 @@ type Instance struct {
 
 	wsClient *wsclient.Client
 
-	vin        string
-	boardModel string
-	subjects   []string
+	vin       string
+	unitModel string
+	subjects  []string
 
 	subscribeMap sync.Map
 
@@ -161,29 +161,29 @@ func (instance *Instance) GetSystemID() (systemID string, err error) {
 	return instance.vin, aoserrors.Wrap(err)
 }
 
-// GetBoardModel returns the board model.
-func (instance *Instance) GetBoardModel() (boardModel string, err error) {
+// GetInitModel returns the unit model.
+func (instance *Instance) GetUnitModel() (unitModel string, err error) {
 	instance.wg.Wait()
 
-	rsp, err := instance.sendGetRequest(boardModelPath)
+	rsp, err := instance.sendGetRequest(unitModelPath)
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 
-	value, err := getValueByPath(boardModelPath, rsp.Value)
+	value, err := getValueByPath(unitModelPath, rsp.Value)
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 
 	var ok bool
 
-	if instance.boardModel, ok = value.(string); !ok {
-		return "", aoserrors.New("wrong boardModel type")
+	if instance.unitModel, ok = value.(string); !ok {
+		return "", aoserrors.New("wrong unit model type")
 	}
 
-	log.WithField("boardModel ", instance.boardModel).Debug("Get boardModel")
+	log.WithField("unitModel ", instance.unitModel).Debug("Get unit model")
 
-	return instance.boardModel, aoserrors.Wrap(err)
+	return instance.unitModel, aoserrors.Wrap(err)
 }
 
 // GetSubjects returns the subjects claims.

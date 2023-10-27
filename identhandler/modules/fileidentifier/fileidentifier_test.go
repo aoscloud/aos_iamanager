@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -69,7 +68,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "vis_")
+	tmpDir, err = os.MkdirTemp("", "vis_")
 	if err != nil {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
@@ -89,7 +88,7 @@ func TestMain(m *testing.M) {
 
 func TestGetSystemID(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
-	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
+	unitModelFile := path.Join(tmpDir, "unitmodel.txt")
 	subjectsFile := path.Join(tmpDir, "subjects.txt")
 
 	systemID := "testSystemID"
@@ -98,11 +97,11 @@ func TestGetSystemID(t *testing.T) {
 		t.Fatalf("Can't write system ID: %s", err)
 	}
 
-	if err := writeID(boardModelFile, ""); err != nil {
-		t.Fatalf("Can't write boardModel: %s", err)
+	if err := writeID(unitModelFile, ""); err != nil {
+		t.Fatalf("Can't write unit model file: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, subjectsFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, unitModelFile, subjectsFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -118,36 +117,36 @@ func TestGetSystemID(t *testing.T) {
 	}
 }
 
-func TestGetBoardModel(t *testing.T) {
+func TestGetUnitModel(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
-	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
+	unitModelFile := path.Join(tmpDir, "unitmodel.txt")
 	subjectsFile := path.Join(tmpDir, "subjects.txt")
 
-	boardModel := "testBoard:1.0"
+	unitModel := "testUnit:1.0"
 
-	if err := writeID(boardModelFile, boardModel); err != nil {
-		t.Fatalf("Can't write boardModel: %s", err)
+	if err := writeID(unitModelFile, unitModel); err != nil {
+		t.Fatalf("Can't write unit model file: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, subjectsFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, unitModelFile, subjectsFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
 	defer identifier.Close()
 
-	getBoardModel, err := identifier.GetBoardModel()
+	getUnitModel, err := identifier.GetUnitModel()
 	if err != nil {
 		t.Fatalf("Error getting system ID: %s", err)
 	}
 
-	if getBoardModel != boardModel {
-		t.Errorf("Wrong board model value: %s", getBoardModel)
+	if getUnitModel != unitModel {
+		t.Errorf("Wrong unit model value: %s", getUnitModel)
 	}
 }
 
 func TestGetSubjects(t *testing.T) {
 	systemIDFile := path.Join(tmpDir, "systemid.txt")
-	boardModelFile := path.Join(tmpDir, "boardmodel.txt")
+	unitModelFile := path.Join(tmpDir, "unitmodel.txt")
 	subjectsFile := path.Join(tmpDir, "subjects.txt")
 
 	if err := writeID(systemIDFile, "testSystemID"); err != nil {
@@ -160,7 +159,7 @@ func TestGetSubjects(t *testing.T) {
 		t.Fatalf("Can't write subjects: %s", err)
 	}
 
-	identifier, err := fileidentifier.New(generateConfig(systemIDFile, boardModelFile, subjectsFile))
+	identifier, err := fileidentifier.New(generateConfig(systemIDFile, unitModelFile, subjectsFile))
 	if err != nil {
 		t.Fatalf("Can't create identifier: %s", err)
 	}
@@ -180,18 +179,18 @@ func TestGetSubjects(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func generateConfig(systemIDPath, boardModelPath, subjectsPath string) (config []byte) {
+func generateConfig(systemIDPath, unitModelPath, subjectsPath string) (config []byte) {
 	type adapterConfig struct {
-		SystemIDPath   string `json:"systemIdPath"`
-		BoardModelPath string `json:"boardModelPath"`
-		SubjectsPath   string `json:"subjectsPath"`
+		SystemIDPath  string `json:"systemIdPath"`
+		UnitModelPath string `json:"unitModelPath"`
+		SubjectsPath  string `json:"subjectsPath"`
 	}
 
 	var err error
 
 	if config, err = json.Marshal(&adapterConfig{
-		SystemIDPath:   systemIDPath,
-		BoardModelPath: boardModelPath, SubjectsPath: subjectsPath,
+		SystemIDPath:  systemIDPath,
+		UnitModelPath: unitModelPath, SubjectsPath: subjectsPath,
 	}); err != nil {
 		log.Fatalf("Can't marshal config: %s", err)
 	}
@@ -220,7 +219,7 @@ func writeSubjects(subjectsFile string, subjects []string) (err error) {
 }
 
 func writeID(filePth string, id string) (err error) {
-	if err = ioutil.WriteFile(filePth, []byte(id), 0o600); err != nil {
+	if err = os.WriteFile(filePth, []byte(id), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
