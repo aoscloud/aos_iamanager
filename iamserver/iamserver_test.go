@@ -161,8 +161,8 @@ func TestPublicService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if apiResponse.Version != 4 {
-		t.Errorf("Wrong API version received: %d", apiResponse.Version)
+	if apiResponse.GetVersion() != 4 {
+		t.Errorf("Wrong API version received: %d", apiResponse.GetVersion())
 	}
 
 	// GetNodeInfo
@@ -172,12 +172,12 @@ func TestPublicService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if nodeResponse.NodeId != testNodeID {
-		t.Errorf("Wrong node ID received: %s", nodeResponse.NodeId)
+	if nodeResponse.GetNodeId() != testNodeID {
+		t.Errorf("Wrong node ID received: %s", nodeResponse.GetNodeId())
 	}
 
-	if nodeResponse.NodeType != "testNodeType" {
-		t.Errorf("Wrong node type received: %s", nodeResponse.NodeId)
+	if nodeResponse.GetNodeType() != "testNodeType" {
+		t.Errorf("Wrong node type received: %s", nodeResponse.GetNodeType())
 	}
 
 	// GetCert
@@ -192,16 +192,16 @@ func TestPublicService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if certResponse.Type != certRequest.Type {
-		t.Errorf("Wrong response type: %s", certResponse.Type)
+	if certResponse.GetType() != certRequest.GetType() {
+		t.Errorf("Wrong response type: %s", certResponse.GetType())
 	}
 
-	if certResponse.CertUrl != certHandler.certURL {
-		t.Errorf("Wrong cert URL: %s", certResponse.CertUrl)
+	if certResponse.GetCertUrl() != certHandler.certURL {
+		t.Errorf("Wrong cert URL: %s", certResponse.GetCertUrl())
 	}
 
-	if certResponse.KeyUrl != certHandler.keyURL {
-		t.Errorf("Wrong key URL: %s", certResponse.KeyUrl)
+	if certResponse.GetKeyUrl() != certHandler.keyURL {
+		t.Errorf("Wrong key URL: %s", certResponse.GetKeyUrl())
 	}
 }
 
@@ -240,12 +240,12 @@ func TestPublicIdentityService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if systemResponse.SystemId != identHandler.systemID {
-		t.Errorf("Wrong systemd ID: %s", systemResponse.SystemId)
+	if systemResponse.GetSystemId() != identHandler.systemID {
+		t.Errorf("Wrong systemd ID: %s", systemResponse.GetSystemId())
 	}
 
-	if systemResponse.UnitModel != identHandler.unitModel {
-		t.Errorf("Wrong unit model: %s", systemResponse.UnitModel)
+	if systemResponse.GetUnitModel() != identHandler.unitModel {
+		t.Errorf("Wrong unit model: %s", systemResponse.GetUnitModel())
 	}
 
 	// GetSubjects
@@ -257,8 +257,8 @@ func TestPublicIdentityService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if !reflect.DeepEqual(subjectsResponse.Subjects, identHandler.subjects) {
-		t.Errorf("Wrong subjects: %v", subjectsResponse.Subjects)
+	if !reflect.DeepEqual(subjectsResponse.GetSubjects(), identHandler.subjects) {
+		t.Errorf("Wrong subjects: %v", subjectsResponse.GetSubjects())
 	}
 
 	// SubscribeSubjectsChanged
@@ -281,8 +281,8 @@ func TestPublicIdentityService(t *testing.T) {
 		t.Fatalf("Error receiving message: %v", err)
 	}
 
-	if !reflect.DeepEqual(subjectsNotification.Subjects, newSubjects) {
-		t.Errorf("Wrong subjects: %v", message.Subjects)
+	if !reflect.DeepEqual(subjectsNotification.GetSubjects(), newSubjects) {
+		t.Errorf("Wrong subjects: %v", message.GetSubjects())
 	}
 }
 
@@ -325,17 +325,18 @@ func TestPermissionsService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	receivedPermissions, ok := permissionHandler.permissions[registerResponse.Secret]
+	receivedPermissions, ok := permissionHandler.permissions[registerResponse.GetSecret()]
 	if !ok {
 		t.Error("Permission is not received")
 	}
 
-	if !reflect.DeepEqual(receivedPermissions["testServer"], registerRequest.Permissions["testServer"].Permissions) {
+	if !reflect.DeepEqual(receivedPermissions["testServer"],
+		registerRequest.GetPermissions()["testServer"].GetPermissions()) {
 		t.Errorf("Incorrect requested permissions: %v", receivedPermissions["testServer"])
 	}
 
-	if registerResponse.Secret != permissionHandler.currentSecret {
-		t.Errorf("Incorrect secret: %v", registerResponse.Secret)
+	if registerResponse.GetSecret() != permissionHandler.currentSecret {
+		t.Errorf("Incorrect secret: %v", registerResponse.GetSecret())
 	}
 
 	// GetPermissions
@@ -343,18 +344,18 @@ func TestPermissionsService(t *testing.T) {
 	publicPermissionsService := pb.NewIAMPublicPermissionsServiceClient(client.connection)
 
 	permissionsResponse, err := publicPermissionsService.GetPermissions(ctx,
-		&pb.PermissionsRequest{Secret: registerResponse.Secret, FunctionalServerId: "testServer"})
+		&pb.PermissionsRequest{Secret: registerResponse.GetSecret(), FunctionalServerId: "testServer"})
 	if err != nil {
 		t.Fatalf("Can't send get permission request: %v", err)
 	}
 
-	if !reflect.DeepEqual(permissionsResponse.Permissions.Permissions,
-		registerRequest.Permissions["testServer"].Permissions) {
-		t.Errorf("Incorrect requested permissions: %v", permissionsResponse.Permissions.Permissions)
+	if !reflect.DeepEqual(permissionsResponse.GetPermissions().GetPermissions(),
+		registerRequest.GetPermissions()["testServer"].GetPermissions()) {
+		t.Errorf("Incorrect requested permissions: %v", permissionsResponse.GetPermissions().GetPermissions())
 	}
 
-	if permissionsResponse.Instance.String() != registerRequest.Instance.String() {
-		t.Errorf("Incorrect instance ident: %v", permissionsResponse.Instance.String())
+	if permissionsResponse.GetInstance().String() != registerRequest.GetInstance().String() {
+		t.Errorf("Incorrect instance ident: %v", permissionsResponse.GetInstance().String())
 	}
 
 	// UnregisterInstance
@@ -368,9 +369,9 @@ func TestPermissionsService(t *testing.T) {
 	}
 
 	expectedInstanceIdent := aostypes.InstanceIdent{
-		ServiceID: unregisterRequest.Instance.ServiceId,
-		SubjectID: unregisterRequest.Instance.SubjectId,
-		Instance:  unregisterRequest.Instance.Instance,
+		ServiceID: unregisterRequest.GetInstance().GetServiceId(),
+		SubjectID: unregisterRequest.GetInstance().GetSubjectId(),
+		Instance:  unregisterRequest.GetInstance().GetInstance(),
 	}
 
 	if permissionHandler.currentUnregisterInstance != expectedInstanceIdent {
@@ -431,8 +432,8 @@ func TestProvisioningService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if !reflect.DeepEqual(nodeIDsResponse.Ids, []string{testNodeID}) {
-		t.Errorf("Wrong node ID's: %v", nodeIDsResponse.Ids)
+	if !reflect.DeepEqual(nodeIDsResponse.GetIds(), []string{testNodeID}) {
+		t.Errorf("Wrong node ID's: %v", nodeIDsResponse.GetIds())
 	}
 
 	// GetCertTypes
@@ -444,8 +445,8 @@ func TestProvisioningService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if !reflect.DeepEqual(certTypesResponse.Types, certHandler.certTypes) {
-		t.Errorf("Wrong nide ID's: %v", nodeIDsResponse.Ids)
+	if !reflect.DeepEqual(certTypesResponse.GetTypes(), certHandler.GetCertTypes()) {
+		t.Errorf("Wrong nide ID's: %v", nodeIDsResponse.GetIds())
 	}
 
 	// SetOwner
@@ -531,12 +532,12 @@ func TestCertificateService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if createKeyResponse.Type != createKeyRequest.Type {
-		t.Errorf("Wrong response type: %s", createKeyResponse.Type)
+	if createKeyResponse.GetType() != createKeyRequest.GetType() {
+		t.Errorf("Wrong response type: %s", createKeyResponse.GetType())
 	}
 
-	if createKeyResponse.Csr != string(certHandler.csr) {
-		t.Errorf("Wrong CSR value: %s", createKeyResponse.Csr)
+	if createKeyResponse.GetCsr() != string(certHandler.csr) {
+		t.Errorf("Wrong CSR value: %s", createKeyResponse.GetCsr())
 	}
 
 	// ApplyCertificate
@@ -548,12 +549,12 @@ func TestCertificateService(t *testing.T) {
 		t.Fatalf("Can't send request: %v", err)
 	}
 
-	if certificateResponse.Type != certificateRequest.Type {
-		t.Errorf("Wrong response type: %s", certificateResponse.Type)
+	if certificateResponse.GetType() != certificateRequest.GetType() {
+		t.Errorf("Wrong response type: %s", certificateResponse.GetType())
 	}
 
-	if certificateResponse.CertUrl != certHandler.certURL {
-		t.Errorf("Wrong cert URL: %s", certificateResponse.CertUrl)
+	if certificateResponse.GetCertUrl() != certHandler.certURL {
+		t.Errorf("Wrong cert URL: %s", certificateResponse.GetCertUrl())
 	}
 }
 
@@ -607,10 +608,10 @@ func TestRemoteIAMs(t *testing.T) {
 	}
 
 	sort.Strings(expectedNodes)
-	sort.Strings(nodeIDsResponse.Ids)
+	sort.Strings(nodeIDsResponse.GetIds())
 
-	if !reflect.DeepEqual(nodeIDsResponse.Ids, expectedNodes) {
-		t.Errorf("Wrong node IDs: %v", nodeIDsResponse.Ids)
+	if !reflect.DeepEqual(nodeIDsResponse.GetIds(), expectedNodes) {
+		t.Errorf("Wrong node IDs: %v", nodeIDsResponse.GetIds())
 	}
 
 	// GetCertTypes
@@ -629,13 +630,13 @@ func TestRemoteIAMs(t *testing.T) {
 			t.Fatalf("Can't send request: %v", err)
 		}
 
-		if !reflect.DeepEqual(expectedCertTypes[node], certTypesResponse.Types) {
-			t.Errorf("Wrong cert types: %v, node: %s", certTypesResponse.Types, node)
+		if !reflect.DeepEqual(expectedCertTypes[node], certTypesResponse.GetTypes()) {
+			t.Errorf("Wrong cert types: %v, node: %s", certTypesResponse.GetTypes(), node)
 		}
 
 		// Clear
 
-		for _, certType := range certTypesResponse.Types {
+		for _, certType := range certTypesResponse.GetTypes() {
 			if node == testNodeID {
 				certHandler.password = uuid.New().String()
 			} else {
@@ -659,7 +660,7 @@ func TestRemoteIAMs(t *testing.T) {
 
 		// SetOwner
 
-		for _, certType := range certTypesResponse.Types {
+		for _, certType := range certTypesResponse.GetTypes() {
 			password := uuid.New().String()
 
 			if _, err := provisioningService.SetOwner(ctx, &pb.SetOwnerRequest{
@@ -681,7 +682,7 @@ func TestRemoteIAMs(t *testing.T) {
 
 		// CreateKey
 
-		for _, certType := range certTypesResponse.Types {
+		for _, certType := range certTypesResponse.GetTypes() {
 			csr := uuid.New().String()
 			subject := uuid.New().String()
 
@@ -707,14 +708,14 @@ func TestRemoteIAMs(t *testing.T) {
 				}
 			}
 
-			if keyResponse.Csr != csr {
+			if keyResponse.GetCsr() != csr {
 				t.Errorf("Wrong CSR: %s", err)
 			}
 		}
 
 		// ApplyCertificate
 
-		for _, certType := range certTypesResponse.Types {
+		for _, certType := range certTypesResponse.GetTypes() {
 			certURL := uuid.New().String()
 
 			if node == testNodeID {
@@ -730,11 +731,11 @@ func TestRemoteIAMs(t *testing.T) {
 			}
 
 			if node == testNodeID {
-				if certHandler.certURL != certResponse.CertUrl {
+				if certHandler.certURL != certResponse.GetCertUrl() {
 					t.Errorf("Wrong cert URL: %s", certHandler.certURL)
 				}
 			} else {
-				if remoteIAMsHandler.certURL != certResponse.CertUrl {
+				if remoteIAMsHandler.certURL != certResponse.GetCertUrl() {
 					t.Errorf("Wrong cert URL: %s", remoteIAMsHandler.certURL)
 				}
 			}

@@ -221,15 +221,15 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 	rsp *pb.CreateKeyResponse, err error,
 ) {
 	log.WithFields(log.Fields{
-		"type": req.Type, "nodeID": req.NodeId, "subject": req.Subject,
+		"type": req.GetType(), "nodeID": req.GetNodeId(), "subject": req.GetSubject(),
 	}).Debug("Process create key request")
 
 	var (
 		csr     []byte
-		subject = req.Subject
+		subject = req.GetSubject()
 	)
 
-	rsp = &pb.CreateKeyResponse{NodeId: req.NodeId, Type: req.Type}
+	rsp = &pb.CreateKeyResponse{NodeId: req.GetNodeId(), Type: req.GetType()}
 
 	defer func() {
 		if err != nil {
@@ -248,11 +248,11 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 	}
 
 	switch {
-	case req.NodeId == server.nodeID || req.NodeId == "":
-		csr, err = server.certHandler.CreateKey(req.Type, subject, req.Password)
+	case req.GetNodeId() == server.nodeID || req.GetNodeId() == "":
+		csr, err = server.certHandler.CreateKey(req.GetType(), subject, req.GetPassword())
 
 	case server.remoteIAMsHandler != nil:
-		csr, err = server.remoteIAMsHandler.CreateKey(req.NodeId, req.Type, subject, req.Password)
+		csr, err = server.remoteIAMsHandler.CreateKey(req.GetNodeId(), req.GetType(), subject, req.GetPassword())
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -267,16 +267,17 @@ func (server *Server) CreateKey(context context.Context, req *pb.CreateKeyReques
 func (server *Server) ApplyCert(
 	context context.Context, req *pb.ApplyCertRequest,
 ) (rsp *pb.ApplyCertResponse, err error) {
-	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process apply cert request")
+	log.WithFields(log.Fields{"type": req.GetType(), "nodeID": req.GetNodeId()}).Debug("Process apply cert request")
 
 	var certURL, serial string
 
 	switch {
-	case req.NodeId == server.nodeID || req.NodeId == "":
-		certURL, serial, err = server.certHandler.ApplyCertificate(req.Type, []byte(req.Cert))
+	case req.GetNodeId() == server.nodeID || req.GetNodeId() == "":
+		certURL, serial, err = server.certHandler.ApplyCertificate(req.GetType(), []byte(req.GetCert()))
 
 	case server.remoteIAMsHandler != nil:
-		certURL, serial, err = server.remoteIAMsHandler.ApplyCertificate(req.NodeId, req.Type, []byte(req.Cert))
+		certURL, serial, err = server.remoteIAMsHandler.ApplyCertificate(
+			req.GetNodeId(), req.GetType(), []byte(req.GetCert()))
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -286,20 +287,21 @@ func (server *Server) ApplyCert(
 		log.Errorf("Apply certificate error: %v", err)
 	}
 
-	return &pb.ApplyCertResponse{NodeId: req.NodeId, Type: req.Type, CertUrl: certURL, Serial: serial}, err
+	return &pb.ApplyCertResponse{NodeId: req.GetNodeId(), Type: req.GetType(), CertUrl: certURL, Serial: serial}, err
 }
 
 // GetCert returns certificate URI by issuer.
 func (server *Server) GetCert(context context.Context, req *pb.GetCertRequest) (rsp *pb.GetCertResponse, err error) {
-	rsp = &pb.GetCertResponse{Type: req.Type}
+	rsp = &pb.GetCertResponse{Type: req.GetType()}
 
 	log.WithFields(log.Fields{
-		"type":   req.Type,
-		"serial": req.Serial,
-		"issuer": base64.StdEncoding.EncodeToString(req.Issuer),
+		"type":   req.GetType(),
+		"serial": req.GetSerial(),
+		"issuer": base64.StdEncoding.EncodeToString(req.GetIssuer()),
 	}).Debug("Process get cert request")
 
-	if rsp.CertUrl, rsp.KeyUrl, err = server.certHandler.GetCertificate(req.Type, req.Issuer, req.Serial); err != nil {
+	if rsp.CertUrl, rsp.KeyUrl, err = server.certHandler.GetCertificate(
+		req.GetType(), req.GetIssuer(), req.GetSerial()); err != nil {
 		log.Errorf("Get certificate error: %s", err)
 
 		return rsp, aoserrors.Wrap(err)
@@ -384,17 +386,18 @@ func (server *Server) RegisterInstance(
 	rsp := &pb.RegisterInstanceResponse{}
 
 	log.WithFields(log.Fields{
-		"serviceID": req.Instance.ServiceId,
-		"subjectID": req.Instance.SubjectId,
-		"instance":  req.Instance.Instance,
+		"serviceID": req.GetInstance().GetServiceId(),
+		"subjectID": req.GetInstance().GetSubjectId(),
+		"instance":  req.GetInstance().GetInstance(),
 	}).Debug("Process register instance")
 
 	permissions := make(map[string]map[string]string)
-	for key, value := range req.Permissions {
-		permissions[key] = value.Permissions
+	for key, value := range req.GetPermissions() {
+		permissions[key] = value.GetPermissions()
 	}
 
-	secret, err := server.permissionHandler.RegisterInstance(instanceIdentPBToCloudprotocol(req.Instance), permissions)
+	secret, err := server.permissionHandler.RegisterInstance(
+		instanceIdentPBToCloudprotocol(req.GetInstance()), permissions)
 	if err != nil {
 		log.Errorf("Register instance error: %s", err)
 
@@ -409,12 +412,12 @@ func (server *Server) RegisterInstance(
 // UnregisterInstance unregisters service.
 func (server *Server) UnregisterInstance(ctx context.Context, req *pb.UnregisterInstanceRequest) (*empty.Empty, error) {
 	log.WithFields(log.Fields{
-		"serviceID": req.Instance.ServiceId,
-		"subjectID": req.Instance.SubjectId,
-		"instance":  req.Instance.Instance,
+		"serviceID": req.GetInstance().GetServiceId(),
+		"subjectID": req.GetInstance().GetSubjectId(),
+		"instance":  req.GetInstance().GetInstance(),
 	}).Debug("Process unregister instance")
 
-	server.permissionHandler.UnregisterInstance(instanceIdentPBToCloudprotocol(req.Instance))
+	server.permissionHandler.UnregisterInstance(instanceIdentPBToCloudprotocol(req.GetInstance()))
 
 	return &empty.Empty{}, nil
 }
@@ -425,9 +428,9 @@ func (server *Server) GetPermissions(
 ) (rsp *pb.PermissionsResponse, err error) {
 	rsp = &pb.PermissionsResponse{}
 
-	log.WithField("funcServerID", req.FunctionalServerId).Debug("Process get permissions")
+	log.WithField("funcServerID", req.GetFunctionalServerId()).Debug("Process get permissions")
 
-	instance, perm, err := server.permissionHandler.GetPermissions(req.Secret, req.FunctionalServerId)
+	instance, perm, err := server.permissionHandler.GetPermissions(req.GetSecret(), req.GetFunctionalServerId())
 	if err != nil {
 		log.Errorf("Ger permissions error: %s", err)
 
@@ -451,7 +454,7 @@ func (server *Server) GetAllNodeIDs(context context.Context,
 
 	log.Debug("Process get all node IDs")
 
-	rsp.Ids = append(rsp.Ids, server.nodeID)
+	rsp.Ids = append(rsp.GetIds(), server.nodeID)
 
 	if server.remoteIAMsHandler == nil {
 		return rsp, nil
@@ -459,13 +462,13 @@ func (server *Server) GetAllNodeIDs(context context.Context,
 
 remoteIAMsLoop:
 	for _, remoteID := range server.remoteIAMsHandler.GetRemoteNodes() {
-		for _, id := range rsp.Ids {
+		for _, id := range rsp.GetIds() {
 			if remoteID == id {
 				continue remoteIAMsLoop
 			}
 		}
 
-		rsp.Ids = append(rsp.Ids, remoteID)
+		rsp.Ids = append(rsp.GetIds(), remoteID)
 	}
 
 	return rsp, nil
@@ -475,16 +478,16 @@ remoteIAMsLoop:
 func (server *Server) GetCertTypes(context context.Context,
 	req *pb.GetCertTypesRequest,
 ) (rsp *pb.CertTypes, err error) {
-	log.WithField("nodeID", req.NodeId).Debug("Process get cert types")
+	log.WithField("nodeID", req.GetNodeId()).Debug("Process get cert types")
 
 	var certTypes []string
 
 	switch {
-	case req.NodeId == server.nodeID || req.NodeId == "":
+	case req.GetNodeId() == server.nodeID || req.GetNodeId() == "":
 		certTypes = server.certHandler.GetCertTypes()
 
 	case server.remoteIAMsHandler != nil:
-		certTypes, err = server.remoteIAMsHandler.GetCertTypes(req.NodeId)
+		certTypes, err = server.remoteIAMsHandler.GetCertTypes(req.GetNodeId())
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -499,14 +502,14 @@ func (server *Server) GetCertTypes(context context.Context,
 
 // SetOwner makes IAM owner of secure storage.
 func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest) (rsp *empty.Empty, err error) {
-	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process set owner request")
+	log.WithFields(log.Fields{"type": req.GetType(), "nodeID": req.GetNodeId()}).Debug("Process set owner request")
 
 	switch {
-	case req.NodeId == server.nodeID || req.NodeId == "":
-		err = server.certHandler.SetOwner(req.Type, req.Password)
+	case req.GetNodeId() == server.nodeID || req.GetNodeId() == "":
+		err = server.certHandler.SetOwner(req.GetType(), req.GetPassword())
 
 	case server.remoteIAMsHandler != nil:
-		err = server.remoteIAMsHandler.SetOwner(req.NodeId, req.Type, req.Password)
+		err = server.remoteIAMsHandler.SetOwner(req.GetNodeId(), req.GetType(), req.GetPassword())
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -521,14 +524,14 @@ func (server *Server) SetOwner(context context.Context, req *pb.SetOwnerRequest)
 
 // Clear clears certificates and keys storages.
 func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp *empty.Empty, err error) {
-	log.WithFields(log.Fields{"type": req.Type, "nodeID": req.NodeId}).Debug("Process clear request")
+	log.WithFields(log.Fields{"type": req.GetType(), "nodeID": req.GetNodeId()}).Debug("Process clear request")
 
 	switch {
-	case req.NodeId == server.nodeID || req.NodeId == "":
-		err = server.certHandler.Clear(req.Type)
+	case req.GetNodeId() == server.nodeID || req.GetNodeId() == "":
+		err = server.certHandler.Clear(req.GetType())
 
 	case server.remoteIAMsHandler != nil:
-		err = server.remoteIAMsHandler.Clear(req.NodeId, req.Type)
+		err = server.remoteIAMsHandler.Clear(req.GetNodeId(), req.GetType())
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -543,11 +546,11 @@ func (server *Server) Clear(context context.Context, req *pb.ClearRequest) (rsp 
 
 // EncryptDisk perform disk encryption.
 func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskRequest) (rsp *empty.Empty, err error) {
-	log.WithFields(log.Fields{"nodeID": req.NodeId}).Debug("Process encrypt disk request")
+	log.WithFields(log.Fields{"nodeID": req.GetNodeId()}).Debug("Process encrypt disk request")
 
 	switch {
-	case req.NodeId == server.nodeID || req.NodeId == "":
-		if err = server.certHandler.CreateSelfSignedCert(discEncryptionType, req.Password); err != nil {
+	case req.GetNodeId() == server.nodeID || req.GetNodeId() == "":
+		if err = server.certHandler.CreateSelfSignedCert(discEncryptionType, req.GetPassword()); err != nil {
 			break
 		}
 
@@ -561,7 +564,7 @@ func (server *Server) EncryptDisk(ctx context.Context, req *pb.EncryptDiskReques
 		}
 
 	case server.remoteIAMsHandler != nil:
-		err = server.remoteIAMsHandler.EncryptDisk(req.NodeId, req.Password)
+		err = server.remoteIAMsHandler.EncryptDisk(req.GetNodeId(), req.GetPassword())
 
 	default:
 		err = aoserrors.New("unknown node ID")
@@ -723,7 +726,7 @@ func (server *Server) handleSubjectsChanged(ctx context.Context) {
 
 func instanceIdentPBToCloudprotocol(ident *pb.InstanceIdent) aostypes.InstanceIdent {
 	return aostypes.InstanceIdent{
-		ServiceID: ident.ServiceId, SubjectID: ident.SubjectId, Instance: ident.Instance,
+		ServiceID: ident.GetServiceId(), SubjectID: ident.GetSubjectId(), Instance: ident.GetInstance(),
 	}
 }
 
