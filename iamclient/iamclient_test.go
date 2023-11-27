@@ -307,7 +307,7 @@ func (server *testServer) close() {
 }
 
 func (server *testServer) GetCertTypes(ctx context.Context, request *pb.GetCertTypesRequest) (*pb.CertTypes, error) {
-	certTypes, err := server.getCertTypes(request.NodeId)
+	certTypes, err := server.getCertTypes(request.GetNodeId())
 	if err != nil {
 		return &pb.CertTypes{}, err
 	}
@@ -316,17 +316,17 @@ func (server *testServer) GetCertTypes(ctx context.Context, request *pb.GetCertT
 }
 
 func (server *testServer) SetOwner(ctx context.Context, request *pb.SetOwnerRequest) (*empty.Empty, error) {
-	if err := server.checkCertTypes(request.NodeId, request.Type); err != nil {
+	if err := server.checkCertTypes(request.GetNodeId(), request.GetType()); err != nil {
 		return &empty.Empty{}, err
 	}
 
-	server.password = request.Password
+	server.password = request.GetPassword()
 
 	return &empty.Empty{}, nil
 }
 
 func (server *testServer) Clear(ctx context.Context, request *pb.ClearRequest) (*empty.Empty, error) {
-	if err := server.checkCertTypes(request.NodeId, request.Type); err != nil {
+	if err := server.checkCertTypes(request.GetNodeId(), request.GetType()); err != nil {
 		return &empty.Empty{}, err
 	}
 
@@ -336,11 +336,11 @@ func (server *testServer) Clear(ctx context.Context, request *pb.ClearRequest) (
 }
 
 func (server *testServer) EncryptDisk(ctx context.Context, request *pb.EncryptDiskRequest) (*empty.Empty, error) {
-	if err := server.checkNode(request.NodeId); err != nil {
+	if err := server.checkNode(request.GetNodeId()); err != nil {
 		return &empty.Empty{}, err
 	}
 
-	server.password = request.Password
+	server.password = request.GetPassword()
 
 	return &empty.Empty{}, nil
 }
@@ -352,23 +352,23 @@ func (server *testServer) FinishProvisioning(ctx context.Context, request *empty
 }
 
 func (server *testServer) CreateKey(ctx context.Context, request *pb.CreateKeyRequest) (*pb.CreateKeyResponse, error) {
-	response := &pb.CreateKeyResponse{NodeId: request.NodeId, Type: request.Type}
+	response := &pb.CreateKeyResponse{NodeId: request.GetNodeId(), Type: request.GetType()}
 
-	if err := server.checkCertTypes(request.NodeId, request.Type); err != nil {
+	if err := server.checkCertTypes(request.GetNodeId(), request.GetType()); err != nil {
 		return response, err
 	}
 
-	server.subject = request.Subject
-	server.password = request.Password
+	server.subject = request.GetSubject()
+	server.password = request.GetPassword()
 	response.Csr = string(server.csr)
 
 	return response, nil
 }
 
 func (server *testServer) ApplyCert(ctx context.Context, request *pb.ApplyCertRequest) (*pb.ApplyCertResponse, error) {
-	response := &pb.ApplyCertResponse{NodeId: request.NodeId, Type: request.Type}
+	response := &pb.ApplyCertResponse{NodeId: request.GetNodeId(), Type: request.GetType()}
 
-	if err := server.checkCertTypes(request.NodeId, request.Type); err != nil {
+	if err := server.checkCertTypes(request.GetNodeId(), request.GetType()); err != nil {
 		return response, err
 	}
 

@@ -6,7 +6,7 @@ replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-
 
 require (
 	github.com/ThalesIgnite/crypto11 v0.0.0-00010101000000-000000000000
-	github.com/aoscloud/aos_common v0.0.0-20231127112630-e417316bb962
+	github.com/aoscloud/aos_common v0.0.0-20231127154544-f0075875ceac
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/uniuri v1.2.0
 	github.com/golang/protobuf v1.5.3
