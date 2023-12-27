@@ -6,7 +6,7 @@ replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-
 
 require (
 	github.com/ThalesIgnite/crypto11 v0.0.0-00010101000000-000000000000
-	github.com/aoscloud/aos_common v0.0.0-20231127154544-f0075875ceac
+	github.com/aoscloud/aos_common v0.0.0-20231227133432-0c97aef1696d
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/uniuri v1.2.0
 	github.com/golang/protobuf v1.5.3
@@ -17,7 +17,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/miekg/pkcs11 v1.0.3-0.20190429190417-a667d056470f
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/crypto v0.15.0
+	golang.org/x/crypto v0.16.0
 	google.golang.org/grpc v1.59.0
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
