@@ -164,7 +164,7 @@ func (client *Client) GetCertTypes(nodeID string) (certTypes []string, err error
 				return aoserrors.Wrap(err)
 			}
 
-			certTypes = response.Types
+			certTypes = response.GetTypes()
 
 			return nil
 		}); err != nil {
@@ -218,7 +218,7 @@ func (client *Client) CreateKey(nodeID, certType, subject, password string) (csr
 				return aoserrors.Wrap(err)
 			}
 
-			csr = []byte(response.Csr)
+			csr = []byte(response.GetCsr())
 
 			return nil
 		}); err != nil {
@@ -240,8 +240,8 @@ func (client *Client) ApplyCertificate(nodeID, certType string, cert []byte) (ce
 				return aoserrors.Wrap(err)
 			}
 
-			certURL = response.CertUrl
-			serial = response.Serial
+			certURL = response.GetCertUrl()
+			serial = response.GetSerial()
 
 			return nil
 		}); err != nil {
